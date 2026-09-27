@@ -1,0 +1,20 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "claude-usage-optimizer",
+  "owner": {"name": "yuvalsosman"},
+  "metadata": {
+    "description": "See where your Claude Code money goes, and what would have kept it."
+  },
+  "plugins": [
+    {
+      "name": "claude-usage",
+      "source": "./plugins/claude-usage",
+      "description": "Analyze your Claude Code usage from local transcripts: an HTML report on cost, caching, context, sessions, tools, subagents and hooks, Claude-written insights with what each change would have saved, and optimizations you can apply one by one.",
+      "author": {"name": "yuvalsosman"},
+      "homepage": "https://github.com/yuval-sosman/claude-usage-optimizer",
+      "repository": "https://github.com/yuval-sosman/claude-usage-optimizer",
+      "category": "productivity",
+      "keywords": ["usage", "cost", "prompt-caching", "context", "analytics", "hooks"]
+    }
+  ]
+}

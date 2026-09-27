@@ -1,0 +1,245 @@
+#!/usr/bin/env python3
+"""Check insights.json / optimizations.json against their schema and against the report they describe.
+
+  python3 validate.py insights      <out>/insights.json      --metrics <out>/data/metrics.json
+  python3 validate.py optimizations <out>/optimizations.json --metrics <out>/data/metrics.json [--insights <out>/insights.json]
+
+Prints OK, or one line per problem, and exits 1 when there are problems. Standard library only.
+"""
+import argparse
+import json
+import os
+import re
+import sys
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+sys.path.insert(0, HERE)
+import apply as AP  # noqa: E402  (the exact path rules apply.py uses)
+import layout  # noqa: E402
+ROOT = os.path.dirname(HERE)
+TYPES = {'object': dict, 'array': list, 'string': str, 'boolean': bool, 'null': type(None)}
+
+
+def type_ok(v, t):
+    if isinstance(t, list):
+        return any(type_ok(v, x) for x in t)
+    if t == 'number':
+        return isinstance(v, (int, float)) and not isinstance(v, bool)
+    if t == 'integer':
+        return isinstance(v, int) and not isinstance(v, bool)
+    return isinstance(v, TYPES.get(t, object))
+
+
+def check(v, sch, path, errs):
+    """The subset of JSON Schema the two schemas use."""
+    if 'const' in sch and v != sch['const']:
+        errs.append(f'{path}: must be {sch["const"]!r}')
+    if 'enum' in sch and v not in sch['enum']:
+        errs.append(f'{path}: {v!r} is not one of {sch["enum"]}')
+    if 'type' in sch and not type_ok(v, sch['type']):
+        errs.append(f'{path}: expected {sch["type"]}, got {type(v).__name__}')
+        return
+    if isinstance(v, str):
+        if len(v) < sch.get('minLength', 0):
+            errs.append(f'{path}: shorter than {sch["minLength"]} characters')
+        if 'maxLength' in sch and len(v) > sch['maxLength']:
+            errs.append(f'{path}: {len(v)} characters, over the {sch["maxLength"]} limit')
+        if 'pattern' in sch and not re.search(sch['pattern'], v):
+            errs.append(f'{path}: {v!r} does not match {sch["pattern"]}')
+    if isinstance(v, (int, float)) and not isinstance(v, bool):
+        if 'minimum' in sch and v < sch['minimum']:
+            errs.append(f'{path}: below {sch["minimum"]}')
+        if 'maximum' in sch and v > sch['maximum']:
+            errs.append(f'{path}: above {sch["maximum"]}')
+    if isinstance(v, list):
+        if len(v) < sch.get('minItems', 0):
+            errs.append(f'{path}: needs at least {sch["minItems"]} items')
+        if 'maxItems' in sch and len(v) > sch['maxItems']:
+            errs.append(f'{path}: more than {sch["maxItems"]} items')
+        for i, x in enumerate(v):
+            if 'items' in sch:
+                check(x, sch['items'], f'{path}[{i}]', errs)
+    if isinstance(v, dict):
+        props = sch.get('properties', {})
+        for k in sch.get('required', []):
+            if k not in v:
+                errs.append(f'{path}: missing "{k}"')
+        for k, x in v.items():
+            if k in props:
+                check(x, props[k], f'{path}.{k}', errs)
+            elif sch.get('additionalProperties') is False:
+                errs.append(f'{path}: unknown field "{k}"')
+
+
+def load(path, what):
+    path = os.path.expanduser(path)
+    moved = layout.data(os.path.dirname(path), os.path.basename(path))
+    if not os.path.exists(path) and os.path.basename(path) in layout.DATA_FILES and os.path.exists(moved):
+        path = moved                                   # <out>/metrics.json, from before data/ existed
+    try:
+        with open(path, encoding='utf-8') as fh:
+            return json.load(fh)
+    except FileNotFoundError:
+        sys.exit(f'{what} not found: {path}')
+    except ValueError as e:
+        sys.exit(f'{what} is not valid JSON: {e}')
+
+
+def report_cards(metrics, scope='all'):
+    """The questions the report shows (cards kept only in the data, marked hidden, are left out) and its scope ids."""
+    data = metrics.get('data') or {}
+    cards = (data.get(scope) or data.get('all') or {}).get('cards') or {}
+    return {k for k, v in cards.items() if not (isinstance(v, dict) and v.get('hidden') and not v.get('alias'))}, set(data.keys())
+
+
+def month_errs(sv, metrics, scope, where):
+    """usd_per_month must be the same saving at 30 days' pace: usd_so_far × 30 / the days the scope covers."""
+    d = ((((metrics or {}).get('data') or {}).get(scope or 'all') or {}).get('headline') or {}).get('days')
+    so, mo = (sv or {}).get('usd_so_far'), (sv or {}).get('usd_per_month')
+    if not (isinstance(d, (int, float)) and d > 0 and isinstance(so, (int, float)) and isinstance(mo, (int, float))):
+        return []
+    want = so * 30 / d
+    if abs(mo - want) > max(0.5, 0.1 * want):
+        return [f'{where}: savings.usd_per_month ${mo:.2f} should be about ${want:.2f} (usd_so_far × 30 / {d:g} days)']
+    return []
+
+
+def validate_insights(doc, metrics):
+    errs = []
+    check(doc, load(os.path.join(ROOT, 'schemas', 'insights.schema.json'), 'schema'), 'insights.json', errs)
+    if not isinstance(doc, dict):
+        return errs
+    ids = [i.get('id') for i in doc.get('insights') or [] if isinstance(i, dict)]
+    dup = {x for x in ids if ids.count(x) > 1}
+    if dup:
+        errs.append(f'duplicate insight ids: {sorted(dup)}')
+    if metrics:
+        gen = (metrics.get('meta') or {}).get('generated')
+        if (doc.get('source') or {}).get('metrics_generated') not in (None, gen):
+            errs.append(f'source.metrics_generated should be {gen!r} (the metrics.json you read)')
+        spend = ((metrics.get('data') or {}).get('all') or {}).get('headline', {}).get('hero', {}).get('value') or 0
+        for n, it in enumerate(doc.get('insights') or []):
+            if not isinstance(it, dict):
+                continue
+            cards, scopes = report_cards(metrics, it.get('scope') or 'all')
+            where = f'insights[{n}] ({it.get("id")})'
+            if it.get('scope') and it['scope'] not in scopes:
+                errs.append(f'{where}: scope {it["scope"]!r} is not in the report')
+            for q in (it.get('questions') or []) + [e.get('question') for e in it.get('evidence') or [] if isinstance(e, dict)]:
+                if q and q not in cards:
+                    errs.append(f'{where}: question {q} is not shown in the report (cite a visible question; the digest marks hidden ones)')
+            sv = it.get('savings')
+            if it.get('category') == 'cost' and not sv:
+                errs.append(f'{where}: cost insights need "savings" (what applying it so far would have saved)')
+            if isinstance(sv, dict) and isinstance(sv.get('usd_so_far'), (int, float)) and spend and sv['usd_so_far'] > spend:
+                errs.append(f'{where}: savings.usd_so_far ${sv["usd_so_far"]:.2f} is more than the whole spend ${spend:.2f}')
+            errs += month_errs(sv, metrics, it.get('scope'), where)
+            for o in (sv or {}).get('overlaps_with') or []:
+                if o not in ids:
+                    errs.append(f'{where}: overlaps_with {o!r} is not an insight id')
+    return errs
+
+
+def home_path(p, out):
+    """Where apply.py would write p: the same variable expansion (${HOME}, ${CLAUDE_DIR}, ${OUT}, ~/.claude mapping…)."""
+    return AP.resolve(p, out)
+
+
+def allowed_path(p):
+    return any(p == r or p.startswith(r + os.sep) for r in (AP.HOME, AP.CLAUDE_DIR))
+
+
+def validate_optimizations(doc, metrics, insights, out=None):
+    errs = []
+    check(doc, load(os.path.join(ROOT, 'schemas', 'optimizations.schema.json'), 'schema'), 'optimizations.json', errs)
+    if not isinstance(doc, dict):
+        return errs
+    ids = [o.get('id') for o in doc.get('optimizations') or [] if isinstance(o, dict)]
+    dup = {x for x in ids if ids.count(x) > 1}
+    if dup:
+        errs.append(f'duplicate optimization ids: {sorted(dup)}')
+    src = doc.get('source') or {}
+    if metrics:
+        gen = (metrics.get('meta') or {}).get('generated')
+        if src.get('metrics_generated') not in (None, gen):
+            errs.append(f'source.metrics_generated should be {gen!r} (the metrics.json you read)')
+    if insights and src.get('insights_generated') not in (None, insights.get('generated')):
+        errs.append(f'source.insights_generated should be {insights.get("generated")!r} (the insights.json you read)')
+    cards = report_cards(metrics)[0] if metrics else None
+    ins_ids = {i.get('id') for i in (insights or {}).get('insights') or []} if insights else None
+    for n, o in enumerate(doc.get('optimizations') or []):
+        if not isinstance(o, dict):
+            continue
+        where = f'optimizations[{n}] ({o.get("id")})'
+        for q in o.get('questions') or []:
+            if cards is not None and q not in cards:
+                errs.append(f'{where}: question {q} is not shown in the report (cite a visible question; the digest marks hidden ones)')
+        for i in o.get('insights') or []:
+            if ins_ids is not None and i not in ins_ids:
+                errs.append(f'{where}: insight {i!r} is not in insights.json')
+        errs += month_errs(o.get('savings'), metrics, 'all', where)
+        if o.get('effort') == 'one-click' and not o.get('apply'):
+            errs.append(f'{where}: effort "one-click" needs an "apply" block')
+        for k, st in enumerate(((o.get('apply') or {}).get('steps')) or []):
+            if not isinstance(st, dict):
+                continue
+            w = f'{where}.apply.steps[{k}]'
+            act, path = st.get('action'), st.get('path') or ''
+            if not allowed_path(home_path(path, out or os.getcwd())):
+                errs.append(f'{w}: path {path!r} is outside your home directory and your Claude folder')
+            if act == 'write_file':
+                if bool(st.get('source')) == bool(st.get('content')):
+                    errs.append(f'{w}: write_file needs exactly one of "source" or "content"')
+                if st.get('source') and not os.path.isfile(os.path.join(HERE, st['source'])):
+                    errs.append(f'{w}: bundled source {st["source"]!r} not found under scripts/')
+            elif act == 'merge_json' and not isinstance(st.get('value'), dict):
+                errs.append(f'{w}: merge_json needs an object "value"')
+            elif act in ('set_json', 'unset_json') and not st.get('pointer'):
+                errs.append(f'{w}: {act} needs a "pointer"')
+            elif act == 'set_json' and 'value' not in st:
+                errs.append(f'{w}: set_json needs a "value"')
+            elif act == 'append_text' and not (st.get('content') and st.get('marker')):
+                errs.append(f'{w}: append_text needs "content" and "marker"')
+            elif act == 'run' and not st.get('command'):
+                errs.append(f'{w}: run needs a "command"')
+            if act in ('merge_json', 'set_json', 'unset_json') and not path.endswith('.json'):
+                errs.append(f'{w}: {act} only edits .json files')
+    return errs
+
+
+def safe_console():
+    """Never crash on a console that can't show a character (e.g. a Windows code page): replace it instead."""
+    for st in (sys.stdout, sys.stderr):
+        try:
+            st.reconfigure(errors='replace')
+        except (AttributeError, ValueError):
+            pass
+
+
+def main(argv=None):
+    safe_console()
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument('kind', choices=['insights', 'optimizations'])
+    ap.add_argument('file')
+    ap.add_argument('--metrics', help='the metrics.json the file was written from')
+    ap.add_argument('--insights', help='insights.json (checks optimization → insight links)')
+    a = ap.parse_args(argv)
+    doc = load(a.file, a.kind)
+    metrics = load(a.metrics, 'metrics.json') if a.metrics else None
+    if a.kind == 'insights':
+        errs = validate_insights(doc, metrics)
+    else:
+        out = os.path.dirname(os.path.abspath(a.file))
+        AP.CLAUDE_DIR = AP.report_claude_dir(out) or AP.CLAUDE_DIR     # the folder apply.py will write to
+        errs = validate_optimizations(doc, metrics, load(a.insights, 'insights.json') if a.insights else None, out=out)
+    if errs:
+        print(f'{len(errs)} problem(s) in {a.file}:')
+        for e in errs:
+            print('  - ' + e)
+        sys.exit(1)
+    n = len(doc.get('insights') or doc.get('optimizations') or [])
+    print(f'OK: {n} {a.kind} in {a.file}')
+
+
+if __name__ == '__main__':
+    main()

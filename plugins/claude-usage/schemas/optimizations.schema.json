@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "claude-usage/optimizations.schema.json",
+  "title": "Claude Code usage optimizations",
+  "description": "Written by the claude-usage:optimize skill. Rendered as the report's Optimizations tab; applied change by change with scripts/apply.py (preview, backup, undo). Check with: python3 scripts/validate.py optimizations <file> --metrics <out>/metrics.json --insights <out>/insights.json",
+  "type": "object",
+  "required": ["schema_version", "generated", "source", "summary", "optimizations"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": 1},
+    "generated": {"type": "string"},
+    "author": {"type": "string"},
+    "source": {
+      "type": "object", "required": ["metrics_generated"], "additionalProperties": false,
+      "properties": {
+        "metrics_generated": {"type": "string"},
+        "insights_generated": {"type": "string"},
+        "claude_code_version": {"type": "string"}
+      }
+    },
+    "summary": {"type": "string", "minLength": 40, "maxLength": 900},
+    "optimizations": {
+      "type": "array", "minItems": 1, "maxItems": 30,
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "category", "kind", "problem", "what_it_does", "questions", "effort", "risk", "manual", "undo", "docs"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{2,60}$"},
+          "title": {"type": "string", "minLength": 5, "maxLength": 90},
+          "category": {"enum": ["cost", "cache", "context", "workflow", "delegation", "tooling", "reliability"]},
+          "kind": {"enum": ["hook", "setting", "statusline", "claude_md", "agent", "command", "habit"]},
+          "problem": {"type": "string", "minLength": 20, "maxLength": 500, "description": "What it fixes, with the numbers from the report"},
+          "what_it_does": {"type": "string", "minLength": 20, "maxLength": 700},
+          "insights": {"type": "array", "items": {"type": "string"}, "description": "Insight ids in insights.json"},
+          "questions": {"type": "array", "minItems": 1, "maxItems": 6, "items": {"type": "string", "pattern": "^[A-Z]{2,3}[0-9]{1,2}$"}},
+          "savings": {
+            "type": "object", "required": ["usd_so_far", "usd_per_month", "basis", "kind"], "additionalProperties": false,
+            "properties": {
+              "usd_so_far": {"type": "number", "minimum": 0, "description": "The saving over all the analysed days (all time)"},
+              "usd_per_month": {"type": "number", "minimum": 0, "description": "The same saving per 30 days: usd_so_far × 30 / days covered"},
+              "basis": {"type": "string", "maxLength": 400},
+              "kind": {"enum": ["measured", "theoretical", "upper_bound"]}
+            }
+          },
+          "effort": {"enum": ["one-click", "minutes", "habit"]},
+          "risk": {"enum": ["low", "medium", "high"]},
+          "tradeoffs": {"type": "string", "maxLength": 500},
+          "apply": {
+            "type": "object", "required": ["summary", "steps"], "additionalProperties": false,
+            "description": "Present only when apply.py can make the change",
+            "properties": {
+              "summary": {"type": "string", "maxLength": 300},
+              "steps": {
+                "type": "array", "minItems": 1, "maxItems": 8,
+                "items": {
+                  "type": "object", "required": ["action", "path"], "additionalProperties": false,
+                  "properties": {
+                    "action": {"enum": ["write_file", "merge_json", "set_json", "unset_json", "append_text", "run"]},
+                    "path": {"type": "string", "description": "File under your home directory (~ allowed); for run: the working directory"},
+                    "source": {"type": "string", "description": "write_file: a file bundled with the plugin, relative to scripts/ (e.g. hooks/stale_cache_guard.py)"},
+                    "content": {"type": "string", "description": "write_file / append_text: literal content"},
+                    "mode": {"type": "string", "pattern": "^[0-7]{3}$"},
+                    "value": {"description": "merge_json: object to deep-merge; set_json: value to set"},
+                    "pointer": {"type": "string", "pattern": "^(/[^/]+)+$", "description": "set_json / unset_json: JSON pointer, e.g. /env/CLAUDE_CODE_SUBAGENT_MODEL"},
+                    "marker": {"type": "string", "description": "append_text: an id that makes the append idempotent"},
+                    "command": {"type": "string", "description": "run: shell command, shown and confirmed before it runs"}
+                  }
+                }
+              }
+            }
+          },
+          "manual": {"type": "array", "minItems": 1, "maxItems": 10, "items": {"type": "string", "maxLength": 400}, "description": "How to do it by hand"},
+          "verify": {"type": "string", "maxLength": 300},
+          "undo": {"type": "string", "maxLength": 300},
+          "docs": {
+            "type": "array", "minItems": 1, "maxItems": 4,
+            "items": {"type": "object", "required": ["title", "url"], "additionalProperties": false,
+                      "properties": {"title": {"type": "string"}, "url": {"type": "string", "pattern": "^https://"}}}
+          }
+        }
+      }
+    }
+  }
+}
