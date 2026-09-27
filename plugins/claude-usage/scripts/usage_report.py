@@ -640,15 +640,13 @@ class Source:
     def label(self, proj):
         cwd = self.cwd.get(proj)
         if not cwd:
-            m = re.match(r'(.*?)--claude-worktrees-(task-[0-9a-f]{6,8})?', proj)
-            if m and m.group(2):
-                return f'{os.path.basename(m.group(1).replace("-", "/"))} ▸ {m.group(2)}'
+            m = re.match(r'(.*?)--claude-worktrees-(.+)$', proj)
+            if m:
+                return f'{os.path.basename(m.group(1).replace("-", "/"))} ▸ {clip(m.group(2), 28)}'
             return short_path(proj.replace('-', '/')) or proj
         m = re.match(r'(.*)/\.claude/worktrees/(.+)$', slash(cwd))
         if m:
-            name = m.group(2)
-            short = re.match(r'(task-[0-9a-f]{6,8})', name)
-            return f'{os.path.basename(m.group(1))} ▸ {short.group(1) if short else clip(name, 28)}'
+            return f'{os.path.basename(m.group(1))} ▸ {clip(m.group(2), 28)}'
         return short_path(cwd) or cwd
 
     def scopes(self):
@@ -1851,7 +1849,7 @@ def cx10(m, g):
                 stacked=True, title=f'{lbl}: cache cost under each lifetime (yours: {cur})'),
             TABLE([('k', 'Part of the cache cost', None), ('a', mark('If 5 minutes'), 'usd'), ('b', mark('If 1 hour'), 'usd'),
                    ('x', 'Cheaper', None)], rows),
-            BAR([z[2] for z in TTL_ZONES], [S('Cached under both', zones[0], 7), S('Only 1 hour keeps it cached', zones[1], 3),
+            BAR([z[2] for z in TTL_ZONES], [S('Cached under both', zones[0], 6), S('Only 1 hour keeps it cached', zones[1], 3),
                                             S('A miss under both', zones[2], 4)], 'count', orient='v', stacked=True,
                 title=f'Idle time before each request ({quick:,} more came within a minute)')]))
         head = f'{lbl}: {best} is {f_usd(diff)} cheaper' + (', and you already use it' if cur == best else f' (you use {cur})')
@@ -4022,8 +4020,6 @@ def path_kind(p):
         return 'Memory'
     if '/plans/' in pl:
         return 'Plans'
-    if '/tasks/' in pl and pl.endswith(('.md', '.yaml', '.yml', '.json', '.txt')):
-        return 'Task specs & reviews'
     if re.search(r'(^|/)(tests?|__tests__|spec)/|[._-]test\.|tests?\.\w+$|checks?\.\w+$', pl):
         return 'Tests'
     if pl.endswith(('.md', '.txt', '.rst')):
@@ -4559,10 +4555,15 @@ HEADLINE_ORDER = [('SV1', 'info'), ('OV3', 'info'), ('CX8', 'warn'), ('CX3', 'in
 
 
 def headline(m, cards):
-    days = sorted({day(c['t0']) for c in m.real})
+    per_day = collections.defaultdict(float)
+    for c in m.real:
+        per_day[day(c['t0'])] += c['usd']
+    days = fill_days(per_day)
     f = m.facts
     hero = {'label': 'Cost at API list prices', 'value': r2(m.usd), 'unit': 'usd',
-            'sub': f"{len(m.real):,} API calls · {len(m.sessions)} sessions · {days[0]} → {days[-1]}" if days else 'no API calls'}
+            'sub': f"{len(m.real):,} API calls · {len(m.sessions)} sessions" if days else 'no API calls'}
+    if len(days) > 1:               # the daily spend under the number (the date range is in the page header)
+        hero['spark'] = {'x': days, 'values': [r2(per_day.get(d, 0.0)) for d in days]}
     ov6 = {i['label']: i['value'] for b in (cards.get('OV6') or {}).get('blocks', []) if b.get('kind') == 'kpis' for i in b['items']}
     kpis = [kpi('Sessions', len(m.sessions), 'count'), kpi('Your prompts', len(m.prompts), 'count'),
             kpi('Median session', ov6.get('Median session'), 'usd'), kpi('Median prompt', ov6.get('Median prompt'), 'usd'),

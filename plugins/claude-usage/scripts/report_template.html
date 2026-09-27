@@ -4,228 +4,282 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Claude Code Usage</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23191918'/%3E%3Crect x='8' y='17' width='4' height='8' rx='1' fill='%233987e5'/%3E%3Crect x='14' y='12' width='4' height='13' rx='1' fill='%233987e5'/%3E%3Crect x='20' y='7' width='4' height='18' rx='1' fill='%235cb56a'/%3E%3C/svg%3E">
 <style>
-/* ---- Color roles (dataviz reference palette; validated light + dark) ---- */
+/* ---- Tokens ----
+   Type: 12 / 13 / 14 / 16 / 20 / 28 / 48 px, weights 400 / 500 / 600. Space: multiples of 4 px.
+   Corners: 6 px controls and inset boxes, 10 px cards, round pills. Colour roles follow the dataviz reference palette. */
 :root {
   color-scheme: light;
   --mode: light;
-  --page: #f9f9f7;
-  --surface-1: #fcfcfb;
-  --wash: rgba(11, 11, 11, 0.045);
-  --wash-strong: rgba(11, 11, 11, 0.09);
+  --page: #f3f3f1;
+  --surface-1: #ffffff;
+  --surface-2: #ffffff;
+  --wash: rgba(11, 11, 11, 0.04);
+  --wash-strong: rgba(11, 11, 11, 0.08);
   --text-primary: #0b0b0b;
   --text-secondary: #52514e;
-  --text-muted: #898781;
-  --grid: #e1e0d9;
+  --text-muted: #72716b;
+  --grid: #e8e7e1;
   --baseline: #c3c2b7;
   --border: rgba(11, 11, 11, 0.10);
-  --good-text: #006300;
-  --shadow: 0 6px 24px rgba(11, 11, 11, 0.12);
+  --good-text: #1f7a3a;
+  --save: #1f7a3a;
+  --focus: #2a78d6;
+  --shadow: 0 8px 24px rgba(11, 11, 11, 0.14);
+  --shadow-card: 0 1px 2px rgba(11, 11, 11, 0.05);
   --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
-  --s5: #e87ba4; --s6: #008300; --s7: #4a3aa7; --s8: #e34948;
-  --status-good: #0ca30c; --status-warning: #fab219; --status-serious: #ec835a; --status-critical: #d03b3b;
-  --topbar-h: 58px;
+  --s5: #e87ba4; --s6: #4a3aa7; --s7: #008300; --s8: #e34948;
+  --status-good: #0ca30c; --status-warning: #e0a000; --status-serious: #ec835a; --status-critical: #d03b3b;
+  --r-ctl: 6px;
+  --r-card: 10px;
+  --topbar-h: 45px;
+  --fast: 120ms ease;
 }
 @media (prefers-color-scheme: dark) {
   :root:where(:not([data-theme="light"])) {
     color-scheme: dark;
     --mode: dark;
     --page: #0d0d0d;
-    --surface-1: #1a1a19;
-    --wash: rgba(255, 255, 255, 0.06);
-    --wash-strong: rgba(255, 255, 255, 0.12);
-    --text-primary: #ffffff;
-    --text-secondary: #c3c2b7;
-    --text-muted: #898781;
-    --grid: #2c2c2a;
-    --baseline: #383835;
+    --surface-1: #181817;
+    --surface-2: #242423;
+    --wash: rgba(255, 255, 255, 0.05);
+    --wash-strong: rgba(255, 255, 255, 0.10);
+    --text-primary: #ededec;
+    --text-secondary: #b8b7b0;
+    --text-muted: #8b8a84;
+    --grid: #2a2a28;
+    --baseline: #3a3a37;
     --border: rgba(255, 255, 255, 0.10);
-    --good-text: #0ca30c;
-    --shadow: 0 6px 24px rgba(0, 0, 0, 0.55);
+    --good-text: #5cb56a;
+    --save: #5cb56a;
+    --focus: #5a9cf0;
+    --shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+    --shadow-card: none;
     --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
-    --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+    --s5: #d55181; --s6: #9085e9; --s7: #3fb950; --s8: #e66767;
   }
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
   --mode: dark;
   --page: #0d0d0d;
-  --surface-1: #1a1a19;
-  --wash: rgba(255, 255, 255, 0.06);
-  --wash-strong: rgba(255, 255, 255, 0.12);
-  --text-primary: #ffffff;
-  --text-secondary: #c3c2b7;
-  --text-muted: #898781;
-  --grid: #2c2c2a;
-  --baseline: #383835;
+  --surface-1: #181817;
+  --surface-2: #242423;
+  --wash: rgba(255, 255, 255, 0.05);
+  --wash-strong: rgba(255, 255, 255, 0.10);
+  --text-primary: #ededec;
+  --text-secondary: #b8b7b0;
+  --text-muted: #8b8a84;
+  --grid: #2a2a28;
+  --baseline: #3a3a37;
   --border: rgba(255, 255, 255, 0.10);
-  --good-text: #0ca30c;
-  --shadow: 0 6px 24px rgba(0, 0, 0, 0.55);
+  --good-text: #5cb56a;
+  --save: #5cb56a;
+  --focus: #5a9cf0;
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  --shadow-card: none;
   --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
-  --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+  --s5: #d55181; --s6: #9085e9; --s7: #3fb950; --s8: #e66767;
 }
 
 /* ---- Page ---- */
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-html { scroll-padding-top: calc(var(--topbar-h) + 12px); }
+html { scroll-padding-top: calc(var(--topbar-h) + 16px); }
 body {
   margin: 0;
   background: var(--page);
   color: var(--text-primary);
-  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 button, select { font: inherit; color: inherit; }
 a { color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+svg .hit:focus-visible, svg .cellm:focus-visible { outline: none; stroke: var(--text-primary); stroke-width: 1.5; }
+.ico { width: 16px; height: 16px; flex-shrink: 0; display: block; }
+@keyframes reveal { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 
-.topbar {
-  position: sticky; top: 0; z-index: 20;
-  display: flex; align-items: center; gap: 12px 20px; flex-wrap: wrap;
-  min-height: var(--topbar-h);
-  padding: 10px max(24px, calc((100% - 1400px) / 2 + 24px));   /* same edges as .layout (max 1400px, centred) */
-  background: var(--page);
-  border-bottom: 1px solid var(--border);
+/* ---- Buttons: one style, two variants (default, ghost), two sizes (32, 28) ---- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 32px; padding: 0 12px;
+  border: 1px solid var(--border); border-radius: var(--r-ctl); background: var(--surface-1); color: var(--text-primary);
+  font-size: 13px; font-weight: 500; line-height: 1; white-space: nowrap; cursor: pointer; text-decoration: none; text-align: left;
+  transition: background-color var(--fast), border-color var(--fast), color var(--fast);
 }
-.brand { min-width: 0; }
-.brand h1 { margin: 0; font-size: 16px; font-weight: 600; line-height: 1.25; }
-.brand .range { font-size: 12px; color: var(--text-secondary); }
-.controls { margin-left: auto; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.ctl { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); }
-.ctl select {
-  font-size: 13px; color: var(--text-primary);
-  background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
-  padding: 6px 28px 6px 10px; max-width: 360px;
-}
-.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface-1); }
+.btn:hover { background: var(--wash-strong); }
+.btn.ghost { border-color: transparent; background: transparent; color: var(--text-secondary); }
+.btn.ghost:hover { background: var(--wash-strong); color: var(--text-primary); }
+.btn.sm { height: 28px; padding: 0 8px; font-size: 12px; gap: 4px; }
+.btn.icon { width: 32px; padding: 0; }
+.btn.sm.icon { width: 28px; }
+.btn[aria-pressed="true"] { background: var(--wash-strong); color: var(--text-primary); }
+.btn:disabled { opacity: 0.4; cursor: default; }
+.btn:disabled:hover { background: transparent; }
+.btn.link { max-width: 100%; }
+.btn.link > span { overflow: hidden; text-overflow: ellipsis; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: var(--r-ctl); overflow: hidden; background: var(--surface-1); }
 .seg button {
-  border: 0; background: transparent; padding: 6px 10px; font-size: 12px; color: var(--text-secondary); cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px; height: 28px; border: 0; background: transparent; padding: 0 12px; white-space: nowrap; flex-shrink: 0;
+  font-size: 13px; color: var(--text-secondary); cursor: pointer; transition: background-color var(--fast), color var(--fast);
 }
 .seg button + button { border-left: 1px solid var(--border); }
-.seg button[aria-pressed="true"] { background: var(--wash-strong); color: var(--text-primary); font-weight: 600; }
-.seg button:hover { background: var(--wash); }
-.menu-btn {
-  display: none; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-1);
-  padding: 6px 10px; font-size: 12px; cursor: pointer;
+.seg button:hover { background: var(--wash); color: var(--text-primary); }
+.seg button[aria-pressed="true"] { background: var(--wash-strong); color: var(--text-primary); font-weight: 500; }
+.seg .n { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.sel {
+  appearance: none; -webkit-appearance: none; field-sizing: content; height: 32px; max-width: 260px; min-width: 0;
+  padding: 0 32px 0 12px; border: 1px solid var(--border); border-radius: var(--r-ctl); background-color: var(--surface-1);
+  font-size: 13px; font-weight: 500; color: var(--text-primary); cursor: pointer; text-overflow: ellipsis;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2372716b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 8px center; background-size: 16px;
+  transition: background-color var(--fast);
 }
+.sel:hover { background-color: var(--wash-strong); }
+.sel.sm { height: 28px; font-size: 12px; padding-left: 8px; padding-right: 28px; background-position: right 6px center; }
+.cnt { font-size: 12px; font-weight: 500; background: var(--wash-strong); color: var(--text-secondary); border-radius: 999px; padding: 0 8px; font-variant-numeric: tabular-nums; }
 
-.layout {
-  display: grid; grid-template-columns: 232px minmax(0, 1fr); gap: 28px;
-  max-width: 1400px; margin: 0 auto; padding: 16px 24px 72px;
+/* ---- Header: a title row that scrolls away, and a sticky row of tabs ---- */
+.topbar { background: var(--page); }
+.bar-in { max-width: 1400px; margin: 0 auto; padding: 0 24px; }
+.toprow { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 16px; padding-top: 16px; padding-bottom: 8px; }
+.brand { min-width: 0; margin-right: auto; }
+.brand h1 { margin: 0; font-size: 16px; font-weight: 600; line-height: 1.25; }
+.brand .range { font-size: 12px; color: var(--text-secondary); }
+.controls { display: flex; align-items: center; gap: 8px; min-width: 0; }
+body:not([data-tab="report"]) .scope-sel { display: none; }
+.tabbar { position: sticky; top: 0; z-index: 20; background: var(--page); border-bottom: 1px solid var(--border); }
+.tabbar .bar-in { display: flex; align-items: stretch; gap: 8px; height: calc(var(--topbar-h) - 1px); }
+.tabs { display: flex; gap: 24px; }
+.tabs button {
+  display: inline-flex; align-items: center; gap: 8px; border: 0; background: none; padding: 0; margin-bottom: -1px;
+  border-bottom: 2px solid transparent; font-size: 14px; font-weight: 500; color: var(--text-secondary); cursor: pointer;
+  transition: color var(--fast), border-color var(--fast);
 }
-.toc {
-  position: sticky; top: calc(var(--topbar-h) + 12px); align-self: start;
-  max-height: calc(100vh - var(--topbar-h) - 24px); overflow: auto;
-  font-size: 13px; padding-right: 4px;
-}
-.toc .toc-h { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin: 4px 0 8px; }
-.toc a.sec-link { display: block; padding: 5px 8px; border-radius: 6px; text-decoration: none; color: var(--text-secondary); }
-.toc a.sec-link:hover { background: var(--wash); color: var(--text-primary); }
-.toc a.sec-link.active { background: var(--wash-strong); color: var(--text-primary); font-weight: 600; }
-.toc .chips { display: flex; flex-wrap: wrap; gap: 3px; padding: 2px 8px 8px; }
-.toc .chips a {
-  font-size: 10.5px; text-decoration: none; color: var(--text-muted);
-  border: 1px solid var(--border); border-radius: 5px; padding: 1px 5px; font-variant-numeric: tabular-nums;
-}
-.toc .chips a:hover { color: var(--text-primary); background: var(--wash); }
+.tabs button:hover { color: var(--text-primary); }
+.tabs button[aria-selected="true"] { color: var(--text-primary); border-bottom-color: var(--text-primary); }
+.tabs button:focus-visible { outline-offset: -2px; }
+.menu-btn { display: none; margin-left: auto; align-self: center; }
+.menu { position: absolute; z-index: 40; top: calc(100% + 4px); right: 0; min-width: 160px; padding: 4px; background: var(--surface-2);
+  border: 1px solid var(--border); border-radius: var(--r-card); box-shadow: var(--shadow); animation: reveal 120ms ease-out; }
+.menu button { display: flex; align-items: center; gap: 8px; width: 100%; height: 32px; padding: 0 8px; border: 0; border-radius: var(--r-ctl);
+  background: none; font-size: 13px; color: var(--text-primary); cursor: pointer; text-align: left; }
+.menu button:hover { background: var(--wash-strong); }
+.menu button .ck { margin-left: auto; visibility: hidden; color: var(--text-secondary); }
+.menu button[aria-checked="true"] .ck { visibility: visible; }
+
+/* ---- Layout: the same sidebar and column on every tab ---- */
+.layout { display: grid; grid-template-columns: 216px minmax(0, 1fr); gap: 32px; max-width: 1400px; margin: 0 auto; padding: 24px 24px 72px; }
 main { min-width: 0; }
+.toc {
+  position: sticky; top: calc(var(--topbar-h) + 16px); align-self: start;
+  max-height: calc(100vh - var(--topbar-h) - 32px); overflow: auto; font-size: 13px; padding: 0 4px 16px 0;
+}
+.toc-h { font-size: 12px; font-weight: 500; color: var(--text-muted); margin: 0 0 8px 12px; }
+.toc a.sec-link {
+  display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-left: 2px solid var(--border);
+  color: var(--text-secondary); text-decoration: none; transition: background-color var(--fast), color var(--fast), border-color var(--fast);
+}
+.toc a.sec-link:hover { background: var(--wash); color: var(--text-primary); }
+.toc a.sec-link.active { border-left-color: var(--text-primary); color: var(--text-primary); font-weight: 500; }
+.toc a.sec-link .n { margin-left: auto; font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; font-weight: 400; }
+.toc .sub { border-left: 2px solid var(--border); padding: 0 0 8px; }
+.toc .sub a {
+  display: flex; gap: 8px; padding: 4px 12px 4px 20px; color: var(--text-muted); text-decoration: none; white-space: nowrap;
+  font-size: 12px; transition: color var(--fast);
+}
+.toc .sub a:hover, .toc .sub a.cur { color: var(--text-primary); }
+.toc .sub a b { font-weight: 500; min-width: 28px; font-variant-numeric: tabular-nums; }
+.toc .sub a span { overflow: hidden; text-overflow: ellipsis; }
 
-/* ---- Headline ---- */
-.headline { margin: 4px 0 8px; }
-.hero { padding: 8px 0 4px; }
+/* ---- Headline: the cost, its daily line, and one strip of tiles ---- */
+.headline { margin: 0 0 8px; }
+.hero { padding: 0 0 16px; }
 .hero .l { font-size: 13px; color: var(--text-secondary); }
-.hero .v { font-size: 56px; font-weight: 600; line-height: 1.05; letter-spacing: -0.02em; margin: 2px 0; }
-.hero .s { font-size: 13px; color: var(--text-muted); }
-.ins { list-style: none; margin: 16px 0 0; padding: 0; background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; }
-.ins li { display: flex; gap: 12px; align-items: flex-start; padding: 11px 16px; border-top: 1px solid var(--grid); }
-.ins li:first-child { border-top: 0; }
-.ins .txt { flex: 1; min-width: 0; }
-.ins .go {
-  flex-shrink: 0; font-size: 11px; color: var(--text-secondary); text-decoration: none;
-  border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; font-variant-numeric: tabular-nums;
+.hero .v { font-size: 48px; font-weight: 600; line-height: 1.1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.hero .spark { position: relative; max-width: 560px; margin-top: 8px; }
+.hero .spark svg { display: block; overflow: visible; }
+.spark-ln { fill: none; stroke: var(--s1); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+.spark-area { fill: var(--s1); opacity: 0.10; }
+.spark-dot { fill: var(--s1); stroke: var(--surface-1); stroke-width: 2; }
+.hero .s { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+.kstrip {
+  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; margin-top: 8px;
+  background: var(--border); border: 1px solid var(--border); border-radius: var(--r-card); overflow: hidden; box-shadow: var(--shadow-card);
 }
-.ins .go:hover { background: var(--wash); color: var(--text-primary); }
-.st { display: inline-flex; align-items: center; gap: 6px; min-width: 66px; font-size: 11px; color: var(--text-secondary); padding-top: 1px; }
-.st i {
-  width: 16px; height: 16px; border-radius: 50%; display: inline-grid; place-items: center;
-  font-style: normal; font-size: 10px; font-weight: 700; line-height: 1;
-}
-.st-good i { background: var(--status-good); color: #ffffff; }
-.st-warn i { background: var(--status-warning); color: #0b0b0b; }
-.st-info i { background: var(--wash-strong); color: var(--text-primary); }
+.kstrip .kpi { background: var(--surface-1); padding: 12px 16px; border: 0; margin: 0; }
+.kstrip .kpi .l, .kstrip .kpi .s, .kstrip .kpi .r { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kstrip.n4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.kstrip.n3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
 /* ---- Sections & cards ---- */
-.sec > h2 { font-size: 20px; font-weight: 600; margin: 36px 0 12px; scroll-margin-top: calc(var(--topbar-h) + 12px); }
+.sec > h2 { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; margin: 40px 0 12px; scroll-margin-top: calc(var(--topbar-h) + 16px); }
 .card {
-  background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
-  padding: 18px 20px 20px; margin: 0 0 16px; scroll-margin-top: calc(var(--topbar-h) + 12px);
+  background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r-card); box-shadow: var(--shadow-card);
+  padding: 20px 24px 24px; margin: 0 0 16px; scroll-margin-top: calc(var(--topbar-h) + 16px);
 }
-.card-head { display: flex; gap: 10px; align-items: flex-start; }
-.badge {
-  flex-shrink: 0; font-size: 11px; font-weight: 600; line-height: 1; padding: 5px 7px; margin-top: 1px;
-  border-radius: 6px; background: var(--wash-strong); color: var(--text-secondary); font-variant-numeric: tabular-nums;
-}
-.card h3 { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.35; flex: 1; min-width: 0; }
-.pills { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; flex-shrink: 0; max-width: 40%; }
-.pill { font-size: 10.5px; padding: 1px 7px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-secondary); white-space: nowrap; }
-.why { color: var(--text-secondary); font-size: 13px; margin: 6px 0 0; }
+.card-head { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+.cid { font-size: 13px; font-weight: 500; color: var(--text-muted); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.card h3 { margin: 0; font-size: 16px; font-weight: 600; line-height: 1.4; flex: 1; min-width: 0; }
+.scopes { margin-left: auto; font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+.why { color: var(--text-secondary); font-size: 13px; margin: 4px 0 0; }
 .card-body { min-height: 0; }
-.blk { margin-top: 16px; }
+.blk { margin-top: 20px; }
 .row2, .rowN { display: grid; grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr)); gap: 0; }
 .rowN > * { padding: 0 20px; }
 .rowN > :first-child { padding-left: 0; }
 .rowN > :last-child { padding-right: 0; }
-.rowN > * + * { border-left: 1px solid var(--baseline); }
+.rowN > * + * { border-left: 1px solid var(--grid); }
 .rowN > .blk { display: flex; flex-direction: column; }
 .rowN > .blk > figure.chart { flex: 1; display: flex; flex-direction: column; }
 .rowN > .blk > figure.chart > .svgwrap, .rowN > .blk > figure.chart > .scroll-shell { margin-top: auto; }   /* side-by-side charts share a baseline */
 .rowN.mix { grid-template-columns: var(--tpl); }                  /* a chart beside a table: the table gets more room */
-.rowN.mix > .blk > figure.chart > .svgwrap, .rowN.mix > .blk > figure.chart > .scroll-shell { margin-top: 6px; }   /* ...and the chart stays at the top */
-.rowN.mix .t td { overflow-wrap: break-word; }                    /* whole words only, so a narrow column isn't split mid-word */
-.blk-text { margin: 0; color: var(--text-primary); font-size: 13.5px; }
-.blk-list h4, .tbl-title { margin: 0 0 6px; font-size: 13px; font-weight: 600; }
-.blk-list ul { margin: 0; padding-left: 18px; font-size: 13px; }
-.blk-list li { margin: 2px 0; overflow-wrap: anywhere; }
+.rowN.mix > .blk > figure.chart > .svgwrap, .rowN.mix > .blk > figure.chart > .scroll-shell, .rowN > .blk > figure.chart.pie > .svgwrap { margin-top: 8px; }   /* ...and a chart beside a table, or a donut, stays at the top */
+.rowN.mix .t td { overflow-wrap: break-word; }
+.blk-text { margin: 0; color: var(--text-primary); font-size: 14px; }
+.blk-list h4, .tbl-title { margin: 0 0 8px; font-size: 13px; font-weight: 600; }
+.blk-list ul { margin: 0; padding-left: 20px; font-size: 13px; }
+.blk-list li { margin: 4px 0; overflow-wrap: anywhere; }
 .callout {
-  margin-top: 16px; padding: 10px 14px; border-radius: 8px;
-  background: var(--wash); border-left: 3px solid var(--text-secondary); font-size: 13.5px;
+  display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 4px 12px; margin-top: 20px; padding: 12px 16px;
+  border-radius: var(--r-ctl); background: color-mix(in srgb, var(--s1) 7%, transparent); font-size: 14px;
 }
-.callout .lab { display: block; font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px; }
-.callout p { margin: 2px 0; }
+.callout > .ico { color: var(--s1); margin-top: 2px; }
+.callout .lab { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.callout p { margin: 4px 0 0; }
+.callout ul { margin: 4px 0 0; padding-left: 20px; }
+.callout li { margin: 4px 0; }
 .note { font-size: 12px; color: var(--text-muted); margin-top: 12px; }
-.empty { margin-top: 14px; padding: 18px; border: 1px dashed var(--baseline); border-radius: 10px; color: var(--text-muted); font-size: 13px; }
-.err { margin-top: 14px; padding: 10px 14px; border-radius: 8px; background: var(--wash); border-left: 3px solid var(--status-critical); font-size: 12.5px; }
+.empty { margin-top: 16px; padding: 16px; border: 1px dashed var(--baseline); border-radius: var(--r-ctl); color: var(--text-muted); font-size: 13px; }
+.err { margin-top: 16px; padding: 12px 16px; border-radius: var(--r-ctl); background: color-mix(in srgb, var(--status-critical) 8%, transparent); font-size: 13px; }
 
-/* ---- KPI tiles ---- */
-.kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(156px, 1fr)); gap: 12px; }
+/* ---- KPI tiles: on the card's own surface, split by thin dividers ---- */
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); overflow: hidden; margin-left: -20px; }   /* the first column's divider falls outside and is clipped */
 .kpis.sym { grid-template-columns: repeat(var(--kcols, 3), minmax(0, 1fr)); }
-@media (max-width: 720px) { .kpis.sym { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.kpi { padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-1); min-width: 0; }
-.kpi .l { font-size: 12px; color: var(--text-secondary); }
-.kpi .v { font-size: 24px; font-weight: 600; margin-top: 3px; letter-spacing: -0.01em; line-height: 1.2; overflow-wrap: anywhere; }
-.kpi .s, .kpi .r { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+.kpis { row-gap: 16px; }
+.kpis > .kpi { border-left: 1px solid var(--grid); margin-left: -1px; padding: 4px 20px; }
+.kpi { min-width: 0; }
+.kpi .l { font-size: 13px; color: var(--text-secondary); }
+.kpi .v { font-size: 20px; font-weight: 600; margin-top: 4px; letter-spacing: -0.01em; line-height: 1.2; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.kpi .s, .kpi .r { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
 .kpi .s { white-space: pre-line; }
-.kpi .dual { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 2px 18px; margin-top: 3px; }
+.kpi .dual { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 4px 16px; margin-top: 4px; }
 .kpi .dual .v { margin-top: 0; }
-.kpi .dual .mo .v { font-size: 18px; color: var(--text-secondary); }
-.kpi .cap { font-size: 11px; color: var(--text-muted); letter-spacing: 0.01em; }
-.headline .kpis { margin-top: 14px; grid-template-columns: repeat(5, minmax(0, 1fr)); }
-.headline .kpi { display: flex; flex-direction: column; }
-.headline .kpi .v { margin-top: auto; padding-top: 6px; }
-@media (max-width: 720px) { .headline .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.kpi .dual .mo .v { color: var(--text-secondary); }
+.kpi .cap { font-size: 12px; color: var(--text-muted); }
+.kpi.has-pop { position: relative; }
+.kpi .kpi-i { position: absolute; top: 8px; right: 8px; }
+@media (max-width: 720px) { .kpis.sym { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* ---- Charts ---- */
 figure.chart { margin: 0; }
-.chart-head { display: flex; align-items: baseline; gap: 10px; min-height: 22px; }
-.chart-title { font-size: 13px; font-weight: 600; flex: 1; min-width: 0; }
-.tbl-toggle, .more {
-  flex-shrink: 0; font-size: 11.5px; color: var(--text-secondary); background: transparent;
-  border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; cursor: pointer;
-}
-.tbl-toggle:hover, .more:hover { background: var(--wash); color: var(--text-primary); }
-.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: var(--text-secondary); margin: 6px 0 2px; }
+.chart-head { display: flex; align-items: center; gap: 4px; min-height: 28px; }
+.chart-title { font-size: 13px; font-weight: 600; flex: 1; min-width: 0; margin-right: 8px; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: var(--text-secondary); margin: 8px 0 0; }
 .legend:empty { display: none; }
-.lg-item { display: inline-flex; align-items: center; gap: 6px; }
+.lg-item { display: inline-flex; align-items: center; gap: 8px; }
 .sw { display: inline-block; flex-shrink: 0; }
 .sw.rect { width: 10px; height: 10px; border-radius: 2px; }
 .sw.line { width: 14px; height: 2px; border-radius: 1px; }
@@ -233,50 +287,44 @@ figure.chart { margin: 0; }
 .b1 { background: var(--s1); } .b2 { background: var(--s2); } .b3 { background: var(--s3); } .b4 { background: var(--s4); }
 .b5 { background: var(--s5); } .b6 { background: var(--s6); } .b7 { background: var(--s7); } .b8 { background: var(--s8); }
 .b0 { background: var(--text-primary); }   /* slot 0: neutral ink for a total drawn with its parts */
-.svgwrap { width: 100%; position: relative; margin-top: 6px; }
+.svgwrap { width: 100%; position: relative; margin-top: 8px; }
 .svgwrap svg { display: block; overflow: visible; }
-.svgwrap.scroll-x { overflow-x: auto; overflow-y: hidden; padding-bottom: 10px; scrollbar-width: thin; scrollbar-color: var(--baseline) transparent; }
+.svgwrap.scroll-x { overflow-x: auto; overflow-y: hidden; padding-bottom: 8px; scrollbar-width: thin; scrollbar-color: var(--baseline) transparent; }
 .svgwrap.scroll-x::-webkit-scrollbar { height: 8px; }
 .svgwrap.scroll-x::-webkit-scrollbar-thumb { background: var(--baseline); border-radius: 4px; }
 .svgwrap.scroll-x::-webkit-scrollbar-track { background: var(--wash); border-radius: 4px; }
+.svgwrap.scroll-x svg { overflow: hidden; }
 .scroll-shell { position: relative; }
-.scroll-shell::before, .scroll-shell::after { content: ""; position: absolute; top: 0; bottom: 18px; width: 36px; pointer-events: none; opacity: 0; transition: opacity 0.15s; z-index: 1; }
+.scroll-shell::before, .scroll-shell::after { content: ""; position: absolute; top: 0; bottom: 16px; width: 32px; pointer-events: none; opacity: 0; transition: opacity var(--fast); z-index: 1; }
 .scroll-shell::before { left: 0; background: linear-gradient(90deg, var(--surface-1), transparent); }
 .scroll-shell::after { right: 0; background: linear-gradient(270deg, var(--surface-1), transparent); }
 .scroll-shell.can-l::before, .scroll-shell.can-r::after { opacity: 1; }
-.scroll-btn { position: absolute; top: calc(50% - 24px); z-index: 2; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--border);
-  background: var(--surface-1); color: var(--text-primary); box-shadow: var(--shadow); cursor: pointer; font-size: 15px; line-height: 1; display: none; padding: 0; }
-.scroll-btn.l { left: 2px; } .scroll-btn.r { right: 2px; }
-.scroll-shell.can-l .scroll-btn.l, .scroll-shell.can-r .scroll-btn.r { display: inline-flex; align-items: center; justify-content: center; }
-.scroll-btn:hover { background: var(--wash-strong); }
-.scroll-hint { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
-.svgwrap.scroll-x svg { overflow: hidden; }
-.tabsblk { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-.tb-head { width: 100%; display: flex; align-items: baseline; gap: 10px; padding: 11px 14px; background: var(--wash); border: 0; cursor: pointer;
-  text-align: left; color: var(--text-primary); font: inherit; }
-.tb-head:hover { background: var(--wash-strong); }
-.tb-title { font-weight: 600; font-size: 13px; white-space: nowrap; }
-.tb-sub { font-size: 12px; color: var(--text-muted); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tb-chev { color: var(--text-secondary); transition: transform 0.15s ease; }
-.tabsblk.open .tb-chev { transform: rotate(180deg); }
-.tb-body { padding: 12px 14px 14px; border-top: 1px solid var(--border); }
-.tb-body[hidden] { display: none !important; }
-.tb-seg { margin-bottom: 10px; }
-.tb-desc { font-size: 13px; color: var(--text-secondary); margin: 0 0 12px; line-height: 1.5; max-width: 900px; }
-.tb-seg button { font-size: 12.5px; padding: 5px 12px; }
-.tb-panel .blk { margin: 0; }
-.pie-sl { stroke: var(--surface-1); stroke-width: 2; stroke-linejoin: round; }
-.pie-v { font-size: 20px; font-weight: 700; fill: var(--text-primary); font-variant-numeric: tabular-nums; }
-.pie-l { font-size: 11.5px; fill: var(--text-muted); }
-figure.as-table .svgwrap, figure.as-table .legend, figure.as-table .scroll-shell, figure.as-table .scroll-hint { display: none; }
+.scroll-hint { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+figure.as-table .svgwrap, figure.as-table .legend, figure.as-table .scroll-shell, figure.as-table .scroll-hint, figure.as-table .scroll-nav { display: none; }
 figure:not(.as-table) .chart-tbl { display: none; }
-.chart-cap { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+.chart-cap { font-size: 12px; color: var(--text-muted); margin-top: 8px; }
+.pie-box { display: flex; align-items: center; gap: 24px; }
+.pie-box svg { flex-shrink: 0; }
+.pie-box.stack { flex-direction: column; align-items: stretch; gap: 12px; }
+.pie-box.stack svg { align-self: center; }
+.pie-box.bar100 { flex-direction: column; align-items: stretch; gap: 12px; }
+.pie-legend { border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; flex: 1; min-width: 0; }
+.pie-legend td { padding: 4px 0; border-bottom: 1px solid var(--grid); vertical-align: middle; }
+.pie-legend tr:last-child td { border-bottom: 0; }
+.pie-legend td.nm { width: 100%; padding-right: 12px; overflow-wrap: anywhere; }
+.pie-legend td.nm .sw { margin-right: 8px; vertical-align: -1px; }
+.pie-legend td.val { text-align: right; white-space: nowrap; padding-right: 12px; }
+.pie-legend td.pct { text-align: right; white-space: nowrap; color: var(--text-muted); min-width: 48px; }
+.pie-legend tr.hl td { background: var(--wash); }
+.pie-sl { stroke: var(--surface-1); stroke-width: 2; stroke-linejoin: round; }
+.pie-v { font-size: 16px; font-weight: 600; fill: var(--text-primary); font-variant-numeric: tabular-nums; }
+.pie-l { font-size: 12px; fill: var(--text-muted); }
 svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
-.ax { fill: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
-.axt { fill: var(--text-secondary); font-size: 11px; }
+.ax { fill: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.axt { fill: var(--text-secondary); font-size: 12px; }
 .cat { fill: var(--text-secondary); font-size: 12px; }
-.vl { fill: var(--text-secondary); font-size: 11px; font-variant-numeric: tabular-nums; }
-.ref-l { fill: var(--text-muted); font-size: 11px; }
+.vl { fill: var(--text-secondary); font-size: 12px; font-variant-numeric: tabular-nums; }
+.ref-l { fill: var(--text-muted); font-size: 12px; }
 .gridl { stroke: var(--grid); stroke-width: 1; shape-rendering: crispEdges; }
 .basel { stroke: var(--baseline); stroke-width: 1; shape-rendering: crispEdges; }
 .refl { stroke: var(--text-muted); stroke-width: 1; shape-rendering: crispEdges; }
@@ -289,18 +337,17 @@ svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
 .ln { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .area { stroke: none; opacity: 0.10; }
 .dotm { stroke: var(--surface-1); stroke-width: 2; }
-.mark { transition: filter 0.12s ease; }
+.mark { transition: filter var(--fast); }
 .mark.hl { filter: brightness(1.14) saturate(1.1); }
 .hit { fill: transparent; outline: none; }
-.hit:focus-visible { stroke: var(--text-primary); stroke-width: 1; }
-.cellm:focus-visible { stroke: var(--text-primary); stroke-width: 1.5; outline: none; }
+.heat-empty { fill: var(--wash-strong); }
 
 /* ---- Tooltip ---- */
 .tt {
   position: fixed; z-index: 60; pointer-events: none; left: 0; top: 0;
-  background: var(--surface-1); color: var(--text-primary);
-  border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow);
-  padding: 8px 10px; font-size: 12px; max-width: 340px;
+  background: var(--surface-2); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: var(--r-ctl); box-shadow: var(--shadow);
+  padding: 8px 12px; font-size: 12px; max-width: 340px;
 }
 .tt[hidden] { display: none; }
 .tt-title { color: var(--text-secondary); margin-bottom: 4px; overflow-wrap: anywhere; }
@@ -309,19 +356,36 @@ svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
 .tt-key { width: 12px; height: 3px; border-radius: 2px; flex-shrink: 0; }
 .tt-val { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .tt-name { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tt-note { color: var(--text-secondary); margin-top: 4px; line-height: 1.4; overflow-wrap: anywhere; white-space: normal; }
+
+/* ---- Collapsible sections (tabs inside a card) ---- */
+.tabsblk { border: 1px solid var(--border); border-radius: var(--r-ctl); overflow: hidden; }
+.tb-head {
+  width: 100%; display: flex; align-items: center; gap: 8px; padding: 12px 16px; background: transparent; border: 0; cursor: pointer;
+  text-align: left; color: var(--text-primary); font: inherit; transition: background-color var(--fast);
+}
+.tb-head:hover { background: var(--wash); }
+.tb-head:focus-visible { outline-offset: -2px; }
+.tb-chev { color: var(--text-secondary); transition: transform 160ms ease; }
+.tabsblk.open .tb-chev { transform: rotate(90deg); }
+.tb-title { font-weight: 600; font-size: 14px; white-space: nowrap; }
+.tb-sub { font-size: 13px; color: var(--text-muted); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tb-body { padding: 16px; border-top: 1px solid var(--border); animation: reveal 160ms ease-out; }
+.tb-seg { margin-bottom: 12px; }
+.tb-desc { font-size: 13px; color: var(--text-secondary); margin: 0 0 12px; line-height: 1.5; max-width: 72ch; }
+.tb-panel .blk { margin: 0; }
 
 /* ---- Cache-miss traces ---- */
-.trx-list { display: grid; gap: 6px; }
+.trx-list { display: grid; gap: 8px; }
 .trx-item {
-  display: grid; grid-template-columns: 22px 62px minmax(0, 1fr) auto auto;
-  grid-template-areas: "rank usd main idle rw"; gap: 2px 14px; align-items: center;
-  width: 100%; text-align: left; background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
-  padding: 8px 12px; cursor: pointer;
+  display: grid; grid-template-columns: 20px 64px minmax(0, 1fr) auto auto;
+  grid-template-areas: "rank usd main idle rw"; gap: 4px 16px; align-items: center;
+  width: 100%; text-align: left; background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r-ctl);
+  padding: 8px 12px; cursor: pointer; transition: background-color var(--fast), border-color var(--fast);
 }
 .trx-item:hover { background: var(--wash); }
 .trx-item[aria-selected="true"] { background: var(--wash-strong); border-color: var(--text-muted); }
-.trx-item:focus-visible { outline: 2px solid var(--s1); outline-offset: 1px; }
-.trx-rank { grid-area: rank; font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.trx-rank { grid-area: rank; font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .trx-usd { grid-area: usd; font-weight: 600; font-variant-numeric: tabular-nums; }
 .trx-main { grid-area: main; min-width: 0; display: flex; flex-direction: column; }
 .trx-cause { font-size: 13px; font-weight: 600; }
@@ -331,15 +395,14 @@ svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
 .trx-idle, .trx-rw { font-size: 12px; color: var(--text-secondary); white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
 .trx-list .trx-item.extra { display: none; }
 .trx-list.all .trx-item.extra { display: grid; }
-.trx-detail { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--grid); }
-.trx-title { margin: 0; font-size: 15px; font-weight: 600; }
-.trx-sub { font-size: 12.5px; color: var(--text-secondary); margin-top: 3px; overflow-wrap: anywhere; }
+.trx .more-row { margin-top: 8px; }
+.trx-detail { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--grid); }
+.trx-title { margin: 0; font-size: 16px; font-weight: 600; }
+.trx-sub { font-size: 13px; color: var(--text-secondary); margin-top: 4px; overflow-wrap: anywhere; }
 .trx-detail .kpis { margin-top: 12px; }
-.trx-story { margin: 14px 0 0; padding-left: 20px; font-size: 13.5px; }
+.trx-story { margin: 16px 0 0; padding-left: 20px; font-size: 14px; }
 .trx-story li { margin: 4px 0; }
-.trx-detail figure.chart { margin-top: 18px; }
-.callout ul { margin: 4px 0 0; padding-left: 18px; }
-.callout li { margin: 3px 0; }
+.trx-detail figure.chart { margin-top: 20px; }
 .tr-band { fill: var(--wash); }
 .tr-hatch-bg { fill: var(--surface-1); }
 .tr-hatch { stroke: var(--baseline); stroke-width: 2; }
@@ -348,8 +411,8 @@ svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
 .tr-guide { stroke: var(--text-muted); stroke-width: 1; stroke-dasharray: 1 3; shape-rendering: crispEdges; pointer-events: none; }
 .tr-exp { stroke: var(--status-critical); stroke-width: 1.5; stroke-dasharray: 5 3; pointer-events: none; }
 .tr-brkt { fill: none; stroke: var(--text-secondary); stroke-width: 1.25; }
-.tr-ann { fill: var(--text-primary); font-size: 11.5px; paint-order: stroke; stroke: var(--surface-1); stroke-width: 3px; stroke-linejoin: round; }
-.tr-ann2 { fill: var(--text-secondary); font-size: 11px; }
+.tr-ann { fill: var(--text-primary); font-size: 12px; paint-order: stroke; stroke: var(--surface-1); stroke-width: 3px; stroke-linejoin: round; }
+.tr-ann2 { fill: var(--text-secondary); font-size: 12px; }
 .tr-pre { opacity: 0.38; }
 .tr-soft { opacity: 0.55; }
 .tr-sel { fill: none; stroke: var(--text-primary); stroke-width: 1.5; pointer-events: none; }
@@ -369,295 +432,285 @@ svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
 .sw.hatch { width: 14px; height: 10px; border-radius: 2px; border: 1px solid var(--baseline); background: repeating-linear-gradient(45deg, var(--baseline) 0 1.5px, transparent 1.5px 4px); }
 .sw.soft { opacity: 0.55; }
 .sw.tick { width: 2px; height: 10px; }
-.tt-note { color: var(--text-secondary); margin-top: 3px; line-height: 1.4; overflow-wrap: anywhere; white-space: normal; }
 @media (max-width: 720px) {
-  .trx-item { grid-template-columns: 20px auto minmax(0, 1fr) auto; grid-template-areas: "rank usd idle rw" ". main main main"; gap: 4px 10px; }
+  .trx-item { grid-template-columns: 20px auto minmax(0, 1fr) auto; grid-template-areas: "rank usd idle rw" ". main main main"; gap: 4px 12px; }
 }
-
-/* ---- Tabs & the views Claude writes (Insights, Optimizations) ---- */
-.tabs { display: inline-flex; gap: 2px; background: var(--wash); border-radius: 9px; padding: 3px; }
-.tabs button { border: 0; background: transparent; padding: 6px 12px; border-radius: 7px; font-size: 13px; color: var(--text-secondary); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
-.tabs button:hover { color: var(--text-primary); }
-.tabs button[aria-selected="true"] { background: var(--surface-1); color: var(--text-primary); font-weight: 600; box-shadow: 0 1px 2px rgba(11, 11, 11, 0.12); }
-.tabs .cnt, .catnav .cnt { font-size: 11px; background: var(--wash-strong); border-radius: 999px; padding: 0 6px; font-weight: 600; font-variant-numeric: tabular-nums; }
-body:not([data-tab="report"]) .menu-btn { display: none !important; }
-body:not([data-tab="report"]) .ctl.scope { display: none !important; }
-.view { max-width: 1100px; margin: 0 auto; padding: 16px 24px 72px; }
-.vhead h2 { font-size: 22px; margin: 8px 0 4px; }
-.vsub { font-size: 12.5px; color: var(--text-secondary); }
-.vsum { font-size: 14.5px; line-height: 1.55; margin: 14px 0 0; max-width: 840px; }
-.vhead .kpis { margin-top: 16px; }
-.catnav { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
-.catnav a { text-decoration: none; font-size: 12.5px; border: 1px solid var(--border); border-radius: 999px; padding: 4px 10px; color: var(--text-secondary); display: inline-flex; gap: 6px; align-items: center; }
-.catnav a:hover { background: var(--wash); color: var(--text-primary); }
-.vcat { margin-top: 30px; scroll-margin-top: calc(var(--topbar-h) + 12px); }
-.vcat > h3 { font-size: 18px; margin: 0 0 4px; }
-.catsub { color: var(--text-secondary); font-size: 13px; margin: 0 0 8px; max-width: 840px; }
-.icard, .ocard { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; margin-top: 12px; scroll-margin-top: calc(var(--topbar-h) + 16px); }
-.icard.prio-high { border-left: 3px solid var(--text-primary); }
-.ic-top { display: flex; gap: 16px; align-items: flex-start; justify-content: space-between; }
-.ic-title { min-width: 0; }
-.ic-title h4 { margin: 6px 0 0; font-size: 16px; line-height: 1.35; outline: none; }
-.badges { display: flex; flex-wrap: wrap; gap: 4px; }
-.bdg { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; color: var(--text-secondary); }
-.bdg.p-high, .bdg.e-one-click { background: var(--wash-strong); color: var(--text-primary); font-weight: 600; }
-.ic-save { text-align: right; flex-shrink: 0; }
-.ic-save .v { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.ic-save .s { font-size: 11.5px; color: var(--text-muted); }
-.ic-bl { font-size: 14.5px; font-weight: 500; margin: 10px 0 0; line-height: 1.5; }
-.ic-detail { font-size: 13.5px; color: var(--text-secondary); margin: 8px 0 0; line-height: 1.55; }
-.ic-trade { font-size: 13px; margin: 8px 0 0; color: var(--text-secondary); }
-.ic-ev { margin: 10px 0 0; padding-left: 0; list-style: none; font-size: 13px; }
-.ic-ev li { margin: 4px 0; }
-.evq { font-size: 11px; font-weight: 600; border: 1px solid var(--border); background: var(--wash); border-radius: 5px; padding: 0 5px; cursor: pointer; font-variant-numeric: tabular-nums; }
-.ic-sv, .ic-do { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: var(--wash); font-size: 13px; }
-.ic-sv .lab, .ic-do .lab, .applybox .lab { display: block; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 3px; }
-.basis { color: var(--text-muted); font-size: 12px; margin-top: 3px; }
-.ic-act { margin: 0; padding-left: 18px; }
-.qrow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 12px; }
-.qlab { font-size: 11.5px; color: var(--text-muted); margin-right: 2px; }
-.qchip { display: inline-flex; gap: 6px; align-items: baseline; max-width: 100%; border: 1px solid var(--border); background: var(--surface-1); border-radius: 7px; padding: 3px 8px; cursor: pointer; font-size: 12px; text-align: left; min-width: 0; }
-.qchip b { font-variant-numeric: tabular-nums; flex-shrink: 0; }
-.qchip span { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 300px; }
-.qall, .olink { border: 1px solid var(--border); background: transparent; border-radius: 7px; padding: 3px 8px; cursor: pointer; font-size: 12px; text-align: left; }
-.qchip:hover, .olink:hover, .qall:hover, .evq:hover { background: var(--wash-strong); }
-.stale { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: var(--wash); border-left: 3px solid var(--status-warning); font-size: 13px; }
-.vempty { padding: 64px 0; text-align: center; }
-.vempty h2 { font-size: 20px; margin: 0 0 6px; }
-.vempty p { color: var(--text-secondary); }
-.vempty code.cmd { display: inline-block; }
-code.cmd, pre.code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; background: var(--wash); border: 1px solid var(--border); border-radius: 6px; }
-code.cmd { padding: 6px 8px; display: block; overflow-x: auto; white-space: pre; }
-pre.code { font-size: 11.5px; padding: 8px; overflow: auto; max-height: 260px; margin: 4px 0 0; white-space: pre; }
-.cmdbox { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; margin-top: 6px; }
-.cmdbox .lab { margin: 0; }
-.copy { border: 1px solid var(--border); background: var(--surface-1); border-radius: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer; }
-.copy.ok { background: var(--wash-strong); font-weight: 600; }
-.applybox { margin-top: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 10px; }
-.apply-sum { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
-.applybox details, .manual { margin-top: 8px; font-size: 13px; }
-.applybox summary, .manual summary { cursor: pointer; color: var(--text-secondary); font-size: 12.5px; }
-.steps { padding-left: 18px; margin: 6px 0 0; }
-.steps li { margin: 6px 0; overflow-wrap: anywhere; }
-.sv-act { font-weight: 600; }
-.sv-ptr { color: var(--text-secondary); }
-.hint { font-size: 12px; color: var(--text-muted); margin: 6px 0 0; }
-.manual ol { margin: 6px 0 0; padding-left: 18px; }
-.manual li { margin: 3px 0; }
-.ofoot { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 12px; font-size: 12.5px; }
-.ofoot a { color: var(--text-secondary); }
-.mark-done { margin-left: auto; border: 1px solid var(--border); background: transparent; border-radius: 7px; padding: 4px 10px; cursor: pointer; font-size: 12px; }
-.mark-done[aria-pressed="true"] { background: var(--wash-strong); font-weight: 600; }
-.ocard.done { opacity: 0.62; }
-.ofilt { margin-top: 14px; }
-.filterbar { position: sticky; top: calc(var(--topbar-h) + 8px); z-index: 10; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; margin: 4px 0 12px; box-shadow: var(--shadow); }
-.filterbar[hidden] { display: none; }
-.filterbar .back { border: 1px solid var(--text-secondary); background: var(--wash); border-radius: 7px; padding: 5px 10px; font-weight: 600; cursor: pointer; font-size: 12.5px; }
-.fb-txt { flex: 1; min-width: 0; font-size: 13px; color: var(--text-secondary); }
-.fb-n { color: var(--text-primary); font-weight: 600; }
-.filterbar .more { margin: 0; }
-/* ---- Insights: newsroom cards (collapsed = the bottom line; open = the story) ---- */
-:root { --sv-l: 40%; --sv-s: 92%; }
-:root[data-theme="dark"] { --sv-l: 56%; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --sv-l: 56%; } }
-.vsum-block { margin: 16px 0 0; padding: 16px 18px 16px 20px; background: var(--surface-1); border: 1px solid var(--border); border-left: 4px solid var(--s1); border-radius: 12px; }
-.vsum-block .lab { display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--s1); margin-bottom: 6px; }
-.vsum-block .vsum { margin: 0; max-width: none; font-size: 15px; line-height: 1.6; }
-.kpi.kpi-max .v { color: hsl(var(--sv-h, 130) var(--sv-s) var(--sv-l)); }
-.kpi.kpi-max { border-color: hsl(var(--sv-h, 130) var(--sv-s) var(--sv-l) / 0.55); }
-.ins-tools { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin-top: 14px; font-size: 12px; color: var(--text-secondary); }
-.ins-tools > button { border: 1px solid var(--border); background: var(--surface-1); border-radius: 7px; padding: 4px 10px; font-size: 12px; cursor: pointer; color: var(--text-primary); }
-.ins-tools > button:hover { background: var(--wash); }
-.ins-sort { display: inline-flex; align-items: center; gap: 8px; }
-.pop-wrap { position: relative; display: inline-flex; }
-.info-btn { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface-1); color: var(--text-secondary);
-  font: italic 700 14px/1 Georgia, 'Times New Roman', serif; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
-.info-btn:hover, .info-btn[aria-expanded="true"] { background: var(--wash-strong); color: var(--text-primary); }
-.pop { position: absolute; z-index: 30; top: calc(100% + 8px); left: 0; min-width: 300px; max-width: min(460px, calc(100vw - 32px));
-  background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow); padding: 12px 14px;
-  font-size: 12.5px; color: var(--text-primary); text-align: left; cursor: auto; }
-.pop[hidden] { display: none !important; }
-.pop .ptitle { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary); margin: 0 0 8px; }
-.pop .prow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0 0; }
-.pop .prow > b { min-width: 74px; font-weight: 600; color: var(--text-secondary); font-size: 12px; }
-#ins-legend { width: 380px; }
-#ins-legend .prow { flex-wrap: nowrap; white-space: nowrap; }
-.pop .pnote { color: var(--text-muted); font-size: 12px; margin: 10px 0 0; line-height: 1.45; }
-.kpi.has-pop { position: relative; cursor: help; }
-.kpi.has-pop:focus-visible { outline: 2px solid var(--s1); outline-offset: 2px; }
-.kpi.has-pop .hint-i { position: absolute; top: 10px; right: 10px; width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--border);
-  font: italic 700 11px/16px Georgia, serif; text-align: center; color: var(--text-muted); }
-.kpi-pop { left: auto; right: 0; width: min(680px, calc(100vw - 32px)); max-width: none; }
-.kpi-pop .blk { margin: 0; }
-@media (max-width: 720px) {
-  .kpi-pop { position: fixed; left: 16px; right: 16px; top: auto; bottom: 16px; width: auto; max-height: 70vh; overflow: auto; }
-  .pop { max-width: calc(100vw - 32px); }
-}
-.ins-sort .seg button { font-size: 12px; padding: 4px 10px; }
-.vhead .kpis { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
-.vprio-h { display: flex; align-items: center; gap: 8px; }
-.vprio-h .kp { font-size: 11px; }
-.vprio-h .cnt { font-size: 12px; background: var(--wash-strong); border-radius: 999px; padding: 1px 8px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.sv-legend { display: inline-flex; align-items: center; gap: 8px; }
-.sv-legend .ramp, .pop .ramp { width: 120px; height: 8px; border-radius: 4px; background: linear-gradient(90deg, hsl(18 var(--sv-s) var(--sv-l)), hsl(52 var(--sv-s) var(--sv-l)), hsl(90 var(--sv-s) var(--sv-l)), hsl(135 var(--sv-s) var(--sv-l))); }
-.legend-chip { display: inline-flex; align-items: center; gap: 5px; }
-.icard.nw { padding: 0; overflow: hidden; border-left: 5px solid var(--baseline); }
-.icard.nw.has-sv { border-left-color: hsl(var(--sv-h) var(--sv-s) var(--sv-l)); }
-.icard.nw.prio-high { border-left-width: 5px; }
-.nw-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 20px; padding: 14px 18px 12px; cursor: pointer; }
-.nw-head:hover { background: var(--wash); }
-.kicker { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; }
-.kp { --pc: var(--text-muted); color: var(--pc); display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px 2px 6px; border-radius: 999px; background: color-mix(in srgb, var(--pc) 14%, transparent); border: 1px solid color-mix(in srgb, var(--pc) 35%, transparent); }
-.kp::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--pc); }
-.kp.p-high { --pc: var(--status-critical); }
-.kp.p-medium { --pc: var(--status-warning); }
-.kp.p-low { --pc: var(--text-muted); }
-.kc { --cc: var(--s1); color: var(--cc); display: inline-flex; align-items: center; gap: 5px; }
-.kc.c-medium { --cc: var(--s7); }
-.kc.c-low { --cc: var(--text-muted); }
-.kc .meter { display: inline-flex; gap: 2px; align-items: flex-end; }
-.kc .meter i { width: 3px; border-radius: 1px; background: var(--cc); opacity: 0.25; }
-.kc .meter i:nth-child(1) { height: 5px; } .kc .meter i:nth-child(2) { height: 8px; } .kc .meter i:nth-child(3) { height: 11px; }
-.kc .meter i.on { opacity: 1; }
-.kcat { color: var(--text-muted); }
-.nw-head h4 { grid-column: 1; margin: 8px 0 0; font-size: 19px; line-height: 1.3; font-weight: 700; letter-spacing: -0.01em; outline: none; }
-.nw-dek { grid-column: 1; margin: 6px 0 0; font-size: 14.5px; line-height: 1.5; color: var(--text-secondary); }
-.nw-save { grid-column: 2; grid-row: 1 / span 3; text-align: right; align-self: center; min-width: 118px; }
-.nw-save .v { font-size: 30px; font-weight: 800; line-height: 1.05; font-variant-numeric: tabular-nums; color: hsl(var(--sv-h) var(--sv-s) var(--sv-l)); }
-.nw-save .s { font-size: 11.5px; color: var(--text-muted); margin-top: 3px; }
-.nw-save .m { display: inline-block; margin-top: 5px; font-size: 11.5px; font-weight: 600; border-radius: 999px; padding: 1px 8px; color: hsl(var(--sv-h) var(--sv-s) var(--sv-l)); background: hsl(var(--sv-h) var(--sv-s) var(--sv-l) / 0.12); font-variant-numeric: tabular-nums; }
-.kp.e-one-click { --pc: var(--s3); } .kp.e-minutes { --pc: var(--s1); } .kp.e-habit { --pc: var(--s7); }
-.kr { --rc: var(--text-muted); color: var(--rc); display: inline-flex; align-items: center; gap: 4px; }
-.kr::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--rc); }
-.kr.r-low { --rc: var(--status-good); } .kr.r-medium { --rc: var(--status-warning); } .kr.r-high { --rc: var(--status-critical); }
-.kkind { color: var(--text-secondary); }
-.nw-act { margin: 2px 18px 12px; padding: 8px 10px 8px 12px; border-radius: 9px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center;
-  background: color-mix(in srgb, var(--s3) 11%, transparent); border: 1px solid color-mix(in srgb, var(--s3) 38%, transparent); }
-.nw-act.manual-act { background: color-mix(in srgb, var(--s1) 9%, transparent); border-color: color-mix(in srgb, var(--s1) 32%, transparent); grid-template-columns: auto minmax(0, 1fr); }
-.nw-act .alab { color: var(--s3); font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; }
-.nw-act.manual-act .alab { color: var(--s1); }
-.nw-act code.cmd { background: var(--surface-1); font-size: 12px; }
-.nw-act .mtxt { font-size: 13px; color: var(--text-primary); min-width: 0; }
-.nw-act .mtxt small { color: var(--text-muted); font-size: 12px; margin-left: 6px; }
-.nw-foot .mark-done { margin-left: auto; }
-.icard.nw.done { opacity: 0.62; }
-@media (max-width: 720px) { .nw-act { grid-template-columns: minmax(0, 1fr) auto; } .nw-act .alab { grid-column: 1 / -1; } .nw-act.manual-act { grid-template-columns: minmax(0, 1fr); } }
-.nw-fix { margin: 2px 18px 12px; padding: 8px 10px 8px 12px; gap: 8px; border-radius: 9px;
-  background: color-mix(in srgb, var(--s3) 11%, transparent); border: 1px solid color-mix(in srgb, var(--s3) 38%, transparent); }
-.nw-fix .qlab { color: var(--s3); font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; margin-right: 4px; display: inline-flex; align-items: center; gap: 5px; }
-.nw-fix .qlab::before { content: ""; width: 14px; height: 14px; flex-shrink: 0; background: var(--s3);
-  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z'/%3E%3C/svg%3E") center / contain no-repeat;
-          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z'/%3E%3C/svg%3E") center / contain no-repeat; }
-.nw-fix .olink { font-weight: 600; font-size: 12.5px; color: var(--text-primary); background: var(--surface-1); border: 1px solid color-mix(in srgb, var(--s3) 55%, transparent); padding: 4px 10px; }
-.nw-fix .olink:hover { background: color-mix(in srgb, var(--s3) 22%, var(--surface-1)); }
-.nw-foot { display: flex; align-items: center; gap: 10px; padding: 0 18px 12px; }
-.nw-tog { border: 0; background: none; padding: 0; font-size: 12.5px; font-weight: 600; color: var(--s1); cursor: pointer; }
-.nw-tog::after { content: " ▾"; }
-.icard.nw.open .nw-tog::after { content: " ▴"; }
-.nw-meta { font-size: 12px; color: var(--text-muted); }
-.nw-body { padding: 2px 18px 16px; border-top: 1px solid var(--border); }
-.nw-body[hidden] { display: none !important; }
-.nw-body .ic-detail { color: var(--text-primary); font-size: 14px; white-space: pre-line; margin-top: 12px; }
-@media (max-width: 720px) {
-  .nw-head { grid-template-columns: minmax(0, 1fr); }
-  .nw-save { grid-column: 1; grid-row: auto; text-align: left; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
-  .nw-save .v { font-size: 24px; }
-  .nw-head h4 { font-size: 17px; }
-}
-@media print { .nw-body[hidden] { display: block !important; } .ins-tools { display: none !important; } }
-@keyframes flash { 0% { box-shadow: 0 0 0 3px var(--s1); } 100% { box-shadow: 0 0 0 0 rgba(0, 0, 0, 0); } }
-.flash { animation: flash 1.8s ease-out; }
-.offscreen { position: fixed; left: -9999px; top: 0; }
-@media (max-width: 960px) {
-  .view { padding: 12px 16px 56px; }
-  .tabs { order: 2; width: 100%; }
-  .tabs button { flex: 1; justify-content: center; }
-  .ic-top { flex-direction: column; gap: 6px; }
-  .ic-save { text-align: left; }
-  .cmdbox { grid-template-columns: minmax(0, 1fr) auto; }
-  .cmdbox .lab { grid-column: 1 / -1; }
-  .qchip span { max-width: 190px; }
-}
-@media print { .tabs, .filterbar, .copy, .mark-done, .ofilt { display: none !important; } }
 
 /* ---- Tables ---- */
 .tbl-wrap { overflow-x: auto; max-width: 100%; }
-table.t { border-collapse: collapse; width: 100%; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.tbl-wrap.tall { max-height: 520px; overflow: auto; }
+table.t { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
 .t th {
-  text-align: left; font-weight: 600; color: var(--text-secondary); white-space: nowrap;
-  border-bottom: 1px solid var(--baseline); padding: 6px 10px 6px 0;
+  text-align: left; font-size: 12px; font-weight: 600; color: var(--text-secondary); white-space: nowrap;
+  border-bottom: 1px solid var(--baseline); padding: 8px 12px 8px 0; background: var(--surface-1);
 }
-.t td { border-bottom: 1px solid var(--grid); padding: 6px 10px 6px 0; vertical-align: top; max-width: 460px; overflow-wrap: anywhere; }
+.tbl-wrap.tall thead th { position: sticky; top: 0; z-index: 1; }
+.t td { border-bottom: 1px solid var(--grid); padding: 8px 12px 8px 0; vertical-align: top; max-width: 460px; overflow-wrap: anywhere; }
+.t th:first-child, .t td:first-child { padding-left: 4px; }
+.t tbody tr { transition: background-color var(--fast); }
+.t tbody tr:hover { background: var(--wash); }
 .t .r { text-align: right; }
 .t td.r { white-space: nowrap; }
-.t td.code { white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
+.t td.code { white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
 .t tr.extra { display: none; }
 .t.all tr.extra { display: table-row; }
-.more { margin-top: 8px; }
+.more-row { margin-top: 8px; }
 
-footer.foot { margin-top: 40px; font-size: 12px; color: var(--text-muted); border-top: 1px solid var(--border); padding-top: 14px; }
-footer.foot ul { margin: 6px 0; padding-left: 18px; }
-.fatal { margin: 24px; padding: 16px; border-radius: 10px; background: var(--wash); border-left: 3px solid var(--status-critical); }
+/* ---- Filter bar (the report, narrowed to the questions behind an insight) ---- */
+.filterbar {
+  position: sticky; top: calc(var(--topbar-h) + 8px); z-index: 10; display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-card); padding: 8px 12px; margin: 0 0 16px; box-shadow: var(--shadow);
+}
+.fb-txt { flex: 1; min-width: 0; font-size: 13px; color: var(--text-secondary); }
+.fb-n { color: var(--text-primary); font-weight: 600; }
+
+/* ---- Insights & Optimizations ---- */
+.vhead h2 { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 4px; }
+.vsub { font-size: 13px; color: var(--text-secondary); }
+.vsum-block { margin: 20px 0 0; max-width: 72ch; }
+.vsum-block .lab { display: block; font-size: 13px; font-weight: 500; color: var(--text-muted); margin-bottom: 4px; }
+.vsum-lead { margin: 0; font-size: 16px; font-weight: 500; line-height: 1.5; color: var(--text-primary); }
+.vsum { margin: 8px 0 0; font-size: 14px; line-height: 1.6; color: var(--text-secondary); }
+.progress { margin-top: 16px; max-width: 480px; }
+.progress .pl { display: flex; justify-content: space-between; font-size: 13px; color: var(--text-secondary); }
+.progress .pl b { color: var(--text-primary); font-weight: 600; }
+.progress .track { height: 4px; border-radius: 999px; background: var(--wash-strong); margin-top: 8px; overflow: hidden; }
+.progress .fill { height: 100%; background: var(--save); border-radius: 999px; transition: width 200ms ease; }
+.vtools { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-top: 20px; }
+.vtools .grow { flex: 1; }
+.vtools .lbl { font-size: 13px; color: var(--text-secondary); display: inline-flex; align-items: center; gap: 8px; }
+.vcat { margin-top: 32px; scroll-margin-top: calc(var(--topbar-h) + 16px); }
+.vcat > h3 { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 600; margin: 0 0 4px; }
+.catsub { color: var(--text-secondary); font-size: 13px; margin: 0 0 12px; max-width: 72ch; }
+.stale { margin-top: 16px; padding: 12px 16px; border-radius: var(--r-ctl); background: color-mix(in srgb, var(--status-warning) 12%, transparent); font-size: 13px; }
+.vempty { padding: 64px 0; text-align: center; }
+.vempty h2 { font-size: 20px; margin: 0 0 8px; }
+.vempty p { color: var(--text-secondary); }
+.icard {
+  background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r-card); box-shadow: var(--shadow-card);
+  margin-top: 12px; scroll-margin-top: calc(var(--topbar-h) + 16px); overflow: hidden;
+}
+.nw-top { display: flow-root; cursor: pointer; transition: background-color var(--fast); }   /* the collapsed card: one click target */
+.nw-top:hover { background: var(--wash); }
+.nw-head { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 4px 16px; padding: 16px 12px 12px 20px; }
+.ocard .nw-head { grid-template-columns: auto minmax(0, 1fr) auto auto; padding-left: 16px; }
+.term { cursor: auto; }
+.nw-main { min-width: 0; }
+.meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 13px; color: var(--text-muted); }
+.meta .sep::before { content: "·"; }
+.dot { display: inline-flex; align-items: center; gap: 8px; }
+.dot::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--dc, var(--text-muted)); flex-shrink: 0; }
+.dot.p-high, .dot.r-high, .dot.rel-conflicts { --dc: var(--status-critical); }
+.dot.p-medium, .dot.r-medium, .dot.rel-alternative { --dc: var(--status-warning); }
+.dot.p-low { --dc: var(--baseline); }
+.dot.r-low { --dc: var(--status-good); }
+.dot.rel-requires { --dc: var(--s6); }
+.dot.rel-overlaps { --dc: var(--s1); }
+.dot.rel-complements { --dc: var(--status-good); }
+.eff { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-secondary); font-size: 12px; font-weight: 500; }
+.eff .ico { width: 14px; height: 14px; }
+.nw-head h4 { margin: 4px 0 0; font-size: 16px; font-weight: 600; line-height: 1.4; outline: none; }
+.nw-dek { margin: 4px 0 0; font-size: 14px; line-height: 1.5; color: var(--text-secondary); max-width: 72ch; }
+.nw-save { text-align: right; align-self: start; padding-top: 20px; min-width: 96px; }
+.nw-save .v { font-size: 20px; font-weight: 600; line-height: 1.2; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; color: var(--save); }
+.nw-save .s { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+.nw-chev { align-self: start; margin-top: 12px; color: var(--text-muted); }
+.nw-chev .ico { transition: transform 160ms ease; }
+.icard.open .nw-chev .ico { transform: rotate(180deg); }
+.chk {
+  width: 20px; height: 20px; margin-top: 4px; border-radius: 50%; border: 1.5px solid var(--baseline); background: transparent; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer; color: transparent;
+  transition: background-color var(--fast), border-color var(--fast), color var(--fast);
+}
+.chk:hover { border-color: var(--text-secondary); color: var(--text-muted); }
+.chk[aria-checked="true"] { background: var(--save); border-color: var(--save); color: #ffffff; }
+.chk .ico { width: 12px; height: 12px; }
+.nw-act { margin: 0 20px 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ocard .nw-act { margin-left: 52px; }
+.nw-act .lbl { font-size: 13px; color: var(--text-muted); margin-right: 4px; }
+.nw-act .mtxt { font-size: 13px; color: var(--text-primary); min-width: 0; flex: 1; }
+.nw-act .mtxt small { color: var(--text-muted); font-size: 12px; margin-left: 8px; }
+.nw-act.manual-act { padding: 8px 12px; border-radius: var(--r-ctl); background: var(--wash); }
+.term {
+  position: relative; display: flex; align-items: center; flex: 1; min-width: 0; height: 36px; border-radius: var(--r-ctl);
+  background: var(--wash); border: 1px solid var(--border); font: 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text-primary);
+}
+.term .ps { color: var(--text-muted); padding: 0 8px 0 12px; user-select: none; }
+.term code { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; font: inherit;
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 32px), transparent); }
+.term .btn { margin: 0 4px; flex-shrink: 0; }
+.term .btn.ok { color: var(--save); }
+.nw-rel { margin: -4px 20px 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; font-size: 13px; color: var(--text-secondary); }
+.ocard .nw-rel { margin-left: 52px; }
+.nw-rel .ritem { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.nw-body { padding: 4px 20px 20px; border-top: 1px solid var(--border); animation: reveal 160ms ease-out; }
+.ocard .nw-body { padding-left: 52px; }
+.nw-body .ic-detail { color: var(--text-primary); font-size: 14px; line-height: 1.6; white-space: pre-line; margin: 16px 0 0; max-width: 72ch; }
+.drow { display: grid; grid-template-columns: 168px minmax(0, 1fr); gap: 4px 16px; padding: 12px 0; border-top: 1px solid var(--grid); font-size: 14px; }
+.nw-body > .drow:first-child { border-top: 0; }
+.ic-detail + .drow, .ic-ev + .drow { margin-top: 16px; }
+.drow > .lab { font-size: 13px; color: var(--text-muted); padding-top: 1px; }
+.drow > .dv { min-width: 0; }
+.drow .basis { color: var(--text-muted); font-size: 13px; margin-top: 4px; }
+.drow ul, .drow ol { margin: 0; padding-left: 20px; }
+.drow li { margin: 4px 0; }
+.drow li:first-child { margin-top: 0; }
+.ic-ev { margin: 12px 0 0; padding-left: 0; list-style: none; font-size: 14px; max-width: 72ch; }
+.ic-ev li { margin: 8px 0; display: flex; gap: 8px; align-items: baseline; }
+.evq { flex-shrink: 0; }
+.qlist { display: grid; gap: 4px; }
+.qitem { display: flex; gap: 8px; align-items: baseline; width: 100%; padding: 4px 8px; margin-left: -8px; border: 0; border-radius: var(--r-ctl); background: none;
+  text-align: left; font-size: 13px; color: var(--text-primary); cursor: pointer; transition: background-color var(--fast); }
+.qitem:hover { background: var(--wash-strong); }
+.qitem b { font-weight: 500; color: var(--text-muted); min-width: 36px; font-variant-numeric: tabular-nums; }
+.qitem .ico { align-self: center; color: var(--text-muted); margin-left: auto; }
+.qlist > .btn.ghost, .ofoot > .btn.ghost:first-child { margin-left: -8px; }   /* ghost buttons line up with the text above */
+.steps { padding-left: 20px; margin: 0; }
+.steps li { margin: 8px 0; overflow-wrap: anywhere; }
+.steps li:first-child { margin-top: 0; }
+.sv-act { font-weight: 600; }
+.sv-ptr { color: var(--text-secondary); }
+.hint { font-size: 13px; color: var(--text-muted); margin: 8px 0 0; }
+code.cmd, pre.code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; background: var(--wash); border: 1px solid var(--border); border-radius: var(--r-ctl); }
+code.cmd { padding: 8px; display: block; overflow-x: auto; white-space: pre; }
+pre.code { padding: 8px; overflow: auto; max-height: 260px; margin: 8px 0 0; white-space: pre; }
+.vempty code.cmd { display: inline-block; }
+details.more-d { margin-top: 8px; font-size: 13px; }
+details.more-d > summary { cursor: pointer; color: var(--text-secondary); list-style: none; display: inline-flex; align-items: center; gap: 4px; }
+details.more-d > summary::-webkit-details-marker { display: none; }
+details.more-d > summary .ico { transition: transform 160ms ease; }
+details.more-d[open] > summary .ico { transform: rotate(90deg); }
+details.more-d[open] > :not(summary) { animation: reveal 160ms ease-out; }
+.ofoot { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.ocard.done .nw-head { padding-top: 12px; padding-bottom: 12px; align-items: center; }
+.ocard.done .meta, .ocard.done .nw-dek, .ocard.done .nw-act, .ocard.done .nw-rel, .ocard.done .why-pick, .ocard.done .nw-save .s { display: none; }
+.ocard.done.skipped .nw-head h4 { text-decoration: none; }
+.ocard.skipped .chk { border-style: dashed; }
+.instead { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+.ocard.done .nw-chev { margin-top: 0; }
+.ocard.done .nw-head h4 { margin: 0; font-size: 14px; font-weight: 500; color: var(--text-muted); text-decoration: line-through; }
+.ocard.done .chk { margin-top: 0; }
+.ocard.done .nw-save { padding-top: 0; }
+.ocard.done .nw-save .v { font-size: 14px; color: var(--text-muted); }
+.rtag { flex-shrink: 0; font-size: 13px; font-weight: 500; color: var(--text-primary); white-space: nowrap; }
+.rwith { font-size: 13px; color: var(--text-secondary); }
+.rjoin { font-size: 13px; color: var(--text-muted); }
+.rnote { font-size: 13px; line-height: 1.5; color: var(--text-secondary); margin-top: 4px; }
+.rel-list, .drow .rel-list { list-style: none; margin: 0; padding: 0; }
+.rel-list li { padding: 8px 0; }
+.rel-list li:first-child { padding-top: 0; }
+.rel-list li + li { border-top: 1px solid var(--grid); }
+/* a choice: its options on a thin rail, joined by "or" */
+.ogroup { margin-top: 16px; padding-left: 16px; border-left: 2px solid var(--baseline); }
+.ogroup-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; font-size: 13px; color: var(--text-secondary); }
+.ogroup > .icard:first-of-type { margin-top: 8px; }
+.or-sep { display: flex; align-items: center; gap: 12px; margin: 8px 0 -4px; font-size: 12px; color: var(--text-muted); }
+.or-sep::before, .or-sep::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+.why-pick { margin: -4px 20px 12px 52px; font-size: 13px; color: var(--text-secondary); }
+.why-pick .lbl { color: var(--text-muted); margin-right: 8px; }
+.combined { margin: 16px 0 0; max-width: 72ch; font-size: 14px; color: var(--text-secondary); }
+.combined b { color: var(--save); font-weight: 600; }
+.pop-wrap { position: relative; display: inline-flex; }
+.pop-anchor { position: relative; }
+.pop-anchor > .kpi-pop { top: 8px; }
+.pop {
+  position: absolute; z-index: 30; top: calc(100% + 8px); left: 0; min-width: 300px; max-width: min(460px, calc(100vw - 32px));
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-card); box-shadow: var(--shadow); padding: 12px 16px;
+  font-size: 13px; color: var(--text-primary); text-align: left; cursor: auto; animation: reveal 120ms ease-out;
+}
+.pop .ptitle { font-size: 13px; font-weight: 600; margin: 0 0 8px; }
+.pop .prow { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 8px 0 0; }
+.pop .prow > b { min-width: 80px; font-weight: 500; color: var(--text-secondary); }
+.pop .pnote { color: var(--text-muted); font-size: 12px; margin: 12px 0 0; line-height: 1.5; }
+.kpi-pop { left: auto; right: 0; width: min(680px, calc(100vw - 32px)); max-width: none; }
+.kpi-pop .blk { margin: 0; }
+.flash { animation: flash 1.6s ease-out; }
+@keyframes flash { 0% { box-shadow: 0 0 0 3px var(--focus); } 100% { box-shadow: 0 0 0 0 transparent; } }
+.offscreen { position: fixed; left: -9999px; top: 0; }
+
+footer.foot { margin-top: 40px; font-size: 12px; color: var(--text-muted); border-top: 1px solid var(--border); padding-top: 16px; }
+footer.foot ul { margin: 8px 0; padding-left: 20px; }
+.fatal { margin: 24px; padding: 16px; border-radius: var(--r-card); background: color-mix(in srgb, var(--status-critical) 8%, transparent); }
 
 /* ---- Narrow screens ---- */
 @media (max-width: 960px) {
-  .topbar { padding: 10px 16px; }
-  .controls { margin-left: 0; width: 100%; }
-  .ctl select { max-width: 100%; }
-  .ctl.scope { flex: 1 1 100%; min-width: 0; }
-  .ctl.scope select { flex: 1; min-width: 0; }
+  .bar-in { padding: 0 16px; }
   .menu-btn { display: inline-flex; }
-  .layout { grid-template-columns: minmax(0, 1fr); padding: 12px 16px 56px; gap: 0; }
+  .layout { grid-template-columns: minmax(0, 1fr); padding: 16px 16px 56px; gap: 0; }
   .toc { display: none; }
   .toc.open {
-    display: block; position: fixed; left: 0; right: 0; top: var(--topbar-h); z-index: 30;
-    max-height: 70vh; background: var(--page); border-bottom: 1px solid var(--border); padding: 12px 16px;
-    box-shadow: var(--shadow);
+    display: block; position: fixed; left: 0; right: 0; top: var(--topbar-h); z-index: 30; max-height: 70vh;
+    background: var(--surface-2); border-bottom: 1px solid var(--border); padding: 16px; box-shadow: var(--shadow);
   }
   .row2, .rowN, .rowN.mix { grid-template-columns: minmax(0, 1fr); }
   .rowN > * { padding: 0; }
-  .rowN > * + * { border-left: 0; border-top: 1px solid var(--baseline); padding-top: 14px; margin-top: 10px; }
-  .card { padding: 14px 14px 16px; }
-  .card-head { flex-wrap: wrap; }
-  .pills { max-width: 100%; justify-content: flex-start; order: 3; flex-basis: 100%; }
+  .rowN > * + * { border-left: 0; border-top: 1px solid var(--grid); padding-top: 16px; margin-top: 12px; }
+  .card { padding: 16px; }
+  .kstrip, .kstrip.n4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kstrip.n3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .kstrip .kpi { padding: 12px; }
+}
+@media (max-width: 720px) {
+  .tabs { gap: 16px; }
+  .menu-btn > span { display: none; }                 /* just the icon: the tab row stays one line */
+  .menu-btn { width: 28px; padding: 0; }
+  .vtools .seg { max-width: 100%; overflow-x: auto; }
+  .scopes { margin-left: 0; flex-basis: 100%; }
   .hero .v { font-size: 48px; }
-  .kpis { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); }
+  .kstrip.n3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .nw-head, .ocard .nw-head { grid-template-columns: minmax(0, 1fr) auto; padding: 16px 8px 12px 16px; }
+  .ocard .nw-head { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .nw-save { grid-column: 1 / -1; grid-row: 2; text-align: left; padding-top: 4px; display: flex; align-items: baseline; gap: 8px; }
+  .ocard .nw-save { grid-column: 2 / -1; }
+  .nw-save .s { margin-top: 0; }
+  .nw-chev { grid-column: -2; grid-row: 1; }
+  .nw-act, .nw-rel { margin-left: 16px; margin-right: 16px; }
+  .ocard .nw-act, .ocard .nw-rel, .ocard .nw-body, .why-pick { margin-left: 16px; padding-left: 16px; }
+  .ogroup { padding-left: 8px; }
+  .ocard .nw-body { margin-left: 0; }
+  .nw-body { padding-left: 16px; padding-right: 16px; }
+  .drow, .rel-list li { grid-template-columns: minmax(0, 1fr); }
+  .kpi-pop { position: fixed; left: 16px; right: 16px; top: auto; bottom: 16px; width: auto; max-height: 70vh; overflow: auto; }
 }
 @media print {
-  .controls, .toc, .tbl-toggle, .more, .menu-btn { display: none !important; }
+  .tabbar, .controls, .toc, .menu-btn, .filterbar, .vtools, .chk, .term .btn, .chart-head .btn { display: none !important; }
   .layout { display: block; padding: 0; }
-  .topbar { position: static; }
   body { background: #ffffff; }
-  .card, .ins, .kpi { break-inside: avoid; }
+  .card, .kpi, .icard { break-inside: avoid; }
   .t tr.extra { display: table-row; }
+  .nw-body[hidden] { display: block !important; }
 }
 </style>
 </head>
 <body data-render-status="loading">
 <header class="topbar" id="topbar">
-  <div class="brand"><h1 id="title">Claude Code usage</h1><div class="range" id="range"></div></div>
-  <nav class="tabs" id="tabs" role="tablist" aria-label="Views"></nav>
-  <div class="controls">
-    <label class="ctl scope">Project <select id="scope" aria-label="Project scope"></select></label>
-    <div class="ctl"><span>Theme</span>
-      <div class="seg" id="theme" role="group" aria-label="Theme">
-        <button type="button" data-mode="auto">Auto</button><button type="button" data-mode="light">Light</button><button type="button" data-mode="dark">Dark</button>
-      </div>
+  <div class="bar-in toprow">
+    <div class="brand"><h1 id="title">Claude Code usage</h1><div class="range" id="range"></div></div>
+    <div class="controls">
+      <select class="sel scope-sel" id="scope" aria-label="Project scope" title="Project scope"></select>
+      <span class="pop-wrap" id="themeWrap"><button type="button" class="btn icon" id="themeBtn" aria-label="Theme" title="Theme" aria-haspopup="menu" aria-expanded="false"></button></span>
     </div>
-    <button type="button" class="menu-btn" id="menuBtn" aria-expanded="false" aria-controls="toc">Contents</button>
   </div>
 </header>
-<div class="layout" id="view-report">
+<nav class="tabbar" id="tabbar" aria-label="Views">
+  <div class="bar-in">
+    <div class="tabs" id="tabs" role="tablist"></div>
+    <button type="button" class="btn sm ghost menu-btn" id="menuBtn" aria-expanded="false" aria-controls="toc">Contents</button>
+  </div>
+</nav>
+<div class="layout">
   <nav class="toc" id="toc" aria-label="Contents"></nav>
   <main id="main">
-    <div class="filterbar" id="filterbar" hidden></div>
-    <section class="headline" id="headline" aria-label="Headline"></section>
-    <div id="sections"></div>
-    <footer class="foot" id="foot"></footer>
+    <div id="view-report">
+      <div class="filterbar" id="filterbar" hidden></div>
+      <section class="headline" id="headline" aria-label="Headline"></section>
+      <div id="sections"></div>
+      <footer class="foot" id="foot"></footer>
+    </div>
+    <div class="view" id="view-insights" hidden></div>
+    <div class="view" id="view-opts" hidden></div>
   </main>
 </div>
-<div class="view" id="view-insights" hidden></div>
-<div class="view" id="view-opts" hidden></div>
 <div class="tt" id="tt" role="tooltip" hidden></div>
 <script>window.REPORT = /*__REPORT_DATA__*/null;</script>
 <script>
@@ -705,6 +758,36 @@ function sv(tag, attrs, parent) {
   }
   if (parent) parent.appendChild(el);
   return el;
+}
+/* 16px line icons (24-unit paths, stroked in the text colour) */
+var ICONS = {
+  chevron: 'M6 9l6 6 6-6', 'chevron-right': 'M9 6l6 6-6 6', 'chevron-left': 'M15 6l-6 6 6 6',
+  info: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 11v5M12 8h.01',
+  copy: 'M9 9h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V10a1 1 0 0 1 1-1zM5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1',
+  check: 'M5 12.5l4.5 4.5L19 7.5',
+  external: 'M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5',
+  arrow: 'M5 12h14M13 6l6 6-6 6', 'arrow-left': 'M19 12H5M11 6l-6 6 6 6',
+  sun: 'M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4',
+  moon: 'M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z',
+  monitor: 'M4 4h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM8 20h8M12 16v4',
+  terminal: 'M5 8l4 4-4 4M12 16h7',
+  hand: 'M8 13V5.5a1.5 1.5 0 0 1 3 0V12M11 11V4.5a1.5 1.5 0 0 1 3 0V12M14 11.5v-5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1a6 6 0 0 1-5-2.7l-2.7-4a1.5 1.5 0 0 1 2.5-1.7L8 15',
+  clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2',
+  bulb: 'M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2h5c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z',
+  menu: 'M4 6h16M4 12h16M4 18h10'
+};
+function icon(name, cls) {
+  var s = sv('svg', { class: 'ico' + (cls ? ' ' + cls : ''), viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2,
+                      'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true', focusable: 'false' });
+  sv('path', { d: ICONS[name] || '' }, s);
+  return s;
+}
+function btn(label, cls, ico, attrs) {
+  // the one button style: cls adds 'ghost', 'sm', 'icon'; ico puts a 16px icon before the label (or alone)
+  var b = h('button', Object.assign({ type: 'button', class: 'btn' + (cls ? ' ' + cls : '') }, attrs || {}));
+  if (ico) b.append(icon(ico));
+  if (label) b.append(h('span', { text: label }));
+  return b;
 }
 function isNum(v) { return typeof v === 'number' && isFinite(v); }
 function num(v) { return isNum(v) ? v : 0; }
@@ -1018,8 +1101,8 @@ function renderBar(wrap, c) {
     var labelW = Math.min(maxOf(cats, function (t) { return textW(t, 12); }) + 12, Math.max(84, W * 0.36));
     var showLabels = wantLabels;
     var barLabel = function (s, i) { return fmt(val(s, i), c.labelUnit || unit, 'label'); };
-    var valW = !showLabels ? 0 : (perBar ? maxOf(cats, function (_, i) { return maxOf(series, function (s) { return textW(barLabel(s, i), 11); }); })
-                                         : maxOf(cats, function (_, i) { return textW(labelOf(i), 11); })) + 12;
+    var valW = !showLabels ? 0 : (perBar ? maxOf(cats, function (_, i) { return maxOf(series, function (s) { return textW(barLabel(s, i), 12); }); })
+                                         : maxOf(cats, function (_, i) { return textW(labelOf(i), 12); })) + 12;
     var allLabeled = showLabels;
     var top = 4, axisH = allLabeled ? 4 : 22;
     var x0 = Math.round(labelW + 4), x1 = Math.round(W - Math.max(valW, 14));
@@ -1086,8 +1169,8 @@ function renderBar(wrap, c) {
 
   /* vertical */
   if (c.minBand && cats.length * c.minBand + 48 > W) W = cats.length * c.minBand + 48;   // too narrow: keep bars readable, scroll sideways
-  var plotHv = c.height || 220;
-  var cw = maxOf(cats, function (t) { return textW(t, 11); });
+  var plotHv = c.height || 180;
+  var cw = maxOf(cats, function (t) { return textW(t, 12); });
   var left0 = 8;
   var ax2 = grouped && series.some(function (s) { return s.axis === 2; });      // a second measure on its own right-hand axis
   var on2 = function (s) { return ax2 && s.axis === 2; };
@@ -1103,16 +1186,20 @@ function renderBar(wrap, c) {
   var nTicks = Math.max(3, Math.floor(plotHv / 55));
   var domv = linearTicks(vmin, vmax, nTicks, unit);
   var dom2 = ax2 ? linearTicks(vmin2, vmax2, nTicks, unit2) : null;
-  var tickW = maxOf(domv.ticks, function (t) { return textW(fmt(t, unit, 'axis'), 11); });
+  var tickW = maxOf(domv.ticks, function (t) { return textW(fmt(t, unit, 'axis'), 12); });
   var leftA = Math.ceil(tickW) + 12;
-  var right = ax2 ? Math.ceil(maxOf(dom2.ticks, function (t) { return textW(fmt(t, unit2, 'axis'), 11); })) + 12 : 8;
+  var right = ax2 ? Math.ceil(maxOf(dom2.ticks, function (t) { return textW(fmt(t, unit2, 'axis'), 12); })) + 12 : 8;
   var bandA = (W - leftA - right) / cats.length;
-  var labelsFit = !ax2 && wantLabels && cats.every(function (_, i) { return textW(labelOf(i), 11) <= bandA - 2; });
+  var thickA = grouped ? Math.min(24, Math.max(3, (bandA * 0.8) / n - 2)) : 0;
+  var barLbl = function (s, i) { return fmt(val(s, i), c.labelUnit || unit, 'label'); };
+  var labelsFit = !ax2 && wantLabels && (grouped
+    ? cats.every(function (_, i) { return series.every(function (s) { return textW(barLbl(s, i), 12) <= thickA + 6; }); })   // one value above each bar
+    : cats.every(function (_, i) { return textW(labelOf(i), 12) <= bandA - 2; }));
   var left = labelsFit ? left0 : leftA;
   var bandv = (W - left - right) / cats.length;
   var thickv = grouped ? Math.min(24, Math.max(3, (bandv * 0.8) / n - 2)) : Math.min(24, Math.max(3, bandv * 0.6));
   var topv = labelsFit ? 18 : 8;
-  var catLines = c.wrapLabels ? cats.map(function (t) { return wrap2(t, bandv - 6, 11); }) : null;
+  var catLines = c.wrapLabels ? cats.map(function (t) { return wrap2(t, bandv - 6, 12); }) : null;
   var every = catLines ? 1 : Math.max(1, Math.ceil((cw + 8) / bandv));
   var twoLines = catLines && catLines.some(function (l) { return l.length > 1; });
   var Hv = topv + plotHv + 22 + (twoLines ? 13 : 0);
@@ -1159,14 +1246,18 @@ function renderBar(wrap, c) {
       var d2 = barPathV(xb + (bandv - thickv) / 2, thickv, sy(0), sy(val(series[0], i)));
       if (d2) marks.push(sv('path', { d: d2, class: 'mark f' + slots[0] }, g));
     }
-    if (labelsFit) {
+    if (labelsFit && grouped) {
+      series.forEach(function (s, j) {
+        if (val(s, i)) sv('text', { class: 'vl', x: xs + j * (thickv + 2) + thickv / 2, y: sy(Math.max(0, val(s, i))) - 5, 'text-anchor': 'middle', text: barLbl(s, i) }, svgv);
+      });
+    } else if (labelsFit) {
       var endV = stacked ? totals[i] : val(series[0], i);
       if (endV) sv('text', { class: 'vl', x: xb + bandv / 2, y: sy(Math.max(0, endV)) - 5, 'text-anchor': 'middle', text: labelOf(i) }, svgv);
     }
     if (catLines) {
       catLines[i].forEach(function (ln, k) { sv('text', { class: 'ax', x: xb + bandv / 2, y: topv + plotHv + 15 + k * 13, 'text-anchor': 'middle', text: ln }, svgv); });
     } else if (i % every === 0) {
-      sv('text', { class: 'ax', x: xb + bandv / 2, y: topv + plotHv + 15, 'text-anchor': 'middle', text: truncate(cat, bandv * every - 6, 11) }, svgv);
+      sv('text', { class: 'ax', x: xb + bandv / 2, y: topv + plotHv + 15, 'text-anchor': 'middle', text: truncate(cat, bandv * every - 6, 12) }, svgv);
     }
     var hit = sv('rect', { class: 'hit', x: xb, y: 0, width: bandv, height: topv + plotHv, tabindex: 0, 'aria-label': cat + ': ' + labelOf(i) }, svgv);
     bindHit(hit, function () { return tipFor(i); }, function () { setHL(marks, true); }, function () { setHL(marks, false); });
@@ -1193,7 +1284,7 @@ function renderLine(wrap, c) {
   if (isNum(c.yMax)) ymax = Math.max(ymax, c.yMax);
   var dom = linearTicks(ymin, ymax, Math.max(3, Math.floor(plotH / 50)), unit);
   if (c.yMin === 'auto' && dom.min < 0 && ymin >= 0) dom.min = 0;
-  var tickW = maxOf(dom.ticks, function (t) { return textW(fmt(t, unit, 'axis'), 11); });
+  var tickW = maxOf(dom.ticks, function (t) { return textW(fmt(t, unit, 'axis'), 12); });
   var top = 10, left = Math.ceil(tickW) + 12;
   var y0 = top + plotH, y1 = top;
   var sy = function (v) { return y0 - (v - dom.min) / (dom.max - dom.min || 1) * (y0 - y1); };
@@ -1204,7 +1295,7 @@ function renderLine(wrap, c) {
     var ys = series.map(function (s, j) { return sy(s.values[lastIdx[j]]); }).sort(function (a, b) { return a - b; });
     for (var q = 1; q < ys.length; q++) if (ys[q] - ys[q - 1] < 13) { endLabels = false; break; }
   }
-  var right = endLabels ? Math.min(W * 0.28, maxOf(series, function (s) { return textW(s.name || '', 11); }) + 18) : 14;
+  var right = endLabels ? Math.min(W * 0.28, maxOf(series, function (s) { return textW(s.name || '', 12); }) + 18) : 14;
   var x0 = left, x1 = W - right;
   var xs = xv.filter(isNum);
   var xmin = Math.min.apply(null, xs), xmax = Math.max.apply(null, xs);
@@ -1241,7 +1332,7 @@ function renderLine(wrap, c) {
     var slotW = Math.max(40, (x1 - x0) / Math.max(1, Math.min(cand.length, maxTicks)));
     var kept = [], lastRight = -Infinity, prevRight = -Infinity;
     cand.forEach(function (i) {
-      var txt = truncate(xLabel(i), slotW, 11), w = textW(txt, 11), cx = sx(xv[i]);
+      var txt = truncate(xLabel(i), slotW, 12), w = textW(txt, 12), cx = sx(xv[i]);
       var anchor = cx - w / 2 < 0 ? 'start' : (cx + w / 2 > W ? 'end' : 'middle');
       var l = anchor === 'start' ? cx : anchor === 'end' ? cx - w : cx - w / 2;
       var item = { i: i, txt: txt, cx: cx, anchor: anchor, l: l, r: l + w };
@@ -1265,7 +1356,7 @@ function renderLine(wrap, c) {
       var xx = Math.round(sx(xpos)) + 0.5;
       sv('line', { class: 'refl', x1: xx, x2: xx, y1: y1, y2: y0 }, svg);
       if (r.label) {
-        var lw = textW(r.label, 11), flip = xx + 4 + lw > x1, lx = flip ? xx - 4 - lw : xx + 4, row = 0;
+        var lw = textW(r.label, 12), flip = xx + 4 + lw > x1, lx = flip ? xx - 4 - lw : xx + 4, row = 0;
         var clash = function (k) { return (refRows[k] || []).some(function (b) { return lx < b[1] + 6 && lx + lw > b[0] - 6; }); };
         while (clash(row)) row++;
         (refRows[row] = refRows[row] || []).push([lx, lx + lw]);
@@ -1310,7 +1401,7 @@ function renderLine(wrap, c) {
     if (lastIdx[j] >= 0) {
       var li = lastIdx[j];
       sv('circle', { cx: sx(xv[li]), cy: sy(s.values[li]), r: 4, class: 'dotm f' + slots[j] }, svg);
-      if (endLabels) sv('text', { class: 'vl', x: sx(xv[li]) + 8, y: sy(s.values[li]), 'dominant-baseline': 'central', text: truncate(s.name || '', right - 12, 11) }, svg);
+      if (endLabels) sv('text', { class: 'vl', x: sx(xv[li]) + 8, y: sy(s.values[li]), 'dominant-baseline': 'central', text: truncate(s.name || '', right - 12, 12) }, svg);
     }
   });
   // crosshair layer
@@ -1374,7 +1465,7 @@ function renderScatter(wrap, c) {
   };
   var xd = domFor(pts.map(function (p) { return p.x; }), logX, c.xUnit);
   var yd = domFor(pts.map(function (p) { return p.y; }), logY, c.yUnit);
-  var tickW = maxOf(yd.ticks, function (t) { return textW(fmt(t, c.yUnit, 'axis'), 11); });
+  var tickW = maxOf(yd.ticks, function (t) { return textW(fmt(t, c.yUnit, 'axis'), 12); });
   var top = c.yLabel ? 24 : 10, left = Math.ceil(tickW) + 12, right = 16, bottom = 22 + (c.xLabel ? 16 : 0);
   var x0 = left, x1 = W - right, y0 = top + plotH, y1 = top;
   var H = y0 + bottom;
@@ -1394,7 +1485,7 @@ function renderScatter(wrap, c) {
   xd.ticks.forEach(function (t, k) {
     var x = Math.round(sx(t)) + 0.5;
     sv('line', { class: 'gridl', x1: x, x2: x, y1: y1, y2: y0 }, svg);
-    var lab = fmt(t, c.xUnit, 'axis'), lw = textW(lab, 11);
+    var lab = fmt(t, c.xUnit, 'axis'), lw = textW(lab, 12);
     if (x - lw / 2 > lastLabelX + 6) {
       var anchor = (k === xd.ticks.length - 1 && x1 - x < lw / 2) ? 'end' : 'middle';
       sv('text', { class: 'ax', x: x, y: y0 + 16, 'text-anchor': anchor, text: lab }, svg);
@@ -1452,8 +1543,8 @@ function renderHeatmap(wrap, c) {
   var rowW = Math.min(maxOf(rows, function (t) { return textW(t, 12); }) + 12, W * 0.3);
   var plotW = W - rowW - 4;
   var cw = plotW / cols.length;
-  var ch = Math.max(18, Math.min(30, cw * 0.9));
-  var colMax = maxOf(cols, function (t) { return textW(t, 11); });
+  var ch = Math.max(18, Math.min(28, cw * 0.9));
+  var colMax = maxOf(cols, function (t) { return textW(t, 12); });
   var every = Math.max(1, Math.ceil((colMax + 6) / cw));
   var top = 18, gridH = rows.length * ch, H = top + gridH + 44;
   var all = [];
@@ -1465,16 +1556,17 @@ function renderHeatmap(wrap, c) {
   var colorOf = function (v) { var t = (v - vmin) / (vmax - vmin); return ramp[Math.max(0, Math.min(ramp.length - 1, Math.round(t * (ramp.length - 1))))]; };
   var svg = newSvg(wrap, W, H, c.title);
   cols.forEach(function (col, j) {
-    if (j % every === 0) sv('text', { class: 'ax', x: rowW + j * cw + cw / 2, y: 12, 'text-anchor': 'middle', text: truncate(col, cw * every - 4, 11) }, svg);
+    if (j % every === 0) sv('text', { class: 'ax', x: rowW + j * cw + cw / 2, y: 12, 'text-anchor': 'middle', text: truncate(col, cw * every - 4, 12) }, svg);
   });
   var focusable = rows.length * cols.length <= 200;
   rows.forEach(function (rw, i) {
     sv('text', { class: 'cat', x: rowW - 8, y: top + i * ch + ch / 2, 'text-anchor': 'end', 'dominant-baseline': 'central', text: truncate(rw, rowW - 12, 12) }, svg);
     cols.forEach(function (col, j) {
       var v = (vals[i] || [])[j];
+      var on = isNum(v) && v > 0;                      // nothing there: a neutral cell, so the colour means activity
       var cell = sv('rect', {
-        x: rowW + j * cw + 1, y: top + i * ch + 1, width: Math.max(1, cw - 2), height: Math.max(1, ch - 2), rx: 2,
-        fill: isNum(v) ? colorOf(v) : 'transparent', class: 'mark cellm'
+        x: rowW + j * cw + 1, y: top + i * ch + 1, width: Math.max(1, cw - 2), height: Math.max(1, ch - 2), rx: 3,
+        fill: on ? colorOf(v) : null, class: 'mark cellm' + (on ? '' : ' heat-empty')
       }, svg);
       if (focusable) { cell.setAttribute('tabindex', 0); cell.setAttribute('aria-label', rw + ' · ' + col + ': ' + fmt(v, c.unit)); }
       bindHit(cell, function () { return { title: rw + ' · ' + col, rows: [{ value: fmt(v, c.unit, 'full'), name: c.valueName || '' }] }; },
@@ -1502,31 +1594,70 @@ function arcPath(cx, cy, R, r, a0, a1) {
   return 'M' + p(R, a0) + 'A' + R + ',' + R + ' 0 ' + large + ' 1 ' + p(R, a1) + 'L' + p(r, a1) + 'A' + r + ',' + r + ' 0 ' + large + ' 0 ' + p(r, a0) + 'Z';
 }
 function renderPie(wrap, c) {
+  // Parts of one whole: a small donut beside a legend table (name · value · share). When one part is 90% or more,
+  // a donut says nothing, so it becomes a single 100% bar.
   var cats = (c.categories || []).map(String), s0 = (c.series || [])[0];
   if (!cats.length || !s0) return emptyChart(wrap);
   var vals = cats.map(function (_, i) { return Math.max(0, num(s0.values[i])); });
   var tot = vals.reduce(function (a, b) { return a + b; }, 0);
   if (!(tot > 0)) return emptyChart(wrap);
-  var W = Math.max(200, Math.floor(wrap.clientWidth || 320)), H = c.height || 230;
-  var R = Math.min(H / 2 - 4, W / 2 - 4), r = R * 0.62, cx = W / 2, cy = H / 2;
-  var svg = newSvg(wrap, W, H, c.title);
+  var W = Math.max(200, Math.floor(wrap.clientWidth || 320));
   var slots = cats.map(function (_, i) { var sl = (c.slots || [])[i]; return isNum(sl) && sl >= 1 && sl <= 8 ? sl : (i % 8) + 1; });
   var pct = function (v) { var q = 100 * v / tot; return q > 0 && q < 0.1 ? '<0.1%' : fmt(q, 'pct'); };
-  var a = -Math.PI / 2;
+  var bar100 = Math.max.apply(null, vals) / tot >= 0.9;
+  var box = h('div', { class: 'pie-box' + (bar100 ? ' bar100' : W < 460 ? ' stack' : '') });
+  var marks = [], rows = [];
+  var tbl = h('table', { class: 'pie-legend' }), tb = h('tbody');
+  tbl.append(tb);
+  var link = function (i, on) { if (marks[i]) setHL([marks[i]], on); if (rows[i]) rows[i].classList.toggle('hl', on); };
+  var tipOf = function (i) { return { title: cats[i], rows: [{ slot: slots[i], value: fmt(vals[i], c.unit, 'full'), name: pct(vals[i]) + ' of the total' }] }; };
+  var svg;
+  if (bar100) {
+    var BW = W, BH = 16;
+    svg = sv('svg', { width: BW, height: BH, viewBox: '0 0 ' + BW + ' ' + BH, role: 'img', 'aria-label': c.title || 'Shares' });
+    var x = 0, last = -1;
+    vals.forEach(function (v, i) { if (v > 0) last = i; });
+    cats.forEach(function (cat, i) {
+      var v = vals[i];
+      if (!(v > 0)) return;
+      var w = v / tot * BW, gap = i === last ? 0 : Math.min(2, w / 3);
+      var r = sv('rect', { x: x.toFixed(2), y: 0, width: Math.max(0.5, w - gap).toFixed(2), height: BH, rx: 3, class: 'mark f' + slots[i], tabindex: 0,
+                           'aria-label': cat + ': ' + fmt(v, c.unit, 'full') + ', ' + pct(v) }, svg);
+      marks[i] = r;
+      bindHit(r, function () { return tipOf(i); }, function () { link(i, true); }, function () { link(i, false); });
+      x += w;
+    });
+  } else {
+    var D = 160, R = D / 2 - 2, r0 = R * 0.64, cx = D / 2, cy = D / 2;
+    svg = sv('svg', { width: D, height: D, viewBox: '0 0 ' + D + ' ' + D, role: 'img', 'aria-label': c.title || 'Shares' });
+    var a = -Math.PI / 2;
+    cats.forEach(function (cat, i) {
+      var v = vals[i];
+      if (!(v > 0)) return;
+      var a1 = a + v / tot * 2 * Math.PI;
+      if (a1 - a > 0.002) {
+        var sl = sv('path', { d: arcPath(cx, cy, R, r0, a, a1), class: 'mark pie-sl f' + slots[i], tabindex: 0, 'aria-label': cat + ': ' + fmt(v, c.unit, 'full') + ', ' + pct(v) }, svg);
+        marks[i] = sl;
+        bindHit(sl, function () { return tipOf(i); }, function () { link(i, true); }, function () { link(i, false); });
+      }
+      a = a1;
+    });
+    sv('text', { class: 'pie-v', x: cx, y: cy + 2, 'text-anchor': 'middle', text: fmt(isNum(c.total) ? c.total : tot, c.unit, 'label') }, svg);
+    sv('text', { class: 'pie-l', x: cx, y: cy + 20, 'text-anchor': 'middle', text: c.centerLabel || 'total' }, svg);
+  }
   cats.forEach(function (cat, i) {
-    var v = vals[i];
-    if (!(v > 0)) return;
-    var a1 = a + v / tot * 2 * Math.PI;
-    if (a1 - a > 0.002) {
-      var sl = sv('path', { d: arcPath(cx, cy, R, r, a, a1), class: 'mark pie-sl f' + slots[i], tabindex: 0, 'aria-label': cat + ': ' + fmt(v, c.unit, 'full') + ', ' + pct(v) }, svg);
-      bindHit(sl, function () { return { title: cat, rows: [{ slot: slots[i], value: fmt(v, c.unit, 'full'), name: pct(v) + ' of the total' }] }; },
-        function () { setHL([sl], true); }, function () { setHL([sl], false); });
-    }
-    a = a1;
+    var tr = h('tr', null,
+      h('td', { class: 'nm' }, h('span', { class: 'sw rect b' + slots[i] }), cat),
+      h('td', { class: 'val', text: fmt(vals[i], c.unit, 'label') }),
+      h('td', { class: 'pct', text: pct(vals[i]) }));
+    tr.addEventListener('pointerenter', function () { link(i, true); });
+    tr.addEventListener('pointerleave', function () { link(i, false); });
+    rows[i] = tr;
+    tb.append(tr);
   });
-  sv('text', { class: 'pie-v', x: cx, y: cy - 2, 'text-anchor': 'middle', text: fmt(isNum(c.total) ? c.total : tot, c.unit, 'label') }, svg);
-  sv('text', { class: 'pie-l', x: cx, y: cy + 16, 'text-anchor': 'middle', text: c.centerLabel || 'total' }, svg);
-  return { legend: cats.map(function (cat, i) { return { name: cat + ' · ' + fmt(vals[i], c.unit, 'label') + ' (' + pct(vals[i]) + ')', slot: slots[i] }; }), kind: 'rect' };
+  box.append(svg, tbl);
+  wrap.replaceChildren(box);
+  return { legend: [], kind: 'rect' };
 }
 var RENDERERS = { bar: renderBar, line: renderLine, scatter: renderScatter, heatmap: renderHeatmap, pie: renderPie };
 
@@ -1580,42 +1711,49 @@ function legendEl(items, kind) {
   return lg;
 }
 
+function tableToggle(fig, onTable, onChart) {
+  var b = btn('Table', 'sm ghost', null, { 'aria-pressed': 'false', title: 'Show the numbers as a table' });
+  b.addEventListener('click', function () {
+    var on = !fig.classList.contains('as-table');
+    fig.classList.toggle('as-table', on);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    b.lastChild.textContent = on ? 'Chart' : 'Table';
+    if (on) onTable(); else onChart();
+  });
+  return b;
+}
 function chartBlock(c) {
-  var fig = h('figure', { class: 'chart' });
+  var fig = h('figure', { class: 'chart' + (c.type === 'pie' ? ' pie' : '') });
   var head = h('div', { class: 'chart-head' });
   head.append(h('figcaption', { class: 'chart-title', text: c.title || '' }));
   var tblBox = h('div', { class: 'chart-tbl' });
-  var btn = h('button', { type: 'button', class: 'tbl-toggle', 'aria-pressed': 'false', text: 'Table' });
-  btn.addEventListener('click', function () {
-    var on = !fig.classList.contains('as-table');
-    fig.classList.toggle('as-table', on);
-    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
-    btn.textContent = on ? 'Chart' : 'Table';
-    if (on && !tblBox.firstChild) tblBox.append(chartTable(c));
-    if (!on) draw();
-  });
-  head.append(btn);
   fig.append(head);
   var lgHold = h('div', { class: 'legend' });
   var wrap = h('div', { class: 'svgwrap' });
   var shell = wrap, hint = null;
-  if (c.scrollX) {                                      // a chart wider than its box: arrows, edge fades, a hint
+  if (c.scrollX) {                                      // a chart wider than its box: arrows in the header, edge fades, a hint
     shell = h('div', { class: 'scroll-shell' });
-    var bl = h('button', { type: 'button', class: 'scroll-btn l', 'aria-label': 'Scroll to earlier', text: '‹' });
-    var br = h('button', { type: 'button', class: 'scroll-btn r', 'aria-label': 'Scroll to later', text: '›' });
+    var bl = btn(null, 'sm ghost icon', 'chevron-left', { 'aria-label': 'Scroll to earlier', title: 'Earlier' });
+    var br = btn(null, 'sm ghost icon', 'chevron-right', { 'aria-label': 'Scroll to later', title: 'Later' });
     bl.addEventListener('click', function () { wrap.scrollBy({ left: -wrap.clientWidth * 0.8, behavior: 'smooth' }); });
     br.addEventListener('click', function () { wrap.scrollBy({ left: wrap.clientWidth * 0.8, behavior: 'smooth' }); });
-    shell.append(wrap, bl, br);
+    var nav = h('span', { class: 'scroll-nav', style: 'display:inline-flex;gap:4px' }, bl, br);
+    head.append(nav);
+    shell.append(wrap);
     hint = h('div', { class: 'scroll-hint', hidden: '', text: c.scrollHint || '← Scroll sideways, or use the arrows, to see more' });
     var sync = function () {
       var max = wrap.scrollWidth - wrap.clientWidth;
       shell.classList.toggle('can-l', wrap.scrollLeft > 2);
       shell.classList.toggle('can-r', wrap.scrollLeft < max - 2);
+      bl.disabled = !(wrap.scrollLeft > 2);
+      br.disabled = !(wrap.scrollLeft < max - 2);
+      nav.hidden = !(max > 2);
       hint.hidden = !(max > 2);
     };
     wrap.addEventListener('scroll', sync, { passive: true });
     fig._sync = sync;
   }
+  head.append(tableToggle(fig, function () { if (!tblBox.firstChild) tblBox.append(chartTable(c)); }, function () { draw(); }));
   fig.append(lgHold, shell, tblBox);
   if (hint) fig.append(hint);
   if (c.note) fig.append(h('div', { class: 'chart-cap', text: c.note }));
@@ -1642,13 +1780,13 @@ function chartBlock(c) {
    ===================================================================== */
 function kpiTile(k) {
   var t = h('div', { class: 'kpi' });
-  t.append(h('div', { class: 'l', text: k.label || '' }));
+  t.append(h('div', { class: 'l', text: k.label || '', title: k.label || null }));
   if (isNum(k.month)) {                                  // a saving: all time, and the same pace over 30 days
     t.append(h('div', { class: 'dual' },
       h('div', null, h('div', { class: 'v', text: fmt(k.value, k.unit, 'label') }), h('div', { class: 'cap', text: 'all time' })),
       h('div', { class: 'mo' }, h('div', { class: 'v', text: '≈ ' + fmt(k.month, 'usd', 'label') }), h('div', { class: 'cap', text: 'per 30 days' }))));
   } else t.append(h('div', { class: 'v', text: fmt(k.value, k.unit, 'label') }));
-  if (k.sub) t.append(h('div', { class: 's', text: k.sub }));
+  if (k.sub) t.append(h('div', { class: 's', text: k.sub, title: k.sub }));
   if (k.ref != null) t.append(h('div', { class: 'r', text: (k.refLabel || 'All projects') + ': ' + fmt(k.ref, k.unit, 'label') }));
   return t;
 }
@@ -1679,13 +1817,14 @@ function buildTable(columns, rows, limit, mode) {
   if (limit && rows.length > limit) {
     var frag = h('div');
     frag.append(wrap);
-    var more = h('button', { type: 'button', class: 'more', text: 'Show all ' + rows.length + ' rows' });
+    var more = btn('Show all ' + rows.length + ' rows', 'sm');
     more.addEventListener('click', function () {
       var on = !table.classList.contains('all');
       table.classList.toggle('all', on);
-      more.textContent = on ? 'Show first ' + limit + ' rows' : 'Show all ' + rows.length + ' rows';
+      wrap.classList.toggle('tall', on && rows.length > 20);      // a long list scrolls in its own box, under a sticky header
+      more.lastChild.textContent = on ? 'Show first ' + limit + ' rows' : 'Show all ' + rows.length + ' rows';
     });
-    frag.append(more);
+    frag.append(h('div', { class: 'more-row' }, more));
     return frag;
   }
   return wrap;
@@ -1696,9 +1835,9 @@ function tabsBlock(b) {
   var root = h('div', { class: 'tabsblk' });
   var uid = 'tb' + Math.random().toString(36).slice(2, 8);
   var head = h('button', { type: 'button', class: 'tb-head', 'aria-expanded': 'false', 'aria-controls': uid },
+    icon('chevron-right', 'tb-chev'),
     h('span', { class: 'tb-title', text: b.title || 'Details' }),
-    h('span', { class: 'tb-sub', text: b.sub || (tabs.length > 1 ? tabs.map(function (t) { return t.label; }).join(' · ') : '') }),
-    h('span', { class: 'tb-chev', 'aria-hidden': 'true', text: '▾' }));
+    h('span', { class: 'tb-sub', text: b.sub || (tabs.length > 1 ? tabs.map(function (t) { return t.label; }).join(' · ') : '') }));
   var bar = h('div', { class: 'seg tb-seg', role: 'tablist', 'aria-label': b.title || 'Details' });
   var panel = h('div', { class: 'tb-panel', role: 'tabpanel' });
   var body = h('div', { class: 'tb-body', id: uid, hidden: '' }, b.desc ? h('p', { class: 'tb-desc', text: b.desc }) : null, tabs.length > 1 ? bar : null, panel);
@@ -1840,16 +1979,16 @@ function hatchDefs(svg) {
   return 'url(#' + id + ')';
 }
 
-var TR_FILL = { call: 'f1', mcall: 'f7', miss: 'fcrit', miss2: 'fcrit', tool: 'f3', wait: 'f2', sub: 'f5', prompt: 'f2', cmd: 'f2', int: 'f2',
-                send: 'f7', launch: 'f7', msg: 'f7', err: 'fcrit', tools: 'f4', mark: 'fneu' };
+var TR_FILL = { call: 'f1', mcall: 'f6', miss: 'fcrit', miss2: 'fcrit', tool: 'f3', wait: 'f2', sub: 'f5', prompt: 'f2', cmd: 'f2', int: 'f2',
+                send: 'f6', launch: 'f6', msg: 'f6', err: 'fcrit', tools: 'f4', mark: 'fneu' };
 var TR_SHAPE = { prompt: 'dot', cmd: 'sq', int: 'x', msg: 'dot', err: 'tri' };
 var TR_LEGEND = [
-  ['call', 'API call', 'rect b1'], ['mcall', 'Main agent API call', 'rect b7'], ['miss', 'Cache miss', 'rect bcrit'],
+  ['call', 'API call', 'rect b1'], ['mcall', 'Main agent API call', 'rect b6'], ['miss', 'Cache miss', 'rect bcrit'],
   ['tool', 'Tool run', 'rect b3'], ['wait', 'Waiting for your answer', 'rect b2 soft'], ['you', 'Your input', 'dot b2'],
-  ['sub', 'Another subagent working', 'rect b5'], ['agent', 'Main agent message', 'dia b7'], ['tools', 'Tools or model changed', 'dia b4'],
+  ['sub', 'Another subagent working', 'rect b5'], ['agent', 'Main agent message', 'dia b6'], ['tools', 'Tools or model changed', 'dia b4'],
   ['err', 'Error', 'dia bcrit'], ['mark', 'Session event', 'dia bneu']
 ];
-function trFill(e) { return e.k === 'notif' ? (e.lane === 'main' ? 'f7' : 'fneu') : (TR_FILL[e.k] || 'fneu'); }
+function trFill(e) { return e.k === 'notif' ? (e.lane === 'main' ? 'f6' : 'fneu') : (TR_FILL[e.k] || 'fneu'); }
 function trLegendKey(e) {
   if (e.k === 'miss2') return 'miss';
   if (e.k === 'prompt' || e.k === 'cmd' || e.k === 'int') return 'you';
@@ -1955,13 +2094,13 @@ function renderTrace(wrap, tr) {
   var fits = function (a, b) { return placed.every(function (iv) { return b < iv[0] - 6 || a > iv[1] + 6; }); };
   sc.breaks.forEach(function (g) {
     var d = (g.b - g.a) / 1000, lab = fmtDur(d);
-    if (textW(lab, 11) > g.w - 4) lab = shortDur(d);
-    var w = textW(lab, 11), cx = g.x0 + g.w / 2;
+    if (textW(lab, 12) > g.w - 4) lab = shortDur(d);
+    var w = textW(lab, 12), cx = g.x0 + g.w / 2;
     sv('text', { class: 'ax tr-brk-l', x: cx, y: 14, 'text-anchor': 'middle', text: lab }, svg);
     placed.push([cx - w / 2, cx + w / 2]);
   });
   gapTicks(sc, tz, ref, narrow ? 70 : 90).forEach(function (tk) {
-    var X = Math.round(tk.x) + 0.5, w = textW(tk.label, 11);
+    var X = Math.round(tk.x) + 0.5, w = textW(tk.label, 12);
     var a = X - w / 2, b = X + w / 2, anchor = 'middle', tx = X;
     if (a < px0 - 4) { anchor = 'start'; a = X; b = X + w; }
     if (b > W - 2) { anchor = 'end'; a = X - w; b = X; }
@@ -2008,7 +2147,7 @@ function renderTrace(wrap, tr) {
     var ex = Math.round(sx(mk.expiry)) + 0.5;
     sv('line', { class: 'tr-exp', x1: ex, x2: ex, y1: top - 2, y2: bot + 4 }, svg);
     var el = (tr.state === 'alive' ? 'Cache still alive until ' : 'Cache expired ') + clkRef(mk.expiry, tz, ref) + (tr.state === 'waiting' ? ', while the request waited' : '');
-    var ew = textW(el, 11.5), ax = Math.max(4, Math.min(W - ew - 4, ex - ew / 2));
+    var ew = textW(el, 12), ax = Math.max(4, Math.min(W - ew - 4, ex - ew / 2));
     sv('text', { class: 'tr-ann', x: ax, y: bot + 17, text: el }, svg);
     var eh = sv('rect', { class: 'hit', x: ex - 6, y: top, width: 12, height: bot - top + 22, tabindex: 0, 'aria-label': el }, svg);
     bindHit(eh, function () {
@@ -2016,7 +2155,7 @@ function renderTrace(wrap, tr) {
     });
   } else if (isNum(mk.expiry) && mk.expiry > hi && tr.state === 'alive') {
     sv('text', { class: 'tr-ann2', x: W - 4, y: bot + 17, 'text-anchor': 'end',
-      text: truncate('The cache was still alive: it would have expired at ' + clkRef(mk.expiry, tz, ref), W - px0, 11) }, svg);
+      text: truncate('The cache was still alive: it would have expired at ' + clkRef(mk.expiry, tz, ref), W - px0, 12) }, svg);
   }
 
   /* how long after the previous reply */
@@ -2024,8 +2163,8 @@ function renderTrace(wrap, tr) {
     var bx0 = sx(mk.prevEnd), bx1 = Math.max(sx(mk.start), bx0 + 2), by = AX + 19;
     sv('path', { d: 'M' + bx0 + ',' + (by + 6) + 'V' + by + 'H' + bx1 + 'V' + (by + 6), class: 'tr-brkt' }, svg);
     var bl = fmtDur(tr.idle) + ' from the previous reply to the next request';
-    if (textW(bl, 11.5) > W - px0 - 8) bl = fmtDur(tr.idle) + ' idle';
-    var bw = textW(bl, 11.5), bcx = (bx0 + bx1) / 2, blx = Math.max(px0, Math.min(W - bw - 6, bcx - bw / 2));
+    if (textW(bl, 12) > W - px0 - 8) bl = fmtDur(tr.idle) + ' idle';
+    var bw = textW(bl, 12), bcx = (bx0 + bx1) / 2, blx = Math.max(px0, Math.min(W - bw - 6, bcx - bw / 2));
     sv('text', { class: 'tr-ann', x: blx, y: by - 5, text: bl }, svg);
   }
 
@@ -2036,14 +2175,14 @@ function renderTrace(wrap, tr) {
   var place = function (d, texts) {
     var k = d.ln.id + ':' + d.it.row;
     for (var i = 0; i < texts.length; i++) {
-      var w = textW(texts[i], 11.5), a = d.it.b + 6, b = a + w;
+      var w = textW(texts[i], 12), a = d.it.b + 6, b = a + w;
       if (b <= px1 && free(k, a, b)) { sv('text', { class: 'tr-ann', x: a, y: d.cy, 'dominant-baseline': 'central', text: texts[i] }, svg); (occ[k] = occ[k] || []).push([a, b]); return; }
       b = d.it.a - 6; a = b - w;
       if (a >= px0 && free(k, a, b)) { sv('text', { class: 'tr-ann', x: b, y: d.cy, 'dominant-baseline': 'central', 'text-anchor': 'end', text: texts[i] }, svg); (occ[k] = occ[k] || []).push([a, b]); return; }
     }
     if (d.it.bar) {                                    /* no room beside it: inside the bar, if it's long enough */
       for (var j = 0; j < texts.length; j++) {
-        if (textW(texts[j], 11.5) + 16 <= d.it.b - d.it.a) { sv('text', { class: 'tr-ann', x: d.it.a + 8, y: d.cy, 'dominant-baseline': 'central', text: texts[j] }, svg); return; }
+        if (textW(texts[j], 12) + 16 <= d.it.b - d.it.a) { sv('text', { class: 'tr-ann', x: d.it.a + 8, y: d.cy, 'dominant-baseline': 'central', text: texts[j] }, svg); return; }
       }
     }
   };
@@ -2111,7 +2250,7 @@ function renderOverview(wrap, tr, pick, listed) {
   if (!bounds.length) { emptyChart(wrap); return []; }
   var lo = Math.min.apply(null, bounds), hi = Math.max.apply(null, bounds);
   var dom = linearTicks(0, ymax, 3, 'tokens');
-  var tickW = maxOf(dom.ticks, function (t) { return textW(fmt(t, 'tokens', 'axis'), 11); });
+  var tickW = maxOf(dom.ticks, function (t) { return textW(fmt(t, 'tokens', 'axis'), 12); });
   var x0 = Math.ceil(tickW) + 14, x1 = W - 12;
   var sc = gapScale(bounds, lo, hi, x0, x1, { brk: 22, minBreak: 15 * 60000, rel: 0.08, maxBreaks: 12 });
   var sx = sc.sx, top = 8, plotH = 96, y0 = top + plotH, H = y0 + 24;
@@ -2137,7 +2276,7 @@ function renderOverview(wrap, tr, pick, listed) {
   sv('line', { class: 'basel', x1: x0, x2: x1, y1: y0 + 0.5, y2: y0 + 0.5 }, svg);
   var lastR = -Infinity, lastDay = null;
   gapTicks(sc, tz, null, 110).forEach(function (tk) {
-    var d = dayOf(tk.t, tz), lab = (d !== lastDay ? d + ' ' : '') + clk(tk.t, tz, false), w = textW(lab, 11);
+    var d = dayOf(tk.t, tz), lab = (d !== lastDay ? d + ' ' : '') + clk(tk.t, tz, false), w = textW(lab, 12);
     var a = Math.max(x0, tk.x - w / 2);
     if (a < lastR + 10 || a + w > W) return;
     sv('text', { class: 'ax', x: a, y: y0 + 16, text: lab }, svg);
@@ -2206,9 +2345,8 @@ function figShell(title, draw, table, note) {
   var fig = h('figure', { class: 'chart' });
   var head = h('div', { class: 'chart-head' });
   head.append(h('figcaption', { class: 'chart-title', text: title }));
-  var btn = h('button', { type: 'button', class: 'tbl-toggle', 'aria-pressed': 'false', text: 'Table' });
-  head.append(btn);
   var lg = h('div', { class: 'legend' }), wrap = h('div', { class: 'svgwrap' }), tblBox = h('div', { class: 'chart-tbl' });
+  head.append(tableToggle(fig, function () { if (!tblBox.firstChild) tblBox.append(table()); }, function () { redraw(true); }));
   fig.append(head, lg, wrap, tblBox);
   if (note) fig.append(h('div', { class: 'chart-cap', text: note }));
   var lastW = 0;
@@ -2220,14 +2358,6 @@ function figShell(title, draw, table, note) {
     var items = draw(wrap) || [];
     lg.replaceChildren.apply(lg, items.map(function (it) { return h('span', { class: 'lg-item' }, h('span', { class: 'sw ' + it.sw }), it.name); }));
   }
-  btn.addEventListener('click', function () {
-    var on = !fig.classList.contains('as-table');
-    fig.classList.toggle('as-table', on);
-    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
-    btn.textContent = on ? 'Chart' : 'Table';
-    if (on && !tblBox.firstChild) tblBox.append(table());
-    if (!on) redraw(true);
-  });
   fig._draw = redraw;
   return fig;
 }
@@ -2255,11 +2385,9 @@ function traceDetail(tr, pick, listed) {
   nodes.push(figShell('Timeline: from the previous reply to the miss', function (wrap) { return renderTrace(wrap, tr); }, function () { return traceTable(tr); },
     'Time runs left to right. Hatched stretches are quiet time drawn narrow; their real length is printed above them. Hover any mark for details.'));
   if ((tr.advice || []).length) {
-    var co = h('div', { class: 'callout' }, h('span', { class: 'lab', text: 'What could have been better' }));
     var ul = h('ul');
     tr.advice.forEach(function (a) { ul.append(h('li', { text: a })); });
-    co.append(ul);
-    nodes.push(co);
+    nodes.push(h('div', { class: 'callout' }, icon('bulb'), h('div', null, h('div', { class: 'lab', text: 'What could have been better' }), ul)));
   }
   var others = (tr.ov || {}).others;
   nodes.push(figShell('Where it happened in the session', function (wrap) { return renderOverview(wrap, tr, pick, listed); }, function () { return overviewTable(tr); },
@@ -2296,13 +2424,13 @@ function tracesBlock(b) {
   });
   box.append(list);
   if (ids.length > LIMIT) {
-    var more = h('button', { type: 'button', class: 'more', text: list.classList.contains('all') ? 'Show the top ' + LIMIT : 'Show all ' + ids.length });
+    var more = btn(list.classList.contains('all') ? 'Show the top ' + LIMIT : 'Show all ' + ids.length, 'sm');
     more.addEventListener('click', function () {
       var on = !list.classList.contains('all');
       list.classList.toggle('all', on);
-      more.textContent = on ? 'Show the top ' + LIMIT : 'Show all ' + ids.length;
+      more.lastChild.textContent = on ? 'Show the top ' + LIMIT : 'Show all ' + ids.length;
     });
-    box.append(more);
+    box.append(h('div', { class: 'more-row' }, more));
   }
   var detail = h('div', { class: 'trx-detail' });
   box.append(detail);
@@ -2313,7 +2441,7 @@ function tracesBlock(b) {
     if (!listed(id)) return false;
     sel = id;
     items.forEach(function (it) { var on = it.getAttribute('data-id') === id; it.setAttribute('aria-selected', on ? 'true' : 'false'); it.tabIndex = on ? 0 : -1; if (on && focus) it.focus(); });
-    if (ids.indexOf(id) >= LIMIT && !list.classList.contains('all')) { list.classList.add('all'); if (more) more.textContent = 'Show the top ' + LIMIT; }
+    if (ids.indexOf(id) >= LIMIT && !list.classList.contains('all')) { list.classList.add('all'); if (more) more.lastChild.textContent = 'Show the top ' + LIMIT; }
     fill();
     detail.querySelectorAll('figure.chart').forEach(function (f) { try { f._draw(true); } catch (e) { if (window.console) console.error(e); } });
     if (scroll) detail.scrollIntoView({ block: 'start', behavior: 'smooth' });
@@ -2345,6 +2473,15 @@ CATS.forEach(function (c) { CAT_BY[c.id] = c; });
 var EFFORT = { 'one-click': 'One command', minutes: 'A few minutes', habit: 'A habit' };
 var KIND = { hook: 'Hook', setting: 'Setting', statusline: 'Status line', claude_md: 'CLAUDE.md', agent: 'Agent', command: 'Command', habit: 'Habit' };
 var ACTION = { write_file: 'Create', merge_json: 'Merge into', set_json: 'Set in', unset_json: 'Remove from', append_text: 'Append to', run: 'Run in' };
+// how two optimizations interact: the tag, the phrase on a card ("Alternative to X") and the word joining a pair
+var REL = {
+  conflicts: { tag: 'Don’t combine', with: 'Conflicts with', join: 'and' },
+  alternative: { tag: 'Pick one', with: 'Alternative to', join: 'or' },
+  requires: { tag: 'Do first', with: 'Needs first', by: 'Needed by', join: 'before' },
+  overlaps: { tag: 'Savings overlap', with: 'Savings overlap with', join: 'and' },
+  complements: { tag: 'Pair well', with: 'Pairs well with', join: 'and' }
+};
+var REL_ORDER = ['conflicts', 'alternative', 'requires', 'overlaps', 'complements'];
 var views = { report: document.getElementById('view-report'), insights: document.getElementById('view-insights'), optimizations: document.getElementById('view-opts') };
 var tabsEl = document.getElementById('tabs');
 var filterbarEl = document.getElementById('filterbar');
@@ -2408,6 +2545,7 @@ function showView() {
     hideTip();
     views[state.tab].querySelectorAll('figure.chart').forEach(function (f) { if (f._draw) { try { f._draw(true); } catch (e) { if (window.console) console.error(e); } } });
   }
+  renderToc();
 }
 function openTab(tab, focus) {
   state.tab = tab;
@@ -2464,7 +2602,7 @@ function renderFilterbar() {
   if (!f) { filterbarEl.replaceChildren(); return; }
   var nodes = [];
   if (f.from) {
-    var back = h('button', { type: 'button', class: 'back', text: '← Back to the ' + (f.from.kind === 'opt' ? 'optimization' : 'insight') });
+    var back = btn('Back to the ' + (f.from.kind === 'opt' ? 'optimization' : 'insight'), 'sm', 'arrow-left');
     back.addEventListener('click', function () { openTab(f.from.kind === 'opt' ? 'optimizations' : 'insights', f.from.id); });
     nodes.push(back);
   }
@@ -2472,27 +2610,29 @@ function renderFilterbar() {
   txt.append(h('span', { class: 'fb-n', text: f.ids.length === 1 ? 'Showing 1 question' : 'Showing ' + f.ids.length + ' questions' }));
   if (f.from) txt.append(document.createTextNode(' behind “' + f.from.title + '”'));
   nodes.push(txt);
-  var all = h('button', { type: 'button', class: 'more', text: 'Show all questions' });
+  var all = btn('Show all questions', 'sm ghost');
   all.addEventListener('click', clearFilter);
   nodes.push(all);
   filterbarEl.replaceChildren.apply(filterbarEl, nodes);
 }
-function qChip(id, scope, from, ids) {
-  var q = cardQ(id, scope);
-  var b = h('button', { type: 'button', class: 'qchip', title: q || id }, h('b', { text: id }), q ? h('span', { text: q }) : null);
-  b.addEventListener('click', function () { goToQuestions([id], from, scope); });
-  return b;
+function drow(label, content) {                          // a label on the left, its content on the right
+  return h('div', { class: 'drow' }, h('div', { class: 'lab', text: label }), h('div', { class: 'dv' }, content));
 }
 function questionsRow(ids, scope, from, label) {
   ids = ids.filter(function (id) { var c = allCards()[id] || {}; return !c.hidden || c.alias; });     // cards kept in the data but not shown
-  var row = h('div', { class: 'qrow' }, h('span', { class: 'qlab', text: label || 'Based on' }));
-  ids.forEach(function (id) { row.append(qChip(id, scope, from, ids)); });
+  var list = h('div', { class: 'qlist' });
+  ids.forEach(function (id) {
+    var q = cardQ(id, scope);
+    var b = h('button', { type: 'button', class: 'qitem' }, h('b', { text: id }), h('span', { text: q || id }), icon('arrow'));
+    b.addEventListener('click', function () { goToQuestions([id], from, scope); });
+    list.append(b);
+  });
   if (ids.length > 1) {
-    var all = h('button', { type: 'button', class: 'qall', text: 'Open all ' + ids.length + ' in the report →' });
+    var all = btn('Open all ' + ids.length + ' in the report', 'sm ghost', null, { style: 'justify-self:start;margin-top:4px' });
     all.addEventListener('click', function () { goToQuestions(ids, from, scope); });
-    row.append(all);
+    list.append(all);
   }
-  return row;
+  return drow(label || 'Based on', list);
 }
 
 /* ---- Insights view ---- */
@@ -2526,89 +2666,103 @@ function savingsLine(sv, scope) {
 }
 function saveTile(sv, scope) {                           // the saving beside an insight or optimization title
   var mo = monthOf(sv, scope);
-  return h('div', { class: 'nw-save' },
+  var kind = sv.kind === 'upper_bound' ? 'at most' : sv.kind === 'measured' ? 'avoidable' : 'in theory';
+  return h('div', { class: 'nw-save', title: (sv.kind === 'upper_bound' ? 'At most, ' : sv.kind === 'measured' ? 'Spent and avoidable, ' : 'Saved in theory, ') + 'all time' },
     h('div', { class: 'v', text: fmt(sv.usd_so_far, 'usd') }),
-    h('div', { class: 's', text: sv.kind === 'upper_bound' ? 'at most, all time' : sv.kind === 'measured' ? 'spent all time, avoidable' : 'saved all time, in theory' }),
-    isNum(mo) ? h('div', { class: 'm', text: '≈ ' + fmt(mo, 'usd') + ' / 30 days' }) : null);
+    h('div', { class: 's', text: isNum(mo) ? kind + ' · ≈ ' + fmt(mo, 'usd') + ' / 30 days' : kind + ', all time' }));
 }
-var SV_RANGE = null;      // [lowest, highest] saving among the insights (legend)
-var SV_RANK = [];         // distinct savings, ascending: colour follows the rank, so the scale spreads evenly
-function savingHue(v) {
-  if (!SV_RANK.length || !isNum(v) || v <= 0) return null;
-  var i = SV_RANK.indexOf(v), t = SV_RANK.length > 1 ? i / (SV_RANK.length - 1) : 1;
-  if (i < 0) t = 0.5;
-  return Math.round(18 + t * (135 - 18));     // 18 = vivid orange (smallest saving) … 135 = vivid green (largest)
+function splitLead(text) {                               // the first sentence, and the rest
+  var m = String(text || '').match(/^([\s\S]+?[.!?])\s+(?=[A-Z0-9“"($])([\s\S]*)$/);
+  return m ? [m[1], m[2]] : [String(text || ''), ''];
 }
-var CAT_TITLE = {};
-var OPEN_INS = {};       // insight cards the reader opened, kept when the list is re-sorted
-function insightCard(it, doc) {
-  var from = { kind: 'ins', id: it.id, title: it.title };
-  var sv = it.savings && isNum(it.savings.usd_so_far) ? it.savings : null;
-  var hue = sv ? savingHue(sv.usd_so_far) : null;
-  var art = h('article', { class: 'icard nw prio-' + (it.priority || 'medium') + (hue != null ? ' has-sv' : ''), id: 'ins-' + it.id });
-  if (hue != null) art.style.setProperty('--sv-h', String(hue));
-  var pr = it.priority || 'medium', cf = it.confidence || 'medium';
-  var bars = { high: 3, medium: 2, low: 1 }[cf] || 2;
-  var meter = h('span', { class: 'meter', 'aria-hidden': 'true' });
-  for (var i = 1; i <= 3; i++) meter.append(h('i', { class: i <= bars ? 'on' : '' }));
-  var kicker = h('div', { class: 'kicker' },
-    h('span', { class: 'kp p-' + pr, text: pr + ' priority' }),
-    h('span', { class: 'kc c-' + cf }, meter, cf + ' confidence'),
-    h('span', { class: 'kcat', text: CAT_TITLE[it.category] || it.category || '' }));
-  var head = h('div', { class: 'nw-head' }, kicker, h('h4', { text: it.title }), h('p', { class: 'nw-dek', text: it.bottom_line }));
-  if (sv) head.append(saveTile(sv, it.scope));
-  art.append(head);
-  var links = (it.optimizations || []).map(findOpt).filter(Boolean);
-  if (links.length) {                                  // the fixes stay visible when the card is collapsed
-    var orow = h('div', { class: 'qrow nw-fix' }, h('span', { class: 'qlab', text: 'Fix it' }));
-    links.forEach(function (o) {
-      var b = h('button', { type: 'button', class: 'olink', text: o.title + ' →' });
-      b.addEventListener('click', function () { openTab('optimizations', o.id); });
-      orow.append(b);
-    });
-    art.append(orow);
-  }
-  var body = h('div', { class: 'nw-body', id: 'insb-' + it.id, hidden: '' });
-  var tog = h('button', { type: 'button', class: 'nw-tog', 'aria-expanded': 'false', 'aria-controls': 'insb-' + it.id, text: 'Read more' });
-  var nq = (it.questions || []).length;
-  var meta = nq ? nq + ' question' + (nq > 1 ? 's' : '') + ' behind it' : '';
-  art.append(h('div', { class: 'nw-foot' }, tog, meta ? h('span', { class: 'nw-meta', text: meta }) : null));
+function summaryBlock(text) {
+  var parts = splitLead(text);
+  return h('div', { class: 'vsum-block' }, h('span', { class: 'lab', text: 'The bottom line' }),
+    h('p', { class: 'vsum-lead', text: parts[0] }), parts[1] ? h('p', { class: 'vsum', text: parts[1] }) : null);
+}
+function chevBtn(ctrl) { return btn(null, 'sm ghost icon nw-chev', 'chevron', { 'aria-expanded': 'false', 'aria-controls': ctrl, 'aria-label': 'Show more' }); }
+function expandable(art, top, body, chev, onToggle) {
+  // the whole collapsed area opens and closes the card (its buttons, links and command field keep their own clicks);
+  // the chevron is the keyboard handle
   function setOpen(open) {
-    if (open) OPEN_INS[it.id] = 1; else delete OPEN_INS[it.id];
     body.hidden = !open;
     art.classList.toggle('open', open);
-    tog.setAttribute('aria-expanded', open ? 'true' : 'false');
-    tog.textContent = open ? 'Show less' : 'Read more';
-    if (open) body.querySelectorAll('figure.chart').forEach(function (f) { if (f._draw) f._draw(true); });
+    chev.setAttribute('aria-expanded', open ? 'true' : 'false');
+    chev.setAttribute('aria-label', open ? 'Show less' : 'Show more');
+    if (onToggle) onToggle(open);
   }
   art._open = setOpen;
-  tog.addEventListener('click', function () { setOpen(body.hidden); });
-  head.addEventListener('click', function (e) { if (!(window.getSelection && String(window.getSelection()))) setOpen(body.hidden); });
-
+  chev.addEventListener('click', function (e) { e.stopPropagation(); setOpen(body.hidden); });
+  top.addEventListener('click', function (e) {
+    if (e.target.closest && e.target.closest('button, a, input, select, textarea, summary, .term')) return;
+    if (!(window.getSelection && String(window.getSelection()))) setOpen(body.hidden);
+  });
+  return setOpen;
+}
+var PRIO = { high: 'High priority', medium: 'Medium priority', low: 'Low priority' };
+var CAT_TITLE = {};
+var OPEN_INS = {};       // insight cards the reader opened, kept when the list is re-sorted
+function insightCard(it, doc, showCat) {
+  var from = { kind: 'ins', id: it.id, title: it.title };
+  var sv = it.savings && isNum(it.savings.usd_so_far) ? it.savings : null;
+  var art = h('article', { class: 'icard nw', id: 'ins-' + it.id });
+  var pr = it.priority || 'medium', cf = it.confidence || 'medium';
+  var meta = h('div', { class: 'meta' }, h('span', { class: 'dot p-' + pr, text: PRIO[pr] || pr }), h('span', { class: 'sep' }),
+    h('span', { text: cf.charAt(0).toUpperCase() + cf.slice(1) + ' confidence' }));
+  if (showCat) meta.append(h('span', { class: 'sep' }), h('span', { text: CAT_TITLE[it.category] || it.category || '' }));
+  var chev = chevBtn('insb-' + it.id);
+  var head = h('div', { class: 'nw-head' }, h('div', { class: 'nw-main' }, meta, h('h4', { text: it.title }), h('p', { class: 'nw-dek', text: it.bottom_line })),
+    sv ? saveTile(sv, it.scope) : h('span'), chev);
+  var top = h('div', { class: 'nw-top' }, head);
+  art.append(top);
+  var links = (it.optimizations || []).filter(findOpt);
+  if (links.length) {                                  // the fixes stay visible when the card is collapsed
+    var orow = h('div', { class: 'nw-act' }, h('span', { class: 'lbl', text: 'Fix it' }));
+    var cg = choiceGroups(), placed = {};
+    links.forEach(function (id) {                      // alternatives sit together, joined by "or"
+      if (placed[id]) return;
+      var g = cg.groupOf[id], run = g ? links.filter(function (x) { return cg.groupOf[x] === g; }) : [id];
+      run.forEach(function (x, k) {
+        placed[x] = true;
+        if (k) orow.append(h('span', { class: 'rjoin', text: 'or' }));
+        var o = findOpt(x), b = btn(o.title, 'sm link', null);
+        b.append(icon('arrow'));
+        b.addEventListener('click', function () { goOpt(o.id); });
+        orow.append(b);
+      });
+    });
+    top.append(orow);
+  }
+  var body = h('div', { class: 'nw-body', id: 'insb-' + it.id, hidden: '' });
+  expandable(art, top, body, chev, function (open) {
+    if (open) OPEN_INS[it.id] = 1; else delete OPEN_INS[it.id];
+    if (open) body.querySelectorAll('figure.chart').forEach(function (f) { if (f._draw) f._draw(true); });
+  });
   if (it.detail) body.append(h('p', { class: 'ic-detail', text: it.detail }));
   if ((it.evidence || []).length) {
     var ev = h('ul', { class: 'ic-ev' });
     it.evidence.forEach(function (e) {
-      var q = h('button', { type: 'button', class: 'evq', text: e.question });
+      var q = btn(e.question, 'sm evq', null, { title: cardQ(e.question, it.scope) || e.question });
       q.addEventListener('click', function () { goToQuestions([e.question], from, it.scope); });
-      ev.append(h('li', null, q, ' ' + e.fact));
+      ev.append(h('li', null, q, h('span', { text: e.fact })));
     });
     body.append(ev);
   }
   if (it.savings) {
     var s2 = it.savings;
-    body.append(h('div', { class: 'ic-sv' }, h('span', { class: 'lab', text: 'If applied from day one' }), savingsLine(s2, it.scope) || '',
+    body.append(drow('If applied from day one', [savingsLine(s2, it.scope) || '',
       s2.basis ? h('div', { class: 'basis', text: s2.basis }) : null,
-      (s2.overlaps_with || []).length ? h('div', { class: 'basis', text: 'Overlaps with: ' + s2.overlaps_with.map(function (o) { var x = findInsight(o); return x ? x.title : o; }).join('; ') }) : null));
+      (s2.overlaps_with || []).length ? h('div', { class: 'basis', text: 'Overlaps with: ' + s2.overlaps_with.map(function (o) { var x = findInsight(o); return x ? x.title : o; }).join('; ') }) : null
+    ].filter(Boolean).reduce(function (d, x) { d.append(x); return d; }, h('div'))));
   }
   if ((it.actions || []).length) {
-    var ul = h('ul', { class: 'ic-act' });
+    var ul = h('ul');
     it.actions.forEach(function (a) { ul.append(h('li', { text: a })); });
-    body.append(h('div', { class: 'ic-do' }, h('span', { class: 'lab', text: 'What to do' }), ul));
+    body.append(drow('What to do', ul));
   }
   body.append(questionsRow(it.questions || [], it.scope, from));
   art.append(body);
-  if (OPEN_INS[it.id]) setOpen(true);
+  if (OPEN_INS[it.id]) art._open(true);
   return art;
 }
 var POPS = [];
@@ -2633,7 +2787,7 @@ function bindPop(trigger, pop, onOpen, hover, container) {
     box.addEventListener('mouseleave', function () { clearTimeout(timer); timer = setTimeout(function () { set(false); }, 180); });
   }
 }
-document.addEventListener('click', function (e) { POPS.forEach(function (p) { if (!p.pop.hidden && !p.box.contains(e.target)) p.set(false); }); });
+document.addEventListener('click', function (e) { POPS.forEach(function (p) { if (!p.pop.hidden && !p.box.contains(e.target) && !p.pop.contains(e.target)) p.set(false); }); });
 document.addEventListener('keydown', function (e) { if (e.key === 'Escape') POPS.forEach(function (p) { if (!p.pop.hidden) p.set(false); }); });
 function combinedSaving(list, spend) {
   // Levers overlap (a smaller context also makes misses cheaper), so they don't add up. Treat each as cutting its share of
@@ -2642,12 +2796,23 @@ function combinedSaving(list, spend) {
   list.forEach(function (i) { keep *= 1 - Math.min(0.99, i.savings.usd_so_far / spend); });
   return spend * (1 - keep);
 }
+function infoPop(id, label, build, wrapCls, holder) {
+  // an (i) button with a small popover built on first open; holder: where the popover sits, when not beside the button
+  var pop = h('div', { class: 'pop', id: id, role: 'dialog', 'aria-label': label, hidden: '' });
+  var b = btn(null, 'sm ghost icon', 'info', { title: label, 'aria-label': label, 'aria-haspopup': 'dialog', 'aria-expanded': 'false', 'aria-controls': id });
+  var wrap = h('span', { class: 'pop-wrap' + (wrapCls ? ' ' + wrapCls : '') }, b);
+  (holder || wrap).append(pop);
+  var built = false;
+  bindPop(b, pop, function () { if (!built) { built = true; build(pop); } }, false, wrap);
+  return wrap;
+}
 function renderInsights() {
   var el = views.insights, doc = insightsDoc();
   if (!doc || !(doc.insights || []).length) {
     el.replaceChildren(emptyView('No insights yet', 'Claude writes this tab from the numbers in this report. In Claude Code, run:', '/claude-usage:report'));
     return;
   }
+  CATS.forEach(function (c) { CAT_TITLE[c.id] = c.title; });
   var nodes = [];
   var head = h('header', { class: 'vhead' });
   head.append(h('h2', { text: 'Insights' }));
@@ -2655,143 +2820,109 @@ function renderInsights() {
     (doc.generated || '') + ' · ' + doc.insights.length + ' insights' }));
   var stl = staleNote(doc, 'insights');
   if (stl) head.append(stl);
-  if (doc.summary) head.append(h('div', { class: 'vsum-block' }, h('span', { class: 'lab', text: 'The bottom line' }), h('p', { class: 'vsum', text: doc.summary })));
+  if (doc.summary) head.append(summaryBlock(doc.summary));
   var cost = doc.insights.filter(function (i) { return i.savings && isNum(i.savings.usd_so_far); });
   var hero = ((((REPORT.data || {}).all || {}).headline) || {}).hero || {};
   var spend = isNum((doc.source || {}).spend_usd) ? doc.source.spend_usd : hero.value;
   var biggest = cost.slice().sort(function (a, b) { return b.savings.usd_so_far - a.savings.usd_so_far; })[0];
-  var k = h('div', { class: 'kpis' });
+  var k = h('div', { class: 'kstrip' });
   if (isNum(spend)) k.append(kpiTile({ label: 'Spend in this period', value: spend, unit: 'usd', sub: 'API list-price equivalent' }));
-  if (biggest) k.append(kpiTile({ label: 'Biggest single saving', value: biggest.savings.usd_so_far, unit: 'usd', month: monthOf(biggest.savings, biggest.scope), sub: biggest.title }));
+  if (biggest) k.append(kpiTile({ label: 'Biggest single saving', value: biggest.savings.usd_so_far, unit: 'usd', sub: biggest.title }));
   var costList = doc.insights.filter(function (i) { return i.category === 'cost' && i.savings && isNum(i.savings.usd_so_far) && i.savings.usd_so_far > 0; });
   if (isNum(spend) && spend > 0 && costList.length) {
     var mx = combinedSaving(costList, spend), sum = costList.reduce(function (a, i) { return a + i.savings.usd_so_far; }, 0);
     var days = coverDays('all');
-    var mt = kpiTile({ label: 'Potential maximum saving', value: mx, unit: 'usd', month: days ? mx * 30 / days : null,
-      sub: fmt(100 * mx / spend, 'pct') + ' of spend, if all ' + costList.length + ' cost changes had applied from day one. Overlaps removed; the plain sum would be ' + fmt(sum, 'usd') + ' all time.' });
-    mt.classList.add('kpi-max');
-    mt.style.setProperty('--sv-h', '135');
-    k.append(mt);
-    var mpop = h('div', { class: 'pop kpi-pop', id: 'maxsave-pop', role: 'dialog', 'aria-label': 'What each cost change would have saved', hidden: '' });
-    var chartBuilt = false;
-    function buildPop() {
-      if (chartBuilt) return;
-      chartBuilt = true;
+    var mt = kpiTile({ label: 'Potential maximum saving', value: mx, unit: 'usd', sub: fmt(100 * mx / spend, 'pct') + ' of spend, overlaps removed' });
+    mt.classList.add('has-pop');
+    var anchor = h('div', { class: 'pop-anchor' });                // under the strip, which clips what overflows it
+    mt.append(infoPop('maxsave-pop', 'How the maximum saving is worked out', function (pop) {
+      pop.classList.add('kpi-pop');
       var withSv = costList.slice().sort(function (a, b) { return b.savings.usd_so_far - a.savings.usd_so_far; });
-      mpop.append(h('p', { class: 'ptitle', text: 'What each cost change would have saved: all time · per 30 days' }),
+      pop.append(h('p', { class: 'ptitle', text: 'What each cost change would have saved' }),
+        h('p', { class: 'pnote', style: 'margin:0 0 8px', text: fmt(mx, 'usd') + ' all time' + (days ? ' (≈ ' + fmt(mx * 30 / days, 'usd') + ' per 30 days)' : '') + ', ' +
+          fmt(100 * mx / spend, 'pct') + ' of spend, if all ' + costList.length + ' cost changes had applied from day one.' }),
         h('div', { class: 'blk' }, chartBlock({ type: 'bar', orient: 'h', unit: 'usd', catLabel: 'Insight', title: '', labelRaw: true,
           categories: withSv.map(function (i) { return i.title; }),
           series: [{ name: 'All time', values: withSv.map(function (i) { return i.savings.usd_so_far; }),
                      raw: withSv.map(function (i) { return monthOf(i.savings, i.scope); }), rawUnit: 'usd', rawPrefix: '≈ ', rawLabel: '/ 30 days', rawName: 'Per 30 days' }],
-          pointColors: withSv.map(function (i) { var hh = savingHue(i.savings.usd_so_far); return hh == null ? null : 'hsl(' + hh + ' var(--sv-s) var(--sv-l))'; }) })),
-        h('p', { class: 'pnote', text: 'These overlap (a smaller context also makes misses cheaper), so the tile does not add them up: each change saves its share of what the others leave, spend × (1 − Π(1 − saving ÷ spend)). The plain sum, ' + fmt(sum, 'usd') + ', is the ceiling. Theoretical: the same work at list prices.' }));
-    }
-    mt.classList.add('has-pop');
-    mt.setAttribute('tabindex', '0');
-    mt.setAttribute('role', 'button');
-    mt.setAttribute('aria-haspopup', 'dialog');
-    mt.setAttribute('aria-expanded', 'false');
-    mt.setAttribute('aria-controls', 'maxsave-pop');
-    mt.append(h('span', { class: 'hint-i', 'aria-hidden': 'true', text: 'i' }), mpop);
-    bindPop(mt, mpop, buildPop, true);
+          pointColors: withSv.map(function () { return 'var(--save)'; }) })),
+        h('p', { class: 'pnote', text: 'These overlap (a smaller context also makes misses cheaper), so they are not added up: each change saves its share of what the others leave, spend × (1 − Π(1 − saving ÷ spend)). The plain sum, ' + fmt(sum, 'usd') + ', is the ceiling. Theoretical: the same work at list prices.' }));
+    }, 'kpi-i', anchor));
+    mt.querySelector('.v').style.color = 'var(--save)';
+    k.append(mt);
   }
   k.append(kpiTile({ label: 'High-priority insights', value: doc.insights.filter(function (i) { return i.priority === 'high'; }).length, unit: 'count', sub: 'of ' + doc.insights.length }));
+  k.classList.add('n' + k.children.length);
   head.append(k);
-  var nav = h('nav', { class: 'catnav', 'aria-label': 'Insight categories' });
-  CATS.forEach(function (c) {
-    var n = doc.insights.filter(function (i) { return i.category === c.id; }).length;
-    if (!n) return;
-    var a = h('a', { href: '#cat-' + c.id }, c.title, h('span', { class: 'cnt', text: String(n) }));
-    a.addEventListener('click', function (e) { e.preventDefault(); var s = document.getElementById('cat-' + c.id); if (s) s.scrollIntoView({ block: 'start' }); });
-    nav.append(a);
-  });
-  head.append(nav);
-  var svs = doc.insights.filter(function (i) { return i.savings && isNum(i.savings.usd_so_far) && i.savings.usd_so_far > 0; }).map(function (i) { return i.savings.usd_so_far; });
-  SV_RANGE = svs.length ? [Math.min.apply(null, svs), Math.max.apply(null, svs)] : null;
-  SV_RANK = svs.filter(function (v, i) { return svs.indexOf(v) === i; }).sort(function (a, b) { return a - b; });
-  CATS.forEach(function (c) { CAT_TITLE[c.id] = c.title; });
-  var legend = h('div', { class: 'ins-tools' });
-  var ipop = h('div', { class: 'pop', id: 'ins-legend', role: 'dialog', 'aria-label': 'How to read the cards', hidden: '' });
-  ipop.append(h('p', { class: 'ptitle', text: 'How to read the cards' }));
-  if (SV_RANGE) ipop.append(h('div', { class: 'prow' }, h('b', { text: 'Saving' }), 'smallest ' + fmt(SV_RANGE[0], 'usd'), h('span', { class: 'ramp', 'aria-hidden': 'true' }), 'largest ' + fmt(SV_RANGE[1], 'usd')));
-  ipop.append(h('div', { class: 'prow' }, h('b', { text: 'Priority' }), h('span', { class: 'kp p-high', text: 'high' }), h('span', { class: 'kp p-medium', text: 'medium' }), h('span', { class: 'kp p-low', text: 'low' })));
-  var conf = h('div', { class: 'prow' }, h('b', { text: 'Confidence' }));
-  [['high', 3], ['medium', 2], ['low', 1]].forEach(function (c) {
-    var mtr = h('span', { class: 'meter', 'aria-hidden': 'true' });
-    for (var q = 1; q <= 3; q++) mtr.append(h('i', { class: q <= c[1] ? 'on' : '' }));
-    conf.append(h('span', { class: 'kc c-' + c[0] }, mtr, c[0]));
-  });
-  ipop.append(conf, h('p', { class: 'pnote', text: 'Savings are coloured by rank among all insights: the largest is green, the smallest orange. Click a card to read the story behind it.' }));
-  var ibtn = h('button', { type: 'button', class: 'info-btn', text: 'i', title: 'How to read the cards', 'aria-label': 'How to read the cards',
-    'aria-haspopup': 'dialog', 'aria-expanded': 'false', 'aria-controls': 'ins-legend' });
-  var iwrap = h('span', { class: 'pop-wrap' }, ibtn, ipop);
-  bindPop(ibtn, ipop, null, false, iwrap);
-  legend.append(iwrap);
-  head.append(legend);
-  nodes.push(head);
+  if (anchor) head.append(anchor);
+  var tools = h('div', { class: 'vtools' });
+  tools.append(h('span', { class: 'lbl' }, 'How to read the cards', infoPop('ins-legend', 'How to read the cards', function (pop) {
+    pop.append(h('p', { class: 'ptitle', text: 'How to read the cards' }),
+      h('div', { class: 'prow' }, h('b', { text: 'Priority' }), h('span', { class: 'dot p-high', text: 'High' }), h('span', { class: 'dot p-medium', text: 'Medium' }), h('span', { class: 'dot p-low', text: 'Low' })),
+      h('div', { class: 'prow' }, h('b', { text: 'Confidence' }), 'how sure the numbers are: high, medium or low'),
+      h('div', { class: 'prow' }, h('b', { text: 'Saving' }), h('span', { style: 'color:var(--save);font-weight:600', text: '$123' }), 'what it would have saved, all time, then per 30 days'),
+      h('p', { class: 'pnote', text: 'Click a card to read the story behind it and the questions it is based on.' }));
+  })), h('span', { class: 'grow' }));
   var prio = { high: 0, medium: 1, low: 2 };
   var usd = function (i) { return (i.savings && isNum(i.savings.usd_so_far)) ? i.savings.usd_so_far : -1; };
   var byPrio = function (a, b) { return (prio[a.priority] == null ? 1 : prio[a.priority]) - (prio[b.priority] == null ? 1 : prio[b.priority]) || usd(b) - usd(a); };
   var bySaving = function (a, b) { return usd(b) - usd(a) || byPrio(a, b); };
   var listEl = h('div', { class: 'ins-list' });
+  function section(id, title, sub, list, showCat, h3) {
+    var sec = h('section', { class: 'vcat', id: id, 'data-toc': title });
+    sec.append(h3 || h('h3', { text: title }), sub ? h('p', { class: 'catsub', text: sub }) : null);
+    list.forEach(function (it) { sec.append(insightCard(it, doc, showCat)); });
+    return sec;
+  }
   function buildList(mode) {
     var secs = [];
     if (mode === 'saving') {
-      var all = doc.insights.slice().sort(bySaving);
-      var sec = h('section', { class: 'vcat', id: 'sort-saving' });
-      sec.append(h('h3', { text: 'All insights, largest saving first' }),
-        h('p', { class: 'catsub', text: 'Insights without a saving follow, by priority. Savings overlap, so they do not add up.' }));
-      all.forEach(function (it) { sec.append(insightCard(it, doc)); });
-      secs.push(sec);
+      secs.push(section('sort-saving', 'Largest saving first', 'Insights without a saving follow, by priority. Savings overlap, so they do not add up.', doc.insights.slice().sort(bySaving), true));
     } else if (mode === 'priority') {
       ['high', 'medium', 'low'].forEach(function (p) {
         var list = doc.insights.filter(function (i) { return (i.priority || 'medium') === p; }).sort(bySaving);
         if (!list.length) return;
-        var sec = h('section', { class: 'vcat', id: 'prio-' + p });
-        sec.append(h('h3', { class: 'vprio-h' }, h('span', { class: 'kp p-' + p, text: p }), p.charAt(0).toUpperCase() + p.slice(1) + ' priority',
-          h('span', { class: 'cnt', text: String(list.length) })));
-        sec.append(h('p', { class: 'catsub', text: { high: 'Worth at least 5% of spend, a quick fix with a clear payoff, or something broken.', medium: 'Worth 1–5% of spend, or a solid habit.', low: 'Small or informational: what is fine as it is.' }[p] }));
-        list.forEach(function (it) { sec.append(insightCard(it, doc)); });
-        secs.push(sec);
+        secs.push(section('prio-' + p, PRIO[p], { high: 'Worth at least 5% of spend, a quick fix with a clear payoff, or something broken.', medium: 'Worth 1–5% of spend, or a solid habit.', low: 'Small or informational: what is fine as it is.' }[p],
+          list, true, h('h3', null, h('span', { class: 'dot p-' + p, text: PRIO[p] }), h('span', { class: 'cnt', text: String(list.length) }))));
       });
     } else {
       CATS.forEach(function (c) {
         var list = doc.insights.filter(function (i) { return i.category === c.id; });
-        if (!list.length) return;
-        list.sort(byPrio);
-        var sec = h('section', { class: 'vcat', id: 'cat-' + c.id });
-        sec.append(h('h3', { text: c.title }), h('p', { class: 'catsub', text: c.sub }));
-        list.forEach(function (it) { sec.append(insightCard(it, doc)); });
-        secs.push(sec);
+        if (list.length) secs.push(section('cat-' + c.id, c.title, c.sub, list.sort(byPrio), false));
       });
     }
     listEl.replaceChildren.apply(listEl, secs);
-    nav.hidden = mode !== 'category';
     listEl.querySelectorAll('figure.chart').forEach(function (f) { if (f._draw) { try { f._draw(true); } catch (e) { /* drawn on first view */ } } });
+    if (state.tab === 'insights') renderToc();
   }
   var mode = 'category';
   try { mode = localStorage.getItem('ccu-ins-sort') || 'category'; } catch (e) { /* storage unavailable */ }
   if (['category', 'saving', 'priority'].indexOf(mode) < 0) mode = 'category';
-  var seg = h('div', { class: 'seg', role: 'group', 'aria-label': 'Sort insights' });
-  [['category', 'Category'], ['saving', 'Cost saving'], ['priority', 'Priority']].forEach(function (o) {
-    var b = h('button', { type: 'button', 'data-mode': o[0], 'aria-pressed': o[0] === mode ? 'true' : 'false', text: o[1] });
-    b.addEventListener('click', function () {
-      mode = o[0];
-      try { localStorage.setItem('ccu-ins-sort', mode); } catch (e) { /* storage unavailable */ }
-      seg.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', x.getAttribute('data-mode') === mode ? 'true' : 'false'); });
-      buildList(mode);
-    });
-    seg.append(b);
+  var sel = h('select', { class: 'sel sm', 'aria-label': 'Sort insights by' });
+  [['category', 'Category'], ['saving', 'Saving'], ['priority', 'Priority']].forEach(function (o) { sel.append(h('option', { value: o[0], text: o[1] })); });
+  sel.value = mode;
+  sel.addEventListener('change', function () {
+    mode = sel.value;
+    try { localStorage.setItem('ccu-ins-sort', mode); } catch (e) { /* storage unavailable */ }
+    buildList(mode);
   });
-  legend.insertBefore(h('span', { class: 'ins-sort' }, 'Sort by', seg), legend.firstChild);
+  tools.append(h('label', { class: 'lbl' }, 'Sort', sel));
+  head.append(tools);
+  nodes.push(head);
   buildList(mode);
   nodes.push(listEl);
   el.replaceChildren.apply(el, nodes);
 }
 
 /* ---- Optimizations view ---- */
-function copyText(text, btn) {
-  function done(ok) { var t = btn.textContent; btn.textContent = ok ? 'Copied' : 'Select and copy'; btn.classList.toggle('ok', ok); setTimeout(function () { btn.textContent = t; btn.classList.remove('ok'); }, 1400); }
+function copyText(text, b) {
+  function done(ok) {
+    var was = Array.prototype.slice.call(b.childNodes), icon0 = b.classList.contains('icon');
+    b.classList.remove('icon');
+    b.classList.toggle('ok', ok);
+    b.replaceChildren(icon(ok ? 'check' : 'copy'), h('span', { text: ok ? 'Copied' : 'Select and copy' }));
+    setTimeout(function () { b.replaceChildren.apply(b, was); b.classList.remove('ok'); if (icon0) b.classList.add('icon'); }, 1400);
+  }
   if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(fallbackCopy(text)); });
   else done(fallbackCopy(text));
 }
@@ -2805,10 +2936,10 @@ function fallbackCopy(text) {
   ta.remove();
   return ok;
 }
-function cmdBox(label, text) {
-  var btn = h('button', { type: 'button', class: 'copy', text: 'Copy' });
-  btn.addEventListener('click', function () { copyText(text, btn); });
-  return h('div', { class: 'cmdbox' }, h('span', { class: 'lab', text: label }), h('code', { class: 'cmd', text: text }), btn);
+function termField(cmd, label) {                          // one terminal-style line, a copy button inside it
+  var b = btn(null, 'sm ghost icon', 'copy', { 'aria-label': label || 'Copy the command', title: 'Copy' });
+  b.addEventListener('click', function (e) { e.stopPropagation(); copyText(cmd, b); });
+  return h('div', { class: 'term' }, h('span', { class: 'ps', 'aria-hidden': 'true', text: '$' }), h('code', { text: cmd, title: cmd }), b);
 }
 function stepView(st) {
   var li = h('li');
@@ -2825,101 +2956,162 @@ function stepView(st) {
 }
 function doneKey(id) { return 'ccu-done:' + ((REPORT.meta || {}).out || '') + ':' + id; }
 function isDone(id) { try { return localStorage.getItem(doneKey(id)) === '1'; } catch (e) { return false; } }
-var OPT_RANK = [];
-function optHue(v) {
-  if (!OPT_RANK.length || !isNum(v) || v <= 0) return null;
-  var i = OPT_RANK.indexOf(v), t = OPT_RANK.length > 1 ? i / (OPT_RANK.length - 1) : 1;
-  return Math.round(18 + (i < 0 ? 0.5 : t) * (135 - 18));
+function setDone(id, on) { try { if (on) localStorage.setItem(doneKey(id), '1'); else localStorage.removeItem(doneKey(id)); } catch (e) { /* storage unavailable */ } }
+function optRelations(o) {
+  // this optimization's own links, plus the reverse side of "requires" (listed only by the one that needs the other)
+  var out = (o.related || []).filter(function (r) { return REL[r.relation] && findOpt(r.id); })
+    .map(function (r) { return { id: r.id, relation: r.relation, note: r.note, label: REL[r.relation].with }; });
+  ((optsDoc() || {}).optimizations || []).forEach(function (x) {
+    (x.related || []).forEach(function (r) {
+      if (r.id === o.id && r.relation === 'requires') out.push({ id: x.id, relation: 'requires', rev: true, note: r.note, label: REL.requires.by });
+    });
+  });
+  return out.sort(function (a, b) { return REL_ORDER.indexOf(a.relation) - REL_ORDER.indexOf(b.relation); });
 }
-function optCard(o) {
+function goOpt(id) {
+  var el = document.getElementById('opt-' + id);
+  if (!el && viewBuilt.opts) { renderOpts(); el = document.getElementById('opt-' + id); }     // filtered out: show all again
+  if (el && el.hidden) {                               // hidden by the filter: show it rather than scroll to nothing
+    el.hidden = false;
+    if (el.parentNode && el.parentNode.hidden) el.parentNode.hidden = false;
+  }
+  openTab('optimizations', id);
+}
+function optLink(id) {
+  var x = findOpt(id);
+  var b = btn((x ? x.title : id) + (isDone(id) ? ' ✓' : ''), 'sm link', null);
+  b.append(icon('arrow'));
+  b.addEventListener('click', function (e) { e.stopPropagation(); goOpt(id); });
+  return b;
+}
+function relTag(kind) { return h('span', { class: 'rtag dot rel-' + kind, text: REL[kind].tag }); }
+var CHOICES = null;
+function choiceGroups() {
+  // optimizations linked as alternatives or conflicts form one choice: apply one of them
+  if (CHOICES) return CHOICES;
+  var list = (optsDoc() || {}).optimizations || [], parent = {}, kind = {};
+  var find = function (x) { while (parent[x] !== x) x = parent[x] = parent[parent[x]]; return x; };
+  list.forEach(function (o) { parent[o.id] = o.id; });
+  list.forEach(function (o) {
+    (o.related || []).forEach(function (r) {
+      if ((r.relation === 'alternative' || r.relation === 'conflicts') && parent[r.id] != null) {
+        var a = find(o.id), b = find(r.id);
+        if (a !== b) parent[b] = a;
+        if (r.relation === 'conflicts') kind[o.id] = kind[r.id] = 'conflicts';
+      }
+    });
+  });
+  var groups = {}, groupOf = {};
+  list.forEach(function (o) { var g = find(o.id); (groups[g] = groups[g] || { id: g, ids: [], kind: 'alternative' }).ids.push(o.id); });
+  Object.keys(groups).forEach(function (g) {
+    if (groups[g].ids.length < 2) { delete groups[g]; return; }
+    groups[g].ids.forEach(function (id) { groupOf[id] = g; if (kind[id]) groups[g].kind = 'conflicts'; });
+  });
+  return (CHOICES = { groups: groups, groupOf: groupOf });
+}
+var REL_ROW = { alternative: 'Instead of', conflicts: 'Don’t combine with', requires: 'Do first', requiredBy: 'Needed by',
+                overlaps: 'Saving shared with', complements: 'Works well with' };
+function relRows(rels) {
+  // one row per kind of link, each linked optimization with the reason
+  var rows = [];
+  ['alternative', 'conflicts', 'requires', 'requiredBy', 'overlaps', 'complements'].forEach(function (k) {
+    var these = rels.filter(function (r) { return (r.rev ? 'requiredBy' : r.relation) === k; });
+    if (!these.length) return;
+    var ul = h('ul', { class: 'rel-list' });
+    these.forEach(function (r) { ul.append(h('li', null, optLink(r.id), r.note ? h('div', { class: 'rnote', text: r.note }) : null)); });
+    rows.push(drow(REL_ROW[k], ul));
+  });
+  return rows;
+}
+var EFFORT_ICON = { 'one-click': 'terminal', minutes: 'hand', habit: 'clock' };
+function optCard(o, onDone, ctx) {
+  // ctx.why: in a choice, when to pick this one; ctx.chosen: the choice's done member, shown on the others ("not needed")
+  ctx = ctx || {};
   var from = { kind: 'opt', id: o.id, title: o.title };
+  var rels = optRelations(o);
   var sv = o.savings && isNum(o.savings.usd_so_far) ? o.savings : null;
-  var hue = sv ? optHue(sv.usd_so_far) : null;
-  var art = h('article', { class: 'icard nw ocard' + (hue != null ? ' has-sv' : '') + (isDone(o.id) ? ' done' : ''), id: 'opt-' + o.id });
-  if (hue != null) art.style.setProperty('--sv-h', String(hue));
-  var kicker = h('div', { class: 'kicker' },
-    h('span', { class: 'kp e-' + o.effort, text: EFFORT[o.effort] || o.effort }),
-    h('span', { class: 'kr r-' + (o.risk || 'low'), text: (o.risk || 'low') + ' risk' }),
-    o.kind === 'habit' && o.effort === 'habit' ? null : h('span', { class: 'kkind', text: KIND[o.kind] || o.kind }),
-    h('span', { class: 'kcat', text: CAT_TITLE[o.category] || o.category || '' }));
-  var head = h('div', { class: 'nw-head' }, kicker, h('h4', { text: o.title }), h('p', { class: 'nw-dek', text: o.problem }));
-  if (sv) head.append(saveTile(sv, null));
-  art.append(head);
+  var done = isDone(o.id), skipped = !done && !!ctx.chosen;
+  var art = h('article', { class: 'icard nw ocard' + (done || skipped ? ' done' : '') + (skipped ? ' skipped' : ''), id: 'opt-' + o.id });
+  var chk = h('button', { type: 'button', class: 'chk', role: 'checkbox', 'aria-checked': done ? 'true' : 'false', 'aria-label': 'Done: ' + o.title, title: done ? 'Mark as not done' : 'Mark as done' }, icon('check'));
+  chk.addEventListener('click', function (e) { e.stopPropagation(); setDone(o.id, !done); if (onDone) onDone(o.id); });
+  var risk = o.risk || 'low';
+  var meta = h('div', { class: 'meta' },
+    h('span', { class: 'eff' }, icon(EFFORT_ICON[o.effort] || 'hand'), EFFORT[o.effort] || o.effort),
+    h('span', { class: 'dot r-' + risk, text: risk.charAt(0).toUpperCase() + risk.slice(1) + ' risk' }));
+  if (!(o.kind === 'habit' && o.effort === 'habit')) meta.append(h('span', { class: 'sep' }), h('span', { text: KIND[o.kind] || o.kind }));
+  var chev = chevBtn('optb-' + o.id);
+  var main = h('div', { class: 'nw-main' }, meta, h('h4', { text: o.title }), h('p', { class: 'nw-dek', text: o.problem }));
+  if (skipped) main.append(h('div', { class: 'instead', text: 'Not needed: you chose “' + findOpt(ctx.chosen).title + '”' }));
+  var head = h('div', { class: 'nw-head' }, chk, main, sv ? saveTile(sv, null) : h('span'), chev);
+  var top = h('div', { class: 'nw-top' }, head);
+  art.append(top);
+  if (ctx.why) top.append(h('div', { class: 'why-pick' }, h('span', { class: 'lbl', text: 'Why this one' }), h('span', { text: ctx.why })));
   var apply = (REPORT.meta || {}).apply;
   if (o.apply && apply) {                              // the one thing to do, visible when collapsed
-    var cmd = apply.replace(' --dir ', ' apply ' + o.id + ' --dir ');
-    var cbtn = h('button', { type: 'button', class: 'copy', text: 'Copy' });
-    cbtn.addEventListener('click', function () { copyText(cmd, cbtn); });
-    art.append(h('div', { class: 'nw-act' }, h('span', { class: 'alab', text: 'Apply' }), h('code', { class: 'cmd', text: cmd }), cbtn));
+    top.append(h('div', { class: 'nw-act' }, termField(apply.replace(' --dir ', ' apply ' + o.id + ' --dir '), 'Copy the apply command')));
   } else if ((o.manual || []).length) {
-    art.append(h('div', { class: 'nw-act manual-act' }, h('span', { class: 'alab', text: 'By hand' }),
+    top.append(h('div', { class: 'nw-act manual-act' }, h('span', { class: 'lbl', text: 'By hand' }),
       h('div', { class: 'mtxt' }, o.manual[0], o.manual.length > 1 ? h('small', { text: '+' + (o.manual.length - 1) + ' more step' + (o.manual.length > 2 ? 's' : '') }) : null)));
   }
-  var body = h('div', { class: 'nw-body', id: 'optb-' + o.id, hidden: '' });
-  var tog = h('button', { type: 'button', class: 'nw-tog', 'aria-expanded': 'false', 'aria-controls': 'optb-' + o.id, text: 'Read more' });
-  var mark = h('button', { type: 'button', class: 'mark-done', 'aria-pressed': isDone(o.id) ? 'true' : 'false', text: isDone(o.id) ? '✓ Done' : 'Mark as done' });
-  mark.addEventListener('click', function () {
-    var on = !isDone(o.id);
-    try { if (on) localStorage.setItem(doneKey(o.id), '1'); else localStorage.removeItem(doneKey(o.id)); } catch (e) { /* storage unavailable */ }
-    art.classList.toggle('done', on);
-    mark.setAttribute('aria-pressed', on ? 'true' : 'false');
-    mark.textContent = on ? '✓ Done' : 'Mark as done';
-  });
-  var nsteps = o.apply ? o.apply.steps.length : (o.manual || []).length;
-  art.append(h('div', { class: 'nw-foot' }, tog, h('span', { class: 'nw-meta', text: nsteps + ' step' + (nsteps === 1 ? '' : 's') + (o.tradeoffs ? ' · has a tradeoff' : '') }), mark));
-  function setOpen(open) {
-    body.hidden = !open;
-    art.classList.toggle('open', open);
-    tog.setAttribute('aria-expanded', open ? 'true' : 'false');
-    tog.textContent = open ? 'Show less' : 'Read more';
+  var first = rels.filter(function (r) { return r.relation === 'requires' && !r.rev; });
+  if (first.length) {                                  // what must come first, and whether it has
+    var strip = h('div', { class: 'nw-rel' });
+    first.forEach(function (r) {
+      strip.append(h('span', { class: 'ritem' }, relTag('requires'), optLink(r.id), h('span', { class: 'rwith', text: isDone(r.id) ? 'done' : 'not done yet' })));
+    });
+    top.append(strip);
   }
-  art._open = setOpen;
-  tog.addEventListener('click', function () { setOpen(body.hidden); });
-  head.addEventListener('click', function () { if (!(window.getSelection && String(window.getSelection()))) setOpen(body.hidden); });
-
+  var body = h('div', { class: 'nw-body', id: 'optb-' + o.id, hidden: '' });
+  expandable(art, top, body, chev);
   if (o.what_it_does) body.append(h('p', { class: 'ic-detail', text: o.what_it_does }));
-  if (o.tradeoffs) body.append(h('p', { class: 'ic-trade' }, h('b', { text: 'Tradeoff: ' }), o.tradeoffs));
-  if (sv && sv.basis) body.append(h('div', { class: 'ic-sv' }, h('span', { class: 'lab', text: 'If applied from day one' }), savingsLine(sv) || '', h('div', { class: 'basis', text: sv.basis })));
+  var rowsEl = h('div');
+  if (o.tradeoffs) rowsEl.append(drow('Tradeoff', o.tradeoffs));
+  relRows(rels).forEach(function (r) { rowsEl.append(r); });
+  if (sv && sv.basis) rowsEl.append(drow('If applied from day one', h('div', null, savingsLine(sv) || '', h('div', { class: 'basis', text: sv.basis }))));
   if (o.apply && apply) {
-    var box = h('div', { class: 'applybox' });
-    box.append(h('div', { class: 'apply-sum', text: o.apply.summary || 'Apply it' }));
-    box.append(h('p', { class: 'hint', text: 'The Apply command shows every change, asks before writing, backs up each file, and can be undone. Settings and hooks take effect in new sessions.' }));
-    var det = h('details', null, h('summary', { text: 'What it changes (' + o.apply.steps.length + ' step' + (o.apply.steps.length > 1 ? 's' : '') + ')' }));
-    var ol = h('ol', { class: 'steps' });
+    var box = h('div');
+    box.append(h('div', { style: 'font-weight:500', text: o.apply.summary || 'Apply it' }));
+    box.append(h('p', { class: 'hint', text: 'The command shows every change, asks before writing, backs up each file, and can be undone. Settings and hooks take effect in new sessions.' }));
+    var det = h('details', { class: 'more-d' }, h('summary', null, icon('chevron-right'), h('span', { text: 'What it changes (' + o.apply.steps.length + ' step' + (o.apply.steps.length > 1 ? 's' : '') + ')' })));
+    var ol = h('ol', { class: 'steps', style: 'margin-top:8px' });
     o.apply.steps.forEach(function (st) { ol.append(stepView(st)); });
     det.append(ol);
-    box.append(det);
-    var und = h('details', null, h('summary', { text: 'Undo' }));
-    und.append(cmdBox('Undo', apply.replace(' --dir ', ' undo ' + o.id + ' --dir ')));
+    var und = h('details', { class: 'more-d' }, h('summary', null, icon('chevron-right'), h('span', { text: 'Undo' })));
+    und.append(h('div', { style: 'margin-top:8px' }, termField(apply.replace(' --dir ', ' undo ' + o.id + ' --dir '), 'Copy the undo command')));
     if (o.undo) und.append(h('p', { class: 'hint', text: o.undo }));
-    box.append(und);
-    body.append(box);
+    box.append(det, und);
+    rowsEl.append(drow('Apply', box));
   }
-  var man = h('details', { class: 'manual', open: o.apply ? null : true }, h('summary', { text: o.apply ? 'Or do it by hand' : 'How to do it' }));
-  var mol = h('ol');
+  var mol = h('ol', { class: 'steps' });
   (o.manual || []).forEach(function (m) { mol.append(h('li', { text: m })); });
-  man.append(mol);
-  if (o.verify) man.append(h('p', { class: 'hint' }, h('b', { text: 'Check: ' }), o.verify));
-  if (!o.apply && o.undo) man.append(h('p', { class: 'hint' }, h('b', { text: 'Undo: ' }), o.undo));
-  body.append(man);
-  body.append(questionsRow(o.questions || [], null, from));
+  var man = h('div', null, mol);
+  if (o.verify) man.append(h('p', { class: 'hint' }, 'Check: ' + o.verify));
+  if (!o.apply && o.undo) man.append(h('p', { class: 'hint' }, 'Undo: ' + o.undo));
+  rowsEl.append(drow(o.apply ? 'Or by hand' : 'How to do it', man));
+  rowsEl.append(questionsRow(o.questions || [], null, from));
   var ins = (o.insights || []).map(findInsight).filter(Boolean);
   if (ins.length) {
-    var irow = h('div', { class: 'qrow' }, h('span', { class: 'qlab', text: 'Insights' }));
+    var irow = h('div', { class: 'ofoot' });
     ins.forEach(function (i) {
-      var b = h('button', { type: 'button', class: 'olink', text: i.title + ' →' });
+      var b = btn(i.title, 'sm link', null);
+      b.append(icon('arrow'));
       b.addEventListener('click', function () { openTab('insights', i.id); });
       irow.append(b);
     });
-    body.append(irow);
+    rowsEl.append(drow('Insights', irow));
   }
   if ((o.docs || []).length) {
     var foot = h('div', { class: 'ofoot' });
-    o.docs.forEach(function (d) { foot.append(h('a', { href: d.url, target: '_blank', rel: 'noopener', text: d.title + ' ↗' })); });
-    body.append(foot);
+    o.docs.forEach(function (d) { foot.append(h('a', { class: 'btn sm ghost', href: d.url, target: '_blank', rel: 'noopener' }, h('span', { text: d.title }), icon('external'))); });
+    rowsEl.append(drow('Docs', foot));
   }
+  body.append.apply(body, Array.prototype.slice.call(rowsEl.childNodes));
   art.append(body);
   return art;
+}
+function whyPick(o, others) {                           // what this option says about the others it competes with
+  var r = (o.related || []).filter(function (x) { return others.indexOf(x.id) >= 0 && x.note; })[0];
+  return r ? r.note : null;
 }
 function renderOpts() {
   var el = views.optimizations, doc = optsDoc();
@@ -2927,45 +3119,99 @@ function renderOpts() {
     el.replaceChildren(emptyView('No optimizations yet', 'Claude turns the insights into concrete changes (hooks, settings, habits) you can apply one by one. In Claude Code, run:', '/claude-usage:optimize'));
     return;
   }
-  var list = doc.optimizations;
-  var nodes = [];
+  CATS.forEach(function (c) { CAT_TITLE[c.id] = c.title; });
+  var list = doc.optimizations, cg = choiceGroups();
+  var save = function (o) { return (o.savings && isNum(o.savings.usd_so_far)) ? o.savings.usd_so_far : 0; };
+  // a unit is one thing to do: a single optimization, or a choice between several (done when one of them is)
+  var units = [], seen = {};
+  list.forEach(function (o) {
+    var g = cg.groupOf[o.id];
+    if (!g) { units.push({ items: [o], cat: o.category }); return; }
+    if (seen[g]) return;
+    seen[g] = true;
+    var items = cg.groups[g].ids.map(findOpt).sort(function (a, b) { return save(b) - save(a); });
+    units.push({ items: items, cat: items[0].category, kind: cg.groups[g].kind });
+  });
+  units.forEach(function (u) { u.save = Math.max.apply(null, u.items.map(save)); });
+  var unitDone = function (u) { return u.items.some(function (o) { return isDone(o.id); }); };
   var head = h('header', { class: 'vhead' });
   head.append(h('h2', { text: 'Optimizations' }));
   head.append(h('div', { class: 'vsub', text: 'Prepared by ' + (doc.author || 'Claude') + ' from the insights and Claude Code’s documented settings · ' + (doc.generated || '') }));
+  var prog = h('div', { class: 'progress' });
+  head.append(prog);
   var stl = staleNote(doc, 'optimizations');
   if (stl) head.append(stl);
-  if (doc.summary) head.append(h('div', { class: 'vsum-block' }, h('span', { class: 'lab', text: 'The bottom line' }), h('p', { class: 'vsum', text: doc.summary })));
-  var osv = list.filter(function (o) { return o.savings && isNum(o.savings.usd_so_far) && o.savings.usd_so_far > 0; }).map(function (o) { return o.savings.usd_so_far; });
-  OPT_RANK = osv.filter(function (v, i) { return osv.indexOf(v) === i; }).sort(function (a, b) { return a - b; });
-  CATS.forEach(function (c) { CAT_TITLE[c.id] = c.title; });
-  var filt = h('div', { class: 'seg ofilt', role: 'group', 'aria-label': 'Filter optimizations' });
+  if (doc.summary) head.append(summaryBlock(doc.summary));
+  var hero = ((((REPORT.data || {}).all || {}).headline) || {}).hero || {}, spend = hero.value, days = coverDays('all');
+  var withSv = units.filter(function (u) { return u.save > 0; });
+  if (isNum(spend) && spend > 0 && withSv.length) {     // what they add up to, honestly: overlaps removed, a choice counted once
+    var comb = combinedSaving(withSv.map(function (u) { return { savings: { usd_so_far: u.save } }; }), spend);
+    var plain = list.reduce(function (t, o) { return t + save(o); }, 0);
+    var nChoice = units.filter(function (u) { return u.items.length > 1; }).length;
+    head.append(h('p', { class: 'combined' }, 'Applied together, these would have saved about ', h('b', { text: fmt(comb, 'usd') }), ' all time' +
+      (days ? ' (≈ ' + fmt(comb * 30 / days, 'usd') + ' per 30 days)' : '') + ', not the ' + fmt(plain, 'usd') + ' you get by adding up the cards: savings overlap' +
+      (nChoice ? ', and each choice below counts once.' : '.')));
+  }
+  var FILTERS = [['all', 'All'], ['one-click', 'One command'], ['manual', 'By hand'], ['todo', 'Not done']];
   var cur = 'all';
-  [['all', 'All'], ['one-click', 'One command'], ['manual', 'By hand'], ['todo', 'Not done']].forEach(function (f) {
-    var b = h('button', { type: 'button', 'aria-pressed': f[0] === cur ? 'true' : 'false', text: f[1] });
-    b.addEventListener('click', function () {
-      cur = f[0];
-      filt.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
-      el.querySelectorAll('.ocard').forEach(function (c) {
-        var o = findOpt(c.id.slice(4));
-        var show = cur === 'all' || (cur === 'one-click' && o.apply) || (cur === 'manual' && !o.apply) || (cur === 'todo' && !isDone(o.id));
-        c.hidden = !show;
-      });
-      el.querySelectorAll('.vcat').forEach(function (s) { s.hidden = !s.querySelector('.ocard:not([hidden])'); });
+  var filt = h('div', { class: 'seg', role: 'group', 'aria-label': 'Filter optimizations' });
+  head.append(h('div', { class: 'vtools' }, filt));
+  var listEl = h('div');
+  var match = function (o, f) { return f === 'all' || (f === 'one-click' && !!o.apply) || (f === 'manual' && !o.apply) || (f === 'todo' && !isDone(o.id)); };
+  var unitMatch = function (u, f) { return f === 'todo' ? !unitDone(u) : u.items.some(function (o) { return match(o, f); }); };
+  function choiceEl(u) {
+    var ids = u.items.map(function (o) { return o.id; });
+    var box = h('div', { class: 'ogroup' });
+    box.append(h('div', { class: 'ogroup-h' }, relTag(u.kind),
+      h('span', { text: u.kind === 'conflicts' ? 'These work against each other: apply only one.' :
+        (u.items.length === 2 ? 'Two' : String(u.items.length)) + ' ways to cut the same cost. With one in place the other adds little, so choose one and mark it done.' })));
+    u.items.filter(function (o) { return match(o, cur); }).forEach(function (o, k) {
+      if (k) box.append(h('div', { class: 'or-sep', text: 'or' }));
+      box.append(optCard(o, onDone, { why: whyPick(o, ids.filter(function (x) { return x !== o.id; })) }));
     });
-    filt.append(b);
-  });
-  head.append(filt);
-  nodes.push(head);
-  CATS.forEach(function (c) {
-    var items = list.filter(function (o) { return o.category === c.id; });
-    if (!items.length) return;
-    items.sort(function (a, b) { return ((b.savings || {}).usd_so_far || 0) - ((a.savings || {}).usd_so_far || 0); });
-    var sec = h('section', { class: 'vcat', id: 'ocat-' + c.id });
-    sec.append(h('h3', { text: c.title }));
-    items.forEach(function (o) { sec.append(optCard(o)); });
-    nodes.push(sec);
-  });
-  el.replaceChildren.apply(el, nodes);
+    return box;
+  }
+  function build() {
+    var nDone = units.filter(unitDone).length, n = units.length;
+    prog.replaceChildren(h('div', { class: 'pl' }, h('span', null, h('b', { text: String(nDone) }), ' of ' + n + ' done'),
+      h('span', { text: nDone === n ? 'All done' : fmt(100 * nDone / n, 'pct') })),
+      h('div', { class: 'track', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': String(n), 'aria-valuenow': String(nDone), 'aria-label': 'Optimizations done' },
+        h('div', { class: 'fill', style: 'width:' + (100 * nDone / n) + '%' })));
+    filt.replaceChildren.apply(filt, FILTERS.map(function (f) {
+      var b = h('button', { type: 'button', 'aria-pressed': f[0] === cur ? 'true' : 'false' }, f[1], h('span', { class: 'n', text: String(units.filter(function (u) { return unitMatch(u, f[0]); }).length) }));
+      b.addEventListener('click', function () { cur = f[0]; build(); });
+      return b;
+    }));
+    var secs = [];
+    CATS.forEach(function (c) {
+      var these = units.filter(function (u) { return u.cat === c.id && !unitDone(u) && unitMatch(u, cur); }).sort(function (a, b) { return b.save - a.save; });
+      if (!these.length) return;
+      var sec = h('section', { class: 'vcat', id: 'ocat-' + c.id, 'data-toc': c.title }, h('h3', { text: c.title }));
+      these.forEach(function (u) { sec.append(u.items.length > 1 ? choiceEl(u) : optCard(u.items[0], onDone)); });
+      secs.push(sec);
+    });
+    var done = units.filter(function (u) { return unitDone(u) && unitMatch(u, cur); }).sort(function (a, b) { return b.save - a.save; });
+    if (done.length) {
+      var ds = h('section', { class: 'vcat', id: 'ocat-done', 'data-toc': 'Done' }, h('h3', null, 'Done', h('span', { class: 'cnt', text: String(done.length) })));
+      done.forEach(function (u) {
+        var chosen = u.items.filter(function (o) { return isDone(o.id); })[0];
+        u.items.forEach(function (o) { ds.append(optCard(o, onDone, isDone(o.id) ? {} : { chosen: chosen.id })); });
+      });
+      secs.push(ds);
+    }
+    if (!secs.length) secs.push(h('p', { class: 'hint', style: 'margin-top:24px', text: 'Nothing left in this filter.' }));
+    listEl.replaceChildren.apply(listEl, secs);
+    if (state.tab === 'optimizations') renderToc();
+  }
+  function onDone(id) {
+    var y = window.scrollY;
+    build();
+    window.scrollTo(0, y);
+    var c = document.querySelector('#opt-' + id + ' .chk');
+    if (c) c.focus({ preventScroll: true });
+  }
+  build();
+  el.replaceChildren(head, listEl);
 }
 
 /* =====================================================================
@@ -3001,7 +3247,8 @@ function estimateHeight(card) {
       if (c.type === 'bar' && c.orient !== 'v') hgt += 60 + (c.categories || []).length * 30;
       else if (c.type === 'heatmap') hgt += 90 + (c.rows || []).length * 24;
       else if (c.type === 'scatter') hgt += 340;
-      else if (c.type === 'pie') hgt += 330;
+      else if (c.type === 'bar' && !c.height) hgt += 250;
+      else if (c.type === 'pie') hgt += 210;
       else hgt += 300;
     } else if (b.kind === 'table') hgt += 56 + Math.min((b.rows || []).length, b.limit || 999, 40) * 31;
     else if (b.kind === 'tabs') hgt += b.collapsed === false ? 360 : 52;
@@ -3035,13 +3282,12 @@ function ensureCard(id) {
 function renderCardHead(ce) {
   var card = ce.card || {};
   var row = h('div', { class: 'card-head' });
-  row.append(h('span', { class: 'badge', text: ce.id }));
+  row.append(h('span', { class: 'cid', text: ce.id }));
   row.append(h('h3', { text: card.q || card.title || ce.id }));
   var tags = String(card.scope || '').split(/[\s,]+/).filter(Boolean);
   if (tags.length) {
-    var pills = h('div', { class: 'pills', 'aria-label': 'Scopes' });
-    tags.forEach(function (t) { pills.append(h('span', { class: 'pill', title: 'Computed ' + (SCOPE_WORDS[t] ? 'per ' + SCOPE_WORDS[t] : t), text: SCOPE_WORDS[t] || t })); });
-    row.append(pills);
+    var words = tags.map(function (t) { return SCOPE_WORDS[t] || t; });
+    row.append(h('span', { class: 'scopes', title: 'Computed per ' + words.join(', per '), text: words.join(' · ') }));
   }
   var nodes = [row];
   if (card.why) nodes.push(h('p', { class: 'why', text: card.why }));
@@ -3076,9 +3322,9 @@ function renderCardBody(ce) {
     if (card.insight) ins.push(card.insight);
     (card.insights || []).forEach(function (t) { if (t) ins.push(t); });
     if (ins.length) {
-      var co = h('div', { class: 'callout' }, h('span', { class: 'lab', text: ins.length > 1 ? 'Insights' : 'Insight' }));
-      ins.forEach(function (t) { co.append(h('p', { text: t })); });
-      out.push(co);
+      var txt = h('div', null, h('div', { class: 'lab', text: 'Insight' }));
+      ins.forEach(function (t) { txt.append(h('p', { text: t })); });
+      out.push(h('div', { class: 'callout' }, icon('bulb'), txt));
     }
     if (card.note) out.push(h('div', { class: 'note', text: card.note }));
   } catch (e) {
@@ -3100,7 +3346,7 @@ function renderCardBody(ce) {
 }
 function nearViewport(el) { var r = el.getBoundingClientRect(); return r.bottom > -900 && r.top < innerHeight + 900; }
 function findAnchor() {
-  var topLimit = document.getElementById('topbar').getBoundingClientRect().bottom;
+  var topLimit = document.getElementById('tabbar').getBoundingClientRect().bottom;
   var list = sectionsEl.querySelectorAll('.card:not([hidden])');
   for (var i = 0; i < list.length; i++) { var r = list[i].getBoundingClientRect(); if (r.bottom > topLimit) return { el: list[i], top: r.top }; }
   return null;
@@ -3139,6 +3385,7 @@ function renderScope() {
 }
 function renderAll() { Object.keys(cardEls).forEach(function (id) { var ce = cardEls[id]; if (!ce.el.hidden && ce.dirty) renderCardBody(ce); }); }
 function redrawCharts(force) {
+  if (headlineEl._spark) { try { headlineEl._spark(); } catch (e) { if (window.console) console.error(e); } }
   document.querySelectorAll('figure.chart').forEach(function (f) { if (f._draw && f.isConnected) { try { f._draw(force); } catch (e) { if (window.console) console.error(e); } } });
 }
 function scrollToCard(id) {
@@ -3147,12 +3394,46 @@ function scrollToCard(id) {
   if (ce.dirty) renderCardBody(ce);
   ce.el.scrollIntoView({ block: 'start' });
   setTimeout(function () { if (ce.dirty) renderCardBody(ce); ce.el.scrollIntoView({ block: 'start' }); }, 140);
-  tocEl.classList.remove('open');
-  document.getElementById('menuBtn').setAttribute('aria-expanded', 'false');
+  closeToc();
 }
 
 /* ---- headline ---- */
-var STATUS = { good: ['st-good', '✓', 'Good'], warn: ['st-warn', '!', 'Watch'], info: ['st-info', 'i', 'Note'] };
+function sparkline(el, sp, unit) {
+  // The daily spend under the big number: a line with a light fill, the peak marked, a value per day on hover.
+  var xs = sp.x || [], vs = (sp.values || []).map(num);
+  if (xs.length < 2) return;
+  var W = Math.max(200, Math.floor(el.clientWidth || 480)), H = 56, pad = 3;
+  var mx = Math.max.apply(null, vs) || 1;
+  var px = function (i) { return pad + i / (xs.length - 1) * (W - 2 * pad); };
+  var py = function (v) { return H - pad - v / mx * (H - 2 * pad); };
+  var peak = vs.indexOf(Math.max.apply(null, vs));
+  var svg = sv('svg', { width: W, height: H, viewBox: '0 0 ' + W + ' ' + H, role: 'img',
+    'aria-label': 'Spend per day, ' + fmtDate(xs[0]) + ' to ' + fmtDate(xs[xs.length - 1]) + '; the highest was ' + fmt(vs[peak], unit) + ' on ' + fmtDate(xs[peak], true) });
+  var d = vs.map(function (v, i) { return (i ? 'L' : 'M') + px(i).toFixed(1) + ',' + py(v).toFixed(1); }).join('');
+  sv('path', { d: d + 'L' + px(xs.length - 1).toFixed(1) + ',' + (H - pad) + 'L' + px(0).toFixed(1) + ',' + (H - pad) + 'Z', class: 'spark-area' }, svg);
+  sv('path', { d: d, class: 'spark-ln' }, svg);
+  var dot = sv('circle', { r: 3.5, class: 'spark-dot', cx: px(peak), cy: py(vs[peak]) }, svg);
+  var hit = sv('rect', { class: 'hit', x: 0, y: 0, width: W, height: H, tabindex: 0, 'aria-label': 'Spend per day: use the arrow keys' }, svg);
+  var cur = peak;
+  var show = function (i, e) {
+    cur = i;
+    dot.setAttribute('cx', px(i)); dot.setAttribute('cy', py(vs[i]));
+    var r = svg.getBoundingClientRect();
+    showTip(e || { clientX: r.left + px(i) * r.width / W, clientY: r.top }, fmtDate(xs[i], true), [{ slot: 1, value: fmt(vs[i], unit, 'full'), name: 'spend that day' }]);
+  };
+  var reset = function () { dot.setAttribute('cx', px(peak)); dot.setAttribute('cy', py(vs[peak])); hideTip(); };
+  hit.addEventListener('pointermove', function (e) {
+    var r = svg.getBoundingClientRect(), x = (e.clientX - r.left) * W / r.width;
+    show(Math.max(0, Math.min(xs.length - 1, Math.round((x - pad) / (W - 2 * pad) * (xs.length - 1)))), e);
+  });
+  hit.addEventListener('pointerleave', reset);
+  hit.addEventListener('blur', reset);
+  hit.addEventListener('focus', function () { show(cur); });
+  hit.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); show(Math.max(0, Math.min(xs.length - 1, cur + (e.key === 'ArrowRight' ? 1 : -1)))); }
+  });
+  el.replaceChildren(svg);
+}
 function renderHeadline() {
   var hd = scopeData().headline;
   if (!hd || (state.tab === 'report' && state.filter)) { headlineEl.replaceChildren(); headlineEl.hidden = true; return; }
@@ -3162,60 +3443,87 @@ function renderHeadline() {
     var hero = h('div', { class: 'hero' });
     hero.append(h('div', { class: 'l', text: hd.hero.label || '' }));
     hero.append(h('div', { class: 'v', text: fmt(hd.hero.value, hd.hero.unit, 'label') }));
-    if (hd.hero.sub) hero.append(h('div', { class: 's', text: hd.hero.sub }));
+    var sp = hd.hero.spark, spEl = null;
+    if (sp && (sp.x || []).length > 1) { spEl = h('div', { class: 'spark' }); hero.append(spEl); }
+    var sub = hd.hero.sub || '';
+    if (spEl) {
+      var pv = Math.max.apply(null, sp.values.map(num));
+      sub += (sub ? ' · ' : '') + 'per day, highest ' + fmt(pv, hd.hero.unit) + ' on ' + fmtDate(sp.x[sp.values.map(num).indexOf(pv)]);
+    }
+    if (sub) hero.append(h('div', { class: 's', text: sub }));
     nodes.push(hero);
+    if (spEl) requestAnimationFrame(function () { sparkline(spEl, sp, hd.hero.unit); });
+    headlineEl._spark = spEl ? function () { sparkline(spEl, sp, hd.hero.unit); } : null;
   }
   if ((hd.kpis || []).length) {
-    var g = h('div', { class: 'kpis' });
+    var g = h('div', { class: 'kstrip' });
     hd.kpis.forEach(function (k) { g.append(kpiTile(k)); });
     nodes.push(g);
   }
   headlineEl.replaceChildren.apply(headlineEl, nodes);
 }
 
-/* ---- table of contents ---- */
+/* ---- table of contents: report sections, or the groups of the Insights / Optimizations view ---- */
+function closeToc() { tocEl.classList.remove('open'); document.getElementById('menuBtn').setAttribute('aria-expanded', 'false'); }
+function tocLink(text, n, onClick, attrs) {
+  var a = h('a', Object.assign({ class: 'sec-link', href: '#' }, attrs || {}), h('span', { text: text }), n != null ? h('span', { class: 'n', text: String(n) }) : null);
+  a.addEventListener('click', function (e) { e.preventDefault(); onClick(); closeToc(); });
+  return a;
+}
 function renderToc() {
+  if (state.tab !== 'report') return renderViewToc();
   var cards = scopeData().cards || {};
-  var only = state.tab === 'report' && state.filter ? state.filter.ids : null;
+  var only = state.filter ? state.filter.ids : null;
   if (only) { var kept = {}; only.forEach(function (id) { if (cards[id]) kept[id] = cards[id]; }); cards = kept; }
-  var nodes = [h('div', { class: 'toc-h', text: only ? 'Filtered' : 'Contents' })];
-  if (scopeData().headline && !only) {
-    var top = h('a', { class: 'sec-link', href: '#headline', text: 'Headline' });
-    top.addEventListener('click', function (e) { e.preventDefault(); window.scrollTo(0, 0); tocEl.classList.remove('open'); });
-    nodes.push(top);
-  }
+  var nodes = [h('div', { class: 'toc-h', text: only ? 'Filtered questions' : 'Sections' })];
+  if (scopeData().headline && !only) nodes.push(tocLink('Headline', null, function () { window.scrollTo(0, 0); }, { 'data-sec': '_top' }));
   sectionList().forEach(function (sec) {
     var ids = Object.keys(cards).filter(function (id) { return sectionOf(id) === sec.id && !cards[id].hidden; }).sort(byId);
     if (!ids.length) return;
-    var a = h('a', { class: 'sec-link', href: '#sec-' + sec.id, 'data-sec': sec.id, text: sec.title || sec.id });
-    a.addEventListener('click', function (e) {
-      e.preventDefault();
+    nodes.push(tocLink(sec.title || sec.id, ids.length, function () {
       var se = secEls[sec.id];
       if (se) { se.el.scrollIntoView({ block: 'start' }); setTimeout(function () { se.el.scrollIntoView({ block: 'start' }); }, 140); }
-      tocEl.classList.remove('open');
-    });
-    nodes.push(a);
-    var chips = h('div', { class: 'chips' });
+    }, { 'data-sec': sec.id }));
+    var sub = h('div', { class: 'sub', 'data-sub': sec.id, hidden: '' });
     ids.forEach(function (id) {
-      var c = h('a', { href: '#card-' + id, title: (cards[id] && cards[id].q) || id, text: id });
-      c.addEventListener('click', function (e) { e.preventDefault(); scrollToCard(id); });
-      chips.append(c);
+      var c = h('a', { href: '#card-' + id, 'data-card': id, title: (cards[id] && cards[id].q) || id }, h('b', { text: id }), h('span', { text: (cards[id] && cards[id].q) || '' }));
+      c.addEventListener('click', function (e) { e.preventDefault(); scrollToCard(id); closeToc(); });
+      sub.append(c);
     });
-    nodes.push(chips);
+    nodes.push(sub);
+  });
+  tocEl.replaceChildren.apply(tocEl, nodes);
+  markActiveSection();
+}
+function renderViewToc() {
+  var view = views[state.tab];
+  var secs = Array.prototype.slice.call(view.querySelectorAll('.vcat')).filter(function (x) { return !x.hidden; });
+  var nodes = [h('div', { class: 'toc-h', text: state.tab === 'insights' ? 'Insights' : 'Optimizations' })];
+  nodes.push(tocLink('Overview', null, function () { window.scrollTo(0, 0); }, { 'data-sec': '_top' }));
+  secs.forEach(function (sec) {
+    var n = sec.querySelectorAll('.icard:not([hidden])').length;
+    nodes.push(tocLink(sec.getAttribute('data-toc') || (sec.querySelector('h3') || {}).textContent || '', n, function () { sec.scrollIntoView({ block: 'start' }); }, { 'data-sec': sec.id }));
   });
   tocEl.replaceChildren.apply(tocEl, nodes);
   markActiveSection();
 }
 function markActiveSection() {
-  var topLimit = document.getElementById('topbar').getBoundingClientRect().bottom + 20;
-  var active = null;
-  Object.keys(secEls).forEach(function (id) {
-    var se = secEls[id];
-    if (se.el.hidden) return;
-    var r = se.el.getBoundingClientRect();
-    if (r.top <= topLimit + 40 && r.bottom > topLimit) active = id;
+  var topLimit = document.getElementById('tabbar').getBoundingClientRect().bottom + 24;
+  var list = state.tab === 'report'
+    ? Object.keys(secEls).map(function (id) { return { id: id, el: secEls[id].el }; })
+    : Array.prototype.map.call(views[state.tab].querySelectorAll('.vcat'), function (el) { return { id: el.id, el: el }; });
+  var active = '_top';
+  list.forEach(function (x) {
+    if (x.el.hidden) return;
+    var r = x.el.getBoundingClientRect();
+    if (r.top <= topLimit + 40 && r.bottom > topLimit) active = x.id;
   });
   tocEl.querySelectorAll('a.sec-link[data-sec]').forEach(function (a) { a.classList.toggle('active', a.getAttribute('data-sec') === active); });
+  if (state.tab !== 'report') return;
+  tocEl.querySelectorAll('.sub[data-sub]').forEach(function (d) { d.hidden = d.getAttribute('data-sub') !== active; });
+  var cur = null;
+  if (secEls[active]) Array.prototype.forEach.call(secEls[active].cards.children, function (el) { if (!el.hidden && el.getBoundingClientRect().top <= topLimit + 40) cur = el.getAttribute('data-id'); });
+  tocEl.querySelectorAll('.sub a[data-card]').forEach(function (a) { a.classList.toggle('cur', a.getAttribute('data-card') === cur); });
 }
 
 /* ---- scope selector & hash ---- */
@@ -3244,15 +3552,36 @@ function buildScopeSelect() {
   });
 }
 
-/* ---- theme ---- */
+/* ---- theme: one button, a small menu ---- */
 var themeMode = 'auto';
+var THEMES = [['auto', 'System', 'monitor'], ['light', 'Light', 'sun'], ['dark', 'Dark', 'moon']];
 function applyTheme(mode, persist) {
   themeMode = mode === 'light' || mode === 'dark' ? mode : 'auto';
   if (themeMode === 'auto') document.documentElement.removeAttribute('data-theme');
   else document.documentElement.setAttribute('data-theme', themeMode);
   if (persist) { try { localStorage.setItem('ccu-theme', themeMode); } catch (e) { /* storage unavailable */ } }
-  document.querySelectorAll('#theme button').forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-mode') === themeMode ? 'true' : 'false'); });
+  var t = THEMES.filter(function (x) { return x[0] === themeMode; })[0];
+  var b = document.getElementById('themeBtn');
+  b.replaceChildren(icon(t[2]));
+  b.setAttribute('aria-label', 'Theme: ' + t[1]);
+  b.title = 'Theme: ' + t[1];
+  document.querySelectorAll('#themeMenu [data-mode]').forEach(function (x) { x.setAttribute('aria-checked', x.getAttribute('data-mode') === themeMode ? 'true' : 'false'); });
   redrawCharts(true);
+}
+function buildThemeMenu() {
+  var b = document.getElementById('themeBtn'), wrap = document.getElementById('themeWrap');
+  var menu = h('div', { class: 'menu', id: 'themeMenu', role: 'menu', 'aria-label': 'Theme', hidden: '' });
+  THEMES.forEach(function (t) {
+    var it = h('button', { type: 'button', role: 'menuitemradio', 'data-mode': t[0], 'aria-checked': 'false' }, icon(t[2]), h('span', { text: t[1] }), icon('check', 'ck'));
+    it.addEventListener('click', function () { applyTheme(t[0], true); menu.hidden = true; b.setAttribute('aria-expanded', 'false'); b.focus(); });
+    menu.append(it);
+  });
+  menu.addEventListener('keydown', function (e) {
+    var items = Array.prototype.slice.call(menu.querySelectorAll('button')), i = items.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); items[(i + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length].focus(); }
+  });
+  wrap.append(menu);
+  bindPop(b, menu, function () { setTimeout(function () { var c = menu.querySelector('[aria-checked="true"]'); if (c) c.focus(); }, 0); }, false, wrap);
 }
 
 /* ---- init ---- */
@@ -3273,10 +3602,8 @@ function init() {
   var stored = null;
   try { stored = localStorage.getItem('ccu-theme'); } catch (e) { stored = null; }
   var forced = p.get('theme');
+  buildThemeMenu();
   applyTheme(forced || stored || 'auto', false);
-  document.querySelectorAll('#theme button').forEach(function (b) {
-    b.addEventListener('click', function () { applyTheme(b.getAttribute('data-mode'), true); });
-  });
   try {
     matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () { if (themeMode === 'auto') redrawCharts(true); });
   } catch (e) { /* old browsers */ }
@@ -3304,6 +3631,8 @@ function init() {
   foot.replaceChildren.apply(foot, fn);
 
   var menuBtn = document.getElementById('menuBtn');
+  menuBtn.replaceChildren(icon('menu'), h('span', { text: 'Contents' }));
+  menuBtn.setAttribute('aria-label', 'Contents');
   menuBtn.addEventListener('click', function () {
     var open = !tocEl.classList.contains('open');
     tocEl.classList.toggle('open', open);
@@ -3368,7 +3697,7 @@ function demoReport() {
               { name: 'Cache read', slot: 1, values: days.map(function (_, i) { return wave(i, 8, 20) * scale; }) },
               { name: 'Output', slot: 3, values: days.map(function (_, i) { return wave(i, 3, 6) * scale; }) }] } },
             { kind: 'table', title: 'Top sessions', limit: 3, columns: [{ key: 's', label: 'Session' }, { key: 'c', label: 'Cost', unit: 'usd' }, { key: 't', label: 'Tokens', unit: 'tokens' }],
-              rows: [{ s: 'Implement the plan with 2 subagents', c: 73, t: 21000000 }, { s: 'Home usage card', c: 40.2, t: 12000000 }, { s: 'Fix worktree slug', c: 22.6, t: 7000000 }, { s: 'Review findings', c: 9.1, t: 2100000 }] }
+              rows: [{ s: 'Implement the plan with 2 subagents', c: 73, t: 21000000 }, { s: 'Add checkout tests', c: 40.2, t: 12000000 }, { s: 'Fix flaky CI job', c: 22.6, t: 7000000 }, { s: 'Review findings', c: 9.1, t: 2100000 }] }
           ],
           insight: 'Opus 5 is 63% of spend.'
         },

@@ -61,7 +61,10 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
   - the schema;
   - cited question ids exist and are shown;
   - no saving exceeds spend;
-  - apply paths stay under home or the Claude folder.
+  - apply paths stay under home or the Claude folder;
+  - optimizations' `related` links are two-sided (except `requires`). Two optimizations that change the same settings key,
+    or act on the same cost (`SAME_LEVER`: the main-thread cache lifetime vs the stale-cache guard, auto-compact vs the
+    context guard), must be linked.
 
 ## The card model (scripts/usage_report.py)
 
@@ -90,7 +93,7 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
   - `merge_misses()` folds the internal cards `_CA_COST`, `_CA_CAUSES` and `_CA_TRACE` into **CX8**. They are built by
     `ca_miss_cost`, `ca_miss_causes` and `ca_miss_traces`, which are in `CARDS`. The cost tiles join CX8's KPIs, the cause
     blocks are added hidden, and the traces become CX8's "Step by step" `TABS` section.
-- **Headline:** `headline()` builds the hero and the 10 tiles.
+- **Headline:** `headline()` builds the hero (its `spark` is the daily spend drawn under the number) and the 10 tiles.
   - Most tiles come from `m.facts`, which cards fill in as a side effect (OV1, OV7, CX1, CX7, CX8, CX9…), so a card that sets a fact must run.
   - The two median tiles are read by label from the KPI block of hidden OV6, so renaming those labels blanks the tiles.
   - The headline insights come from the cards listed in `HEADLINE_ORDER`.
@@ -100,6 +103,13 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
 
 **Only the look (template, CSS, JS):**
 - Edit `scripts/report_template.html`, then run `usage_report.py --render --out <OUT>`. This doesn't recompute, and insights stay current.
+- Keep to the design tokens at the top of the CSS:
+  - type 12 / 13 / 14 / 16 / 20 / 28 / 48 px, weights 400 / 500 / 600;
+  - spacing in multiples of 4 px; corners 6 px (controls, inset boxes), 10 px (cards), round (pills);
+  - one button style, `btn()` / `.btn` (`ghost`, `sm`, `icon`), and the 16 px line icons from `icon()`;
+  - savings in the one `--save` green, and colour only in dots, marks and chart series.
+  All three tabs share the header, the sticky tab row and the sidebar (`renderToc()` lists the report's sections, or the
+  `.vcat` groups of the Insights / Optimizations view).
 - Check that the page renders: headless Chrome `--dump-dom` and look for `data-render-status="ok" data-render-errors="0"` on `<body>`.
 - The README screenshots (`docs/images/`) show made-up data. After a visible change, regenerate them as the docstring of
   `docs/screenshots/make_demo.py` says; never screenshot a real report.
@@ -129,6 +139,9 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
 - The renderers in the template (`insightCard`, `optCard`, `renderInsights`, `renderOpts`).
 - The instructions in the matching `SKILL.md` and the insights guide.
 - `apply.py` if you add or change a step action.
+- A catalog entry that goes after a cost another entry already targets: give both a **Related** line in
+  `skills/optimize/reference/catalog.md`. If the pair is a setting or bundled hook the validator can see, add it to
+  `SAME_LEVER` in validate.py.
 
 **Prices or models:**
 - Edit `scripts/prices.json` (canonical ids; `_compare` sets SV6's comparison set).

@@ -1,9 +1,23 @@
 # Catalog of optimizations
 
 Each entry: **when** it applies (read the named questions in digest.md), **saving** (where the number comes from), the
-**apply** template for optimizations.json (adapt names, paths and thresholds to the data), the **manual** steps, and the
-**tradeoff**. Paths use `~`; apply.py expands them and refuses anything outside the home directory. Check config.json first:
-never overwrite an existing `statusLine`, never add a second copy of a hook, skip settings already at the proposed value.
+**apply** template for optimizations.json (adapt names, paths and thresholds to the data), the **manual** steps, the
+**tradeoff**, and **related**: how it interacts with other entries. Paths use `~`; apply.py expands them and refuses anything
+outside the home directory. Check config.json first: never overwrite an existing `statusLine`, never add a second copy of a
+hook, skip settings already at the proposed value.
+
+## How optimizations interact
+
+Every saving here is measured alone, as if that change were the only one. When you propose two entries whose **Related**
+line names each other, link them in `related` on both (same relation) and write the note from each one's side. The same
+rules cover pairs the catalog doesn't list:
+- **Same cost, two fixes** → `alternative`: the one applied first takes most of the saving. Lead with the one the data
+  favours, say in the note when the other is the better pick, and never add their savings.
+- **Same setting, different values**, or one undoes what the other relies on → `conflicts`: keep one, or offer them as an
+  explicit choice. Two hooks on the same event are fine together (hook groups are appended).
+- **Part of the same cost** (one shrinks the contexts, calls or prices the other's saving was computed on) → `overlaps`:
+  both are worth doing; name the overlap in each `savings.basis` and don't sum them in the summary.
+- **One makes the other work better** → `complements`. **One only works or pays off after the other** → `requires`.
 
 ---
 
@@ -17,6 +31,8 @@ never overwrite an existing `statusLine`, never add a second copy of a hook, ski
   right and the spend came from switching up (`/model`) for whole sessions.
 - **Manual**: `/model` at the start of a session; switch up only for the hard part, then back; consider `opusplan`.
 - **Tradeoff**: a cheaper model can take more turns or do the work worse; judge by task.
+- **Related**: effort-default `overlaps` (both cut the same main-thread output cost: SV6 reprices the tokens you had, a lower
+  effort cuts the tokens).
 
 ### subagent-model: run subagents on Sonnet by default
 - **When**: SV6 "Subagents on Sonnet 5" > $5 and `env.CLAUDE_CODE_SUBAGENT_MODEL` isn't set.
@@ -26,6 +42,8 @@ never overwrite an existing `statusLine`, never add a second copy of a hook, ski
   (`~/.claude/agents/<name>.md`), e.g. read-only research agents on Haiku (SV6 "Explore subagents on Haiku").
 - **Tradeoff**: subagents that plan or review hard code may need the stronger model; an agent's own `model` field and a
   per-call model still win.
+- **Related**: subagent-briefs and cache-ttl-fit (when it changes the subagent lifetime) `overlaps`: SV3's resume misses and
+  SV5's subagent cache writes are priced at the model the subagents ran on, so on Sonnet both are worth less.
 
 ### effort-default: lower the default effort (only with strong evidence)
 - **When**: OV4 thinking share > 35% of output and `effortLevel` is `high`/`xhigh`/`max`, and OV3 shows output is a big part
@@ -34,6 +52,7 @@ never overwrite an existing `statusLine`, never add a second copy of a hook, ski
 - **Apply**: `set_json` `~/.claude/settings.json` pointer `/effortLevel` value `"medium"`.
 - **Manual**: `/effort high` for hard tasks, back to medium after.
 - **Tradeoff**: less thinking on hard problems. Changing effort mid-session can also invalidate the cache.
+- **Related**: main-model `overlaps`.
 
 ### stop-hook-followup: make Stop-hook follow-up work cheaper
 - **When**: SV1's "Stop-hook follow-up work" lever > $5.
@@ -54,6 +73,9 @@ never overwrite an existing `statusLine`, never add a second copy of a hook, ski
 - **Manual**: `/config` → auto-compact window, or the settings line above.
 - **Tradeoff**: Claude Code recommends its automatic window; compaction drops detail and costs one summary. Risk `medium`.
   Offer **context-guard** as the gentle alternative.
+- **Related**: context-guard `alternative` (the same SV4 saving, forced vs a notice: with both, the notice fires just before
+  a compaction that happens anyway; pick context-guard when the user wants to decide). stale-cache-guard and big-read-guard
+  `overlaps` (see them).
 
 ### context-guard: a notice when the context passes the break-even size
 - **When**: same data as auto-compact-window; preferred when the user wants to decide when to compact.
@@ -62,6 +84,8 @@ never overwrite an existing `statusLine`, never add a second copy of a hook, ski
   `merge_json` `~/.claude/settings.json` value
   `{"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command", "command": "python3 \"$HOME/.claude/hooks/claude-usage/context_guard.py\" --threshold <T>", "timeout": 10}]}]}}`.
 - **Tradeoff**: none beyond a line of text; it never blocks.
+- **Related**: auto-compact-window `alternative`. statusline-cache `complements` (the status line shows the context size all
+  the time; the guard speaks up at the threshold). stale-cache-guard and big-read-guard `overlaps` (see them).
 
 ### big-read-guard: steer Claude to targeted reads of large files
 - **When**: SV8 saving > $3 (large whole-file reads re-read for the rest of the session; CX3's costliest-item insight and EX8 show which files).
@@ -69,6 +93,8 @@ never overwrite an existing `statusLine`, never add a second copy of a hook, ski
 - **Apply**: `write_file` `~/.claude/hooks/claude-usage/big_read_guard.py` from `hooks/big_read_guard.py` (mode 755);
   `merge_json` `~/.claude/settings.json` value `{"hooks": {"PreToolUse": [{"matcher": "Read", "hooks": [{"type": "command", "command": "python3 \"$HOME/.claude/hooks/claude-usage/big_read_guard.py\" --max-kb 60", "timeout": 10}]}]}}`.
 - **Tradeoff**: one extra round-trip the first time a big file is needed whole (the retry goes through).
+- **Related**: auto-compact-window / context-guard `overlaps` (SV8 counts carrying each big read for the rest of the session;
+  compacting earlier drops it from the context too).
 
 ### bash-output-cap: smaller inline Bash output
 - **When**: CX3 shows Bash results among the top context sources and the digest's EX10 lists very large Bash outputs (EX10 is
@@ -95,12 +121,25 @@ never overwrite an existing `statusLine`, never add a second copy of a hook, ski
   start-up + 15K (SV7), so use about twice the start-up size (60000 suits a ~30K start-up) and small sessions are never stopped.
 - **Manual**: after a break over the cache lifetime with a big context, `/clear` and paste a short summary (or `/compact` first).
 - **Tradeoff**: one extra Enter when you really do want to continue.
+- **Related**:
+  - cache-ttl-fit, when it moves the main thread to 1h: `alternative`. Both go after the same misses, the returns after a
+    break. The 1h lifetime keeps the cache warm through pauses of up to an hour but makes every cache write cost 2× input
+    instead of 1.25×. The guard lets the cache expire and stops the one prompt that would re-write a big context. With 1h
+    in place the guard only fires after pauses over an hour (it reads the lifetime from the transcript), so SV7's saving,
+    computed at today's lifetime, mostly goes. With the guard in place, the 5–60 min returns that SV5 counts as 1h hits
+    become fresh starts. Pick by SV5's break-even line: pauses you mostly continue through → 1h; longer breaks, or the user
+    would rather restart small → the guard. Propose one; mention the other in the note.
+  - cache-ttl-fit, when it moves the main thread to 5m: `complements` (5m lets more returns expire; the guard stops the
+    costly ones, which softens the switch's downside).
+  - statusline-cache `complements` (the countdown warns before you type; the guard catches it when you don't look).
+  - auto-compact-window / context-guard `overlaps` (SV7 is priced at the context sizes you had; compacting shrinks them).
 
 ### statusline-cache: see context size and cache warmth all the time
 - **When**: no `statusLine` in any settings file (config.json).
 - **Apply**: `write_file` `~/.claude/hooks/claude-usage/statusline.py` from `hooks/statusline.py` (mode 755); `merge_json`
   `~/.claude/settings.json` value `{"statusLine": {"type": "command", "command": "python3 \"$HOME/.claude/hooks/claude-usage/statusline.py\""}}`.
 - **Saving**: none directly (awareness); omit `savings`.
+- **Related**: stale-cache-guard and context-guard `complements`.
 
 ### cache-ttl-fit: choose the cache lifetime per thread kind
 - **When**: SV5's "Cheapest mix" differs from the actual mix and saves > $3 (current: main 1h on a subscription, else 5m;
@@ -111,6 +150,8 @@ never overwrite an existing `statusLine`, never add a second copy of a hook, ski
 - **Apply**: `merge_json` `~/.claude/settings.json` value `{"promptCacheTtl": "5m"}` or `{"subagentPromptCacheTtl": "1h"}`; a single subagent type
   can differ with `experimental.cacheTtl` in its agent file (SV5 lists each type).
 - If SV5 agrees with the current defaults, don't propose a change: write an insight that the lifetimes already fit.
+- **Related**: stale-cache-guard: `alternative` when the main thread goes to 1h, `complements` when it goes to 5m (see
+  stale-cache-guard). subagent-model `overlaps` when the subagent lifetime changes.
 
 ### keep-awake: don't let the Mac sleep mid-run
 - **When**: SV3 has a "Computer went to sleep" row (ME7 shows the errors) and the user is on macOS.
@@ -123,6 +164,7 @@ never overwrite an existing `statusLine`, never add a second copy of a hook, ski
 - **When**: CX8/EX3 show a "tool list changed" miss right at session start.
 - **Kind**: habit. **Manual**: wait until the startup MCP line settles (or check `/mcp`) before the first prompt; disable
   servers the project doesn't use (unused-mcp-off).
+- **Related**: unused-mcp-off `overlaps` (fewer servers, fewer tool-list changes at start; its saving already counts that miss).
 
 ---
 
@@ -144,6 +186,7 @@ never overwrite an existing `statusLine`, never add a second copy of a hook, ski
   it's unused (per project, reversible with `/mcp enable`); the Chrome extension's server from `/chrome` (turn off "enabled by
   default"). Never `claude mcp remove`.
 - **Saving**: those rows' "Saved, all time" and "Per 30 days" (SV2), plus a tool-list-change miss at session start if EX3/CX8 show one.
+- **Related**: mcp-connect-first `overlaps`.
 
 ### fix-broken-hook: a hook that fails every time
 - **When**: EX5 lists failures with "No such file or directory" (or a path from another machine) and config.json shows the
@@ -160,3 +203,4 @@ never overwrite an existing `statusLine`, never add a second copy of a hook, ski
   finished and its context is large, start a fresh subagent with a short brief of what changed instead of resuming it with
   SendMessage (resuming re-writes its whole history to the cache)."
 - **Tradeoff**: CLAUDE.md loads in every session; keep it short. The fresh subagent may need to re-read some files.
+- **Related**: subagent-model `overlaps`.

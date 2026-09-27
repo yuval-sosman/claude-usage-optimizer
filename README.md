@@ -8,7 +8,7 @@ saved so far. Nothing leaves your machine.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="plugins/claude-usage/docs/images/report-dark.png">
-  <img alt="The usage report: total cost, headline numbers and the first question" src="plugins/claude-usage/docs/images/report-light.png">
+  <img alt="The usage report: total cost with its daily spend, the headline numbers and the first question" src="plugins/claude-usage/docs/images/report-light.png">
 </picture>
 
 <sub>All screenshots show generated demo data.</sub>
@@ -86,9 +86,9 @@ Undo:  python3 …/claude-usage/scripts/apply.py undo subagents-on-sonnet --dir 
 </details>
 
 <details>
-<summary><b>Optimizations</b>: one command to apply, one to undo</summary>
+<summary><b>Optimizations</b>: a checklist, with the choices between changes</summary>
 
-![The Optimizations tab: changes with their savings and a copyable apply command](plugins/claude-usage/docs/images/optimizations.png)
+![The Optimizations tab: progress, how the changes relate, and each change with its saving and a copyable apply command](plugins/claude-usage/docs/images/optimizations.png)
 </details>
 
 <details>
@@ -162,6 +162,15 @@ diff per file and asks before writing, backs up every file it touches, and only 
 `apply.py undo <id>` removes just that change and keeps other optimizations and your own later edits. `apply.py list`
 shows what's applied. Settings and hooks take effect in new sessions.
 
+The tab shows how optimizations interact:
+- **Pick one**: two fixes for the same cost (e.g. the stale-cache guard vs a 1-hour cache) appear as one choice. Mark the one
+  you pick as done and the other is set aside as not needed.
+- **Do first**: a change that needs another shows it, and whether it's done yet.
+- **Saving shared with** and **Works well with**: listed inside each card.
+- The top of the tab gives the combined saving, with overlaps removed and each choice counted once.
+
+`apply.py` warns before you apply one whose alternative is already applied.
+
 Hooks it can install (copied to `~/.claude/hooks/claude-usage/`, so they keep working if the plugin moves or updates):
 - **Stale-cache guard:** holds the first message into an expired, big session and shows what it would cost.
 - **Context notice:** a line of text once the context passes your break-even size.
@@ -208,9 +217,14 @@ where Claude Code guards every write. To change it, pass `--out DIR`, or set `CL
 - A deterministic script does all the counting. Claude only reads what it extracted, never your transcripts.
 - Dollars are API list-price equivalents. On a subscription they are a yardstick, not your bill.
 - Savings re-price your actual calls as if one change had been in place from day one. They are theoretical and they
-  overlap, and the report says so.
-- `scripts/validate.py` checks Claude's output against a schema. It checks that every cited question exists, that every
-  cost insight states its saving and basis, and that no saving exceeds total spend. The skills run it until it passes.
+  overlap, and the report says so: optimizations that go after the same cost are linked as alternatives or overlaps.
+- `scripts/validate.py` checks Claude's output against a schema. It checks:
+  - that every cited question exists;
+  - that every cost insight states its saving and basis;
+  - that no saving exceeds total spend;
+  - that optimizations changing the same setting, or acting on the same cost, say how they relate.
+
+  The skills run it until it passes.
 - Rebuilding the report marks older insights **out of date** until the report skill runs again.
 </details>
 

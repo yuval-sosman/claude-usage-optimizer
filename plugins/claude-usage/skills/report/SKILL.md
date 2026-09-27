@@ -55,12 +55,17 @@ savings, and a worked example. The output contract is `${CLAUDE_SKILL_DIR}/../..
 
 ## 3. Write the insights
 
+If `<OUT>/insights.json` already exists (an earlier run), **Read it first**. Claude Code refuses to overwrite a file that
+hasn't been read in this conversation (a Bash `cat` doesn't count), and the refused Write wastes the whole file you generated.
+Reading it also lets you keep the `id` of every insight that still holds, so links to it stay valid.
+
 Write `<OUT>/insights.json`:
 
 - `source.metrics_generated` = the "Generated …" timestamp at the top of digest.md (exactly as written there, `YYYY-MM-DD HH:MM:SS`);
   `source.range` and `source.spend_usd` from the digest; `generated` = now; `author` = `"Claude (claude-usage:report)"`.
 - `summary`: 3–5 sentences, cost first: total spend, the two or three biggest levers with their savings, and one sentence on what
-  is already working well.
+  is already working well. The tab shows the first sentence larger, as the lead: make it the one thing to remember, and keep it
+  short (under about 160 characters).
 - The insights themselves, following the guide's anatomy and quality bar (12–20 of them, at least 4 in `cost`, each of those
   with `savings`).
 

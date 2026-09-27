@@ -149,6 +149,74 @@ def allowed_path(p):
     return any(p == r or p.startswith(r + os.sep) for r in (AP.HOME, AP.CLAUDE_DIR))
 
 
+SYMMETRIC = ('alternative', 'conflicts', 'overlaps', 'complements')      # listed by both sides; "requires" by one
+SAME_LEVER = (   # changes that act on the same cost: two optimizations making them must say how they relate
+    ('context size (compacting automatically vs a notice)', {'setting:autoCompactWindow', 'hook:context_guard.py'}),
+    ('returns after the cache expired (the main-thread cache lifetime vs the stale-cache guard)',
+     {'setting:promptCacheTtl', 'hook:stale_cache_guard.py'}),
+)
+
+
+def key_paths(v, pre=''):
+    """The settings keys a merge_json value sets, e.g. {"env": {"X": 1}} -> ["env/X"]. Hook lists are appended, not set."""
+    if not isinstance(v, dict) or not v or pre == 'hooks':
+        return [pre] if pre and pre != 'hooks' else []
+    return [k for key, x in v.items() for k in key_paths(x, f'{pre}/{key}' if pre else key)]
+
+
+def touches(o, out):
+    """What an optimization's apply steps change: {(file, key path)} for JSON settings, and lever tags."""
+    keys, tags = set(), set()
+    for st in ((o.get('apply') or {}).get('steps')) or []:
+        if not isinstance(st, dict):
+            continue
+        act, path = st.get('action'), home_path(st.get('path') or '', out)
+        if act == 'write_file' and st.get('source'):
+            tags.add('hook:' + os.path.basename(st['source']))
+        paths = key_paths(st.get('value')) if act == 'merge_json' else \
+            [st['pointer'].strip('/')] if act in ('set_json', 'unset_json') and st.get('pointer') else []
+        for k in paths:
+            keys.add((path, k))
+            tags.add('setting:' + k)
+    return keys, tags
+
+
+def relation_errs(opts, out):
+    errs, by_id = [], {o.get('id'): o for o in opts}
+    rel = {o.get('id'): {r.get('id'): r.get('relation') for r in o.get('related') or [] if isinstance(r, dict)} for o in opts}
+    for o in opts:
+        oid, where = o.get('id'), f'optimization {o.get("id")}'
+        seen = [r.get('id') for r in o.get('related') or [] if isinstance(r, dict)]
+        for x in sorted({x for x in seen if seen.count(x) > 1}):
+            errs.append(f'{where}: related lists {x!r} more than once')
+        for x, kind in rel[oid].items():
+            if x == oid:
+                errs.append(f'{where}: related to itself')
+            elif x not in by_id:
+                errs.append(f'{where}: related {x!r} is not an optimization id in this file')
+            elif kind in SYMMETRIC and rel[x].get(oid) != kind:
+                errs.append(f'{where}: lists {x} as {kind}, so {x} must list {oid} as {kind} too' +
+                            (f' (it says {rel[x][oid]})' if oid in rel[x] else ''))
+            elif kind == 'requires' and rel[x].get(oid) == 'requires':
+                errs.append(f'{where}: {oid} and {x} require each other')
+    info = {o.get('id'): touches(o, out) for o in opts}
+    ids = list(by_id)
+    for i, a in enumerate(ids):
+        for b in ids[i + 1:]:
+            if b in rel[a] or a in rel[b]:
+                continue
+            same = sorted(k for f, k in info[a][0] & info[b][0])
+            if same:
+                errs.append(f'{a} and {b} both change {", ".join(same)}: say how they relate in "related" (usually conflicts or alternative)')
+                continue
+            for name, lever in SAME_LEVER:
+                if info[a][1] & lever and info[b][1] & lever:
+                    errs.append(f'{a} and {b} act on the same cost, {name}: say how they relate in "related" '
+                                '(alternative, overlaps or complements) and why')
+                    break
+    return errs
+
+
 def validate_optimizations(doc, metrics, insights, out=None):
     errs = []
     check(doc, load(os.path.join(ROOT, 'schemas', 'optimizations.schema.json'), 'schema'), 'optimizations.json', errs)
@@ -204,6 +272,7 @@ def validate_optimizations(doc, metrics, insights, out=None):
                 errs.append(f'{w}: run needs a "command"')
             if act in ('merge_json', 'set_json', 'unset_json') and not path.endswith('.json'):
                 errs.append(f'{w}: {act} only edits .json files')
+    errs += relation_errs([o for o in doc.get('optimizations') or [] if isinstance(o, dict)], out or os.getcwd())
     return errs
 
 

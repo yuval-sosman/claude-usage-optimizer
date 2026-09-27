@@ -21,6 +21,8 @@ Listed in display order. **Cost management comes first and matters most.**
 ## Anatomy of a good insight
 
 - **title** (≤ 90 chars): the finding, not the topic. "Fable 5 work cost 2.5× what Opus 5.5 would have", not "Model usage".
+  When the insight has `savings`, keep the amount out of the title: the card already shows it beside the title, all time and
+  per 30 days. "Compacting at ~150K tokens pays for itself", not "Compacting at ~150K would have saved $67 (≈ $111 per 30 days)".
 - **bottom_line** (one sentence, ≤ 280 chars): what is true, the key number, and why it matters.
 - **detail** (≤ 1,400 chars): the reasoning. Connect two or three questions: cause → effect → cost. Name the mechanism
   ("every later call re-reads it", "resuming rebuilds the subagent's history"). No filler.
@@ -38,8 +40,8 @@ Listed in display order. **Cost management comes first and matters most.**
 
 "What would it have saved if applied from day one" means: the same work over the analysed period, with the change in place from
 the first day. Every saving is given twice, so it is easy to read: **all time** (the analysed days) and **per 30 days** (the same
-pace projected to 30 days). Say both wherever a saving appears in text (title, bottom_line, detail, evidence), e.g. "$67 all time
-(≈ $111 per 30 days)". Take the numbers from the SV questions; don't recompute them unless you must (then show how in `basis`).
+pace projected to 30 days). Say both wherever a saving appears in text (bottom_line, detail, evidence; not the title), e.g.
+"$67 all time (≈ $111 per 30 days)". Take the numbers from the SV questions; don't recompute them unless you must (then show how in `basis`).
 
 - `usd_so_far`: the saving over the whole period, "all time" (an SV card's saving tile or "all time" column, SV1's table, or a
   measured cost such as CX8's "Extra cost of misses").
@@ -85,7 +87,7 @@ Non-cost insights may carry `savings` too when a number exists.
 {
   "id": "cost-compact-150k",
   "category": "cost",
-  "title": "Compacting at ~150K tokens would have saved about $67 (≈ $111 per 30 days)",
+  "title": "Compacting at ~150K tokens pays for itself",
   "bottom_line": "Your main threads often run past 150K tokens; every call above that re-reads the extra context, so compacting there would have saved about $67 all time (≈ $111 per 30 days, 11% of spend) after paying for the compactions.",
   "detail": "Cache reads are 54% of spend (OV3), and they scale with context size: the median session peaks at 131K and many run far past it (CX1). Replaying every main thread with a /compact whenever it was about to pass 150K (SV4) cuts the re-read context on 1,515 calls, for 65 compactions. Below ~100K compaction costs more than it saves; above 200K the saving shrinks. Compaction drops detail, so do it at natural breaks between subtasks.",
   "questions": ["SV4", "CX1", "OV3"],

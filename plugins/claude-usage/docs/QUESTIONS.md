@@ -283,7 +283,7 @@ Thinking, text shown to me, and tool inputs (Bash scripts and heredocs, file con
 Lines added and removed, and files touched.
 - Check: ✓ +6,679 / −1,926 lines, from `structuredPatch`.
 
-**OUT3. What does Claude write: code, tests, plans and specs, memory, or docs and config?** `T P`
+**OUT3. What does Claude write: code, tests, plans, memory, docs or config?** `T P`
 Measured in calls, lines and output tokens, drawn as one vertical bar chart: each kind of file's share of each measure, side by side (the counts are in the tooltip).
 - Check: ✓ code 353 edits (about 184k tokens), plans 48 (about 81k), tests 68 (about 52k), memory 131 (about 51k).
 

@@ -46,6 +46,19 @@
           "effort": {"enum": ["one-click", "minutes", "habit"]},
           "risk": {"enum": ["low", "medium", "high"]},
           "tradeoffs": {"type": "string", "maxLength": 500},
+          "related": {
+            "type": "array", "maxItems": 6,
+            "description": "How this optimization interacts with the others in this file. Both sides list the pair with the same relation, except requires (listed only by the one that needs the other).",
+            "items": {
+              "type": "object", "required": ["id", "relation", "note"], "additionalProperties": false,
+              "properties": {
+                "id": {"type": "string", "description": "Another optimization's id in this file"},
+                "relation": {"enum": ["alternative", "conflicts", "overlaps", "complements", "requires"],
+                             "description": "alternative: two ways to fix the same cost, pick one (once one is in place the other adds little); conflicts: don't combine, they work against each other; overlaps: both worth doing, but their savings count some of the same cost, so they don't add up; complements: each makes the other work better; requires: apply the other one first"},
+                "note": {"type": "string", "minLength": 10, "maxLength": 300, "description": "Why, in one sentence, from this optimization's side; for alternative, which to pick when"}
+              }
+            }
+          },
           "apply": {
             "type": "object", "required": ["summary", "steps"], "additionalProperties": false,
             "description": "Present only when apply.py can make the change",

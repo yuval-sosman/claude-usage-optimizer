@@ -6,5 +6,5 @@
  {"name": "cache-misses", "sel": "#card-CX8", "width": 1240, "scale": 1.5},
  {"name": "miss-trace", "sel": "#card-CX8 .tabsblk.open", "width": 1240, "scale": 1.5, "prep": "const t=[...document.querySelectorAll('#card-CX8 .tb-head')].find(x=>/Step by step/.test(x.textContent)); t.click();"},
  {"name": "insights", "hash": "tab=insights", "sel": ["#topbar", "#shot-end"], "width": 1240, "scale": 1.5, "prep": "document.querySelectorAll('#view-insights .icard')[2].id='shot-end';"},
- {"name": "optimizations", "hash": "tab=optimizations", "sel": ["#topbar", "#shot-end"], "width": 1240, "scale": 1.5, "prep": "document.querySelectorAll('#view-opts .icard')[1].id='shot-end';"}
+ {"name": "optimizations", "hash": "tab=optimizations", "sel": ["#topbar", "#shot-end"], "width": 1240, "scale": 1.5, "prep": "localStorage.clear(); document.querySelectorAll('#view-opts .icard')[1].id='shot-end';"}
 ]

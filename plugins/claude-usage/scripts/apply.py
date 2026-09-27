@@ -232,6 +232,31 @@ def show(opt, out):
     return steps, changed
 
 
+REL = {'alternative': 'alternative to', 'conflicts': "don't combine with", 'overlaps': 'savings overlap with',
+       'complements': 'pairs well with', 'requires': 'needs first'}
+
+
+def related_lines(opt, opts, state, out):
+    """How opt relates to the other optimizations, with a warning when an alternative or a conflicting one is already
+    applied, or one it needs isn't."""
+    lines, warns = [], []
+    for r in opt.get('related') or []:
+        oid, kind = r.get('id'), r.get('relation')
+        if oid not in opts or kind not in REL:
+            continue
+        on = oid in state
+        lines.append(f"    {REL[kind]:<22} {oid}{' (applied)' if on else ''}: {r.get('note', '')}")
+        if on and kind in ('alternative', 'conflicts'):
+            warns.append(f"! {oid} is already applied and this is {'an alternative to it' if kind == 'alternative' else 'in conflict with it'}. "
+                         f"Keep one: undo it with  python3 {HERE}/apply.py undo {oid} --dir {out}  if you want this one instead.")
+        elif not on and kind == 'requires':
+            warns.append(f'! This needs {oid} first:  python3 {HERE}/apply.py apply {oid} --dir {out}')
+    for o in opts.values():                       # the reverse side of "requires"
+        if any(r.get('id') == opt['id'] and r.get('relation') == 'requires' for r in o.get('related') or []):
+            lines.append(f"    {'needed by':<22} {o['id']}{' (applied)' if o['id'] in state else ''}")
+    return (['\n  Related:'] + lines if lines else []) + (['\n' + '\n'.join(warns)] if warns else [])
+
+
 MISSING = object()
 
 
@@ -413,15 +438,19 @@ def undo_record(oid, rec, out, state):
     return notes
 
 
-def do_apply(opt, out, yes):
+def do_apply(opt, out, yes, opts=None):
+    state = load_state(out)
     if not opt.get('apply'):
         print(f"\n{opt['title']} has no automatic change. Do it by hand:")
         for i, m in enumerate(opt.get('manual') or [], 1):
             print(f'  {i}. {m}')
+        for ln in related_lines(opt, opts or {}, state, out):
+            print(ln)
         return
     oid = opt['id']
-    state = load_state(out)
     steps, changed = show(opt, out)
+    for ln in related_lines(opt, opts or {}, state, out):
+        print(ln)
     if not changed:
         print('\nNothing to change: it is already applied.')
         return
@@ -555,19 +584,24 @@ def main(argv=None):
     opts = {o['id']: o for o in doc.get('optimizations') or []}
     if not opts:
         raise SystemExit(f'No optimizations in {out}/optimizations.json. Run /claude-usage:optimize in Claude Code first.')
+    state = load_state(out)
     if a.cmd == 'list':
-        state = load_state(out)
         for o in opts.values():
             how = 'applied' if o['id'] in state else ('one command' if o.get('apply') else 'by hand')
             sv = (o.get('savings') or {}).get('usd_so_far')
             print(f"  {o['id']:<34} {how:<12} {('$%.2f so far' % sv) if sv else '':<14} {o['title']}")
+            for r in o.get('related') or []:
+                if r.get('relation') in ('alternative', 'conflicts', 'requires') and r.get('id') in opts:
+                    print(f"  {'':<34} {REL[r['relation']]} {r['id']}")
         return
     if not a.id or a.id not in opts:
         raise SystemExit(f"Unknown id {a.id!r}. Known: {', '.join(opts)}")
     if a.cmd == 'show':
         show(opts[a.id], out)
+        for ln in related_lines(opts[a.id], opts, state, out):
+            print(ln)
     else:
-        do_apply(opts[a.id], out, a.yes)
+        do_apply(opts[a.id], out, a.yes, opts)
 
 
 if __name__ == '__main__':
