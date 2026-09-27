@@ -44,6 +44,7 @@ library only); runs on macOS, Linux and Windows.
 /claude-usage:optimize      turn the insights into changes you can apply one by one
 /claude-usage:brainstorm    dig into the numbers with Claude and test what-ifs
 /claude-usage:video         a 30–60 second video of your own highlights, to share
+/claude-usage:share         the whole report as one file, to send to whoever compares usage
 ```
 
 Or just ask *"why did Claude Code cost so much last week?"*
@@ -150,6 +151,7 @@ Each question, how it's counted and how to check it: [docs/QUESTIONS.md](plugins
 | `/claude-usage:optimize` | a focus: `cost`, `cache`, `context`, `hooks` or anything else · `apply <id>`: apply one optimization, after a preview |
 | `/claude-usage:brainstorm` | a question or topic, e.g. `why are subagents so expensive?` |
 | `/claude-usage:video` | what to highlight, e.g. `cache misses and savings` · `--seconds 30-60` · `--no-mp4` |
+| `/claude-usage:share` | `--name NAME` · `--team TEAM` · `--no-open` · `open FILE`: open a share file someone sent you |
 
 ```text
 /claude-usage:report --days 30
@@ -199,6 +201,13 @@ the report was built from).
 | `plan` | `--seconds 30-60`: draft the storyboard |
 | `check` | check the storyboard: length, ids, numbers, no private names |
 | `render` | `--no-mp4` (the page only) · `--open` · `--stills 3,20` (PNG frames instead) · `--fps N` · `--scale N` · `--browser PATH` · `--ffmpeg PATH` |
+
+**Sharing**: `python3 $S/share.py <command> [--out DIR]`
+
+| Command | What it does |
+|---|---|
+| `pack` | `--name NAME` · `--team TEAM` · `--reveal`: write the whole report as one file to `<out>/share/` |
+| `unpack FILE` | `--to DIR` · `--open`: turn a share file back into a report folder (default `<out>/received/<file name>/`) |
 
 **What the skills run for you** (rarely needed by hand):
 - `candidates.py --out DIR [--show SECTIONS] [--brief]`: the optimization drafts and savings bundles;
@@ -263,6 +272,25 @@ on and it picks and words the scenes; it runs 30 to 60 seconds.
 </details>
 
 <details>
+<summary><b>Sharing the whole report</b></summary>
+
+`/claude-usage:share` packs your report into one JSON file, made when you ask, to send to someone who collects and
+compares usage across people (a team lead, a platform team):
+
+- It holds everything report.html holds, and more: every number, chart, table and miss trace of every project scope, the
+  insights and optimizations, the optimization drafts, your setup (secrets removed), the optimizations you applied, and
+  every row of the CSV exports, with numbers as numbers. The format is `plugins/claude-usage/schemas/share.schema.json`.
+- It writes `~/.claude-usage/share/claude-usage-share-<name>-<date>.json` and shows it in your file manager. Add
+  `--name` and `--team` to say who it is from. It tells you when the report is days old or the insights are out of
+  date, so you can refresh them first.
+- It includes project names, session titles, file paths, prompt snippets and commands, like report.html. Send it only
+  to someone you would show your report to.
+- Whoever gets it runs `/claude-usage:share open <file>`: it becomes a report folder in `~/.claude-usage/received/`
+  with its own report.html, showing who shared it and without the apply commands (those optimizations are for the
+  sender's machine).
+</details>
+
+<details>
 <summary><b>Where it reads and writes</b></summary>
 
 It reads the transcripts Claude Code keeps in `<claude dir>/projects`. `<claude dir>` is `--claude-dir DIR`, else
@@ -279,6 +307,8 @@ where Claude Code guards every write. To change it, pass `--out DIR`, or set `CL
 ├── optimizations.json   written by /claude-usage:optimize
 ├── data/                rebuilt on every run: metrics.json, digest.md and candidates.json (what Claude reads), config.json, *.csv
 ├── video/               /claude-usage:video: storyboard.json, video.html and claude-usage-video.mp4
+├── share/               /claude-usage:share: the one-file copies of your report you made to send
+├── received/            share files others sent you, each unpacked into its own report folder
 └── applied/             once you apply something: applied.json and backups/
 ```
 </details>
@@ -286,8 +316,18 @@ where Claude Code guards every write. To change it, pass `--out DIR`, or set `CL
 <details>
 <summary><b>Any model, any machine</b></summary>
 
-- Model ids from the API, Bedrock (`us.anthropic.claude-sonnet-4-5-20250929-v1:0`), Vertex (`claude-sonnet-4-5@20250929`)
-  and older names (`claude-3-5-sonnet-20241022`) all resolve to one canonical id before pricing.
+- Model ids from the API, Bedrock (`us.anthropic.claude-sonnet-4-5-20250929-v1:0`, `global.anthropic.claude-opus-4-6-v1`,
+  `anthropic.claude-opus-5`), Vertex (`claude-sonnet-4-5@20250929`) and older names (`claude-3-5-sonnet-20241022`) all
+  resolve to one canonical id before pricing.
+- Bedrock and Claude API prices match at list, and global routing stays at list on both (`global.` profiles,
+  `inference_geo: "global"`). What the transcripts show costing more is priced that way: a regional Bedrock inference
+  profile (`us.`, `eu.`, `apac.`, `jp.`, `au.`…) costs 10% more for Claude 4.5 and later, Claude API inference pinned to one
+  location (`inference_geo: "us"`) 10% more for Claude 4.6 and later, and fast mode its premium. Native Claude Code calls
+  are priced exactly as before. The report's notes say where the calls ran when any went through Bedrock or a pinned
+  location.
+- A Bedrock application inference profile ARN names no model. The report maps it through `modelOverrides` in your settings,
+  or `ANTHROPIC_DEFAULT_OPUS_MODEL` (and SONNET, HAIKU) set to it (the family only, so it is flagged as estimated); add it to
+  `_aliases` in `scripts/prices.json` to price it exactly.
 - `scripts/prices.json` covers Claude models from Claude 3 on. An unlisted Claude model is priced like the nearest version
   of its family and flagged as estimated; a non-Claude model counts as $0. Add a line to price one exactly.
 - Older transcripts that don't mark typed prompts are handled.
@@ -316,7 +356,8 @@ where Claude Code guards every write. To change it, pass `--out DIR`, or set `CL
 Everything stays local, and the report makes no network requests. It contains prompt snippets, file paths and session
 titles, so treat it like your transcripts. `config.json` and the digest drop anything that looks like a key, token or
 secret, and list MCP servers by name only. The video, meant for sharing, shows numbers only: no prompts, and no project
-names, session titles or paths unless you ask.
+names, session titles or paths unless you ask. The share file (`/claude-usage:share`) is the opposite: it holds all of
+the report, names and prompt snippets included, and leaves your machine only when you send it.
 </details>
 
 <details>
@@ -327,14 +368,15 @@ names, session titles or paths unless you ask.
 CLAUDE.md                            for working on the plugin
 plugins/claude-usage/
   .claude-plugin/plugin.json         the plugin manifest
-  skills/report|optimize|brainstorm|video/  the four skills and their reference guides
+  skills/report|optimize|brainstorm|video|share/  the five skills and their reference guides
   scripts/usage_report.py            the engine (stdlib Python 3.8+); report_template.html is the offline UI
   scripts/apply.py, validate.py      apply/undo optimizations; check Claude's output
   scripts/candidates.py, assemble.py the optimization drafts and savings bundles; merge Claude's notes into the final JSON
   scripts/video*.py, fonts/          the highlights video: storyboard, checks, template, recorder (headless browser + ffmpeg)
+  scripts/share.py                   the whole report as one file to send, and back into a report folder
   scripts/prices.json                USD per million tokens per model
   scripts/hooks/                     hooks and status line the optimizations install
-  schemas/                           the insights, optimizations and video storyboard contracts
+  schemas/                           the insights, optimizations, video storyboard and share file contracts
   docs/QUESTIONS.md                  every question: why, how, what it found
   docs/screenshots/                  the made-up data and script behind docs/images/
 promo/                               the launch videos (HTML), their MP4s and GIFs, and render.mjs

@@ -286,13 +286,75 @@ def slim(d):
                 b.pop(k, None)
 
 
+ALIASES = {}    # ids that name no model (a Bedrock application inference profile ARN, a gateway's own name) → canonical id
+PROFILE = re.compile(r'(?:^|[/:])([a-z]{2,6}(?:-[a-z]+)?)\.anthropic\.', re.I)   # a Bedrock inference profile: global., us., eu.…
+MODEL_WORDS = {'opus', 'sonnet', 'haiku', 'fable', 'mythos', 'default', 'best', 'opusplan'}       # Claude Code's own model aliases
+
+
+def names_no_model(v):
+    """Whether an id names no Claude model by itself (a Bedrock application inference profile ARN, a gateway's own name), so
+    only an alias can say which model it is. A Claude id (anything with claude- in it) or one of Claude Code's model words
+    never does: those resolve on their own, and aliasing them would re-price a native model."""
+    s = re.sub(r'\[.*?\]$', '', (v or '').strip().lower())
+    return bool(s) and 'claude-' not in s and s not in MODEL_WORDS and not s.startswith('<')
+
+
 def canon_model(m):
     """One id per model, whatever the provider wrote: 'us.anthropic.claude-sonnet-4-5-20250929-v1:0',
     'claude-sonnet-4-5@20250929', 'claude-opus-5[1m]' and 'claude-3-5-sonnet-latest' become 'claude-sonnet-4-5',
-    'claude-opus-5' and 'claude-sonnet-3-5'. Ids that are not Claude models are returned unchanged."""
+    'claude-opus-5' and 'claude-sonnet-3-5'. An id in ALIASES (see model_aliases) becomes the model it stands for. Ids that are
+    not Claude models are returned unchanged."""
     if not isinstance(m, str) or not m or m.startswith('<'):
         return m or '?'
+    if ALIASES and names_no_model(m):
+        a = ALIASES.get(re.sub(r'\[.*?\]$', '', m.strip()))
+        if a:
+            return a
     return _canon_id(m)
+
+
+def where_of(model_id, usage):
+    """Where a call ran, as far as its model id and usage say, for pricing and the report's notes:
+    bedrock_global / bedrock_regional: a Bedrock inference profile, global. or any other (us., eu., apac., jp., au., us-gov.…);
+    bedrock: Bedrock without a profile prefix (its Messages endpoint's anthropic.… ids, an application inference profile ARN),
+    where global or regional isn't recorded; api_global / api_regional: the Claude API's usage.inference_geo, "global" or any
+    other location ("us"). None when nothing says (a subscription reports "not_available"): a native call at list price."""
+    mid = model_id if isinstance(model_id, str) else ''
+    prof = PROFILE.search(mid)
+    if prof:
+        return 'bedrock_global' if prof.group(1).lower() == 'global' else 'bedrock_regional'
+    if re.match(r'anthropic\.claude-|arn:aws[\w-]*:bedrock:', mid, re.I):
+        return 'bedrock'
+    geo = str((usage or {}).get('inference_geo') or '').lower()
+    if geo in ('', 'not_available', 'none'):
+        return None
+    return 'api_global' if geo == 'global' else 'api_regional'
+
+
+MODEL_VARS = {'ANTHROPIC_DEFAULT_OPUS_MODEL': 'opus', 'ANTHROPIC_DEFAULT_SONNET_MODEL': 'sonnet',
+              'ANTHROPIC_DEFAULT_HAIKU_MODEL': 'haiku', 'ANTHROPIC_SMALL_FAST_MODEL': 'haiku'}
+
+
+def model_aliases(prices, settings):
+    """ALIASES for ids that name no Claude model, in this order: prices.json's _aliases; a settings file's modelOverrides
+    (a Claude id mapped to a Bedrock application inference profile ARN, read backwards); and ANTHROPIC_DEFAULT_<FAMILY>_MODEL
+    set to such an ARN, in a settings file's env or this process's environment (the version isn't known, so it is priced as
+    the family's model the report compares against and listed in prices.guessed). Returns the aliases."""
+    out = {k: v for k, v in prices.aliases.items() if names_no_model(k)}
+    envs = [js.get('env') for js in settings if isinstance(js, dict) and isinstance(js.get('env'), dict)] + [os.environ]
+    for js in settings:
+        mo = js.get('modelOverrides') if isinstance(js, dict) else None
+        for cid, target in (mo.items() if isinstance(mo, dict) else ()):         # a malformed settings file is skipped
+            if (isinstance(target, str) and names_no_model(target) and target not in out
+                    and model_parts(_canon_id(cid))[0]):                          # only a Claude model can be priced
+                out[target] = _canon_id(cid)
+    for env in envs:
+        for var, fam in MODEL_VARS.items():
+            v = re.sub(r'\[.*?\]$', '', str(env.get(var) or '').strip())
+            if names_no_model(v) and v not in out and prices.pick(fam):
+                out[v] = prices.pick(fam)
+                prices.guessed[v] = (prices.pick(fam), var)
+    return out
 
 
 @functools.lru_cache(maxsize=None)
@@ -324,6 +386,8 @@ def model_parts(m):
 def model_name(m):
     if not m or m == '<synthetic>':
         return 'Client error'
+    if str(m).startswith('arn:'):                                  # a Bedrock profile no alias maps to a model
+        return 'Bedrock ' + clip(str(m).rsplit('/', 1)[-1], 24)
     fam, v = model_parts(canon_model(m))
     if fam:
         return f'{fam.title()} {v[0]}' + (f'.{v[1]}' if v[1] else '')
@@ -566,6 +630,7 @@ def card(cid, q, scope, blocks, why=None, insight=None, note=None, empty=None):
 class Prices:
     def __init__(self, path):
         self.table, self.source, self.missing, self.estimated, self.compare = {}, '', set(), {}, []
+        self.aliases, self.modifiers, self.guessed = {}, {}, {}
         if path and os.path.exists(path):
             with open(path, encoding='utf-8') as fh:
                 for k, v in json.load(fh).items():
@@ -573,6 +638,10 @@ class Prices:
                         self.source = v
                     elif k == '_compare' and isinstance(v, list):
                         self.compare = [canon_model(x) for x in v]
+                    elif k == '_aliases' and isinstance(v, dict):
+                        self.aliases = {str(a): _canon_id(b) for a, b in v.items() if isinstance(b, str) and not a.startswith('_')}
+                    elif k == '_modifiers' and isinstance(v, dict):
+                        self.modifiers = {a: b for a, b in v.items() if isinstance(b, dict) and not a.startswith('_')}
                     elif not k.startswith('_') and isinstance(v, dict):
                         self.table[canon_model(k)] = v
         self.compare = [k for k in self.compare if k in self.table] or sorted(self.table)
@@ -606,7 +675,21 @@ class Prices:
         same = sorted((model_parts(k)[1], k) for k in self.table if model_parts(k)[0] == family)
         return same[-1][1] if same else None
 
-    def cost(self, model, u):
+    def mult(self, model, where=None, fast=False):
+        """What a call pays over list price: _modifiers[where] (bedrock_regional, api_regional; global routing has none) for
+        models from its version on, times the model's own "fast" premium when it ran in fast mode."""
+        x = 1.0
+        mod = self.modifiers.get(where) if where else None
+        if mod:
+            fam, v = model_parts(canon_model(model))
+            if fam and v >= tuple(mod.get('from') or (0, 0)):
+                x *= mod.get('mult') or 1
+        if fast:
+            x *= (self.rate(model) or {}).get('fast') or 1
+        return x
+
+    def cost(self, model, u, mult=1.0):
+        """What the usage cost at this model's list prices, times mult (a call's pm, from mult())."""
         r = self.rate(model)
         if not r:
             return None
@@ -614,15 +697,15 @@ class Prices:
         w5, w1 = cc.get('ephemeral_5m_input_tokens'), cc.get('ephemeral_1h_input_tokens')
         if w5 is None and w1 is None:
             w5, w1 = u.get('cache_creation_input_tokens') or 0, 0
-        return {'input': (u.get('input_tokens') or 0) * r['in'] / 1e6,
-                'output': (u.get('output_tokens') or 0) * r['out'] / 1e6,
-                'cache_read': (u.get('cache_read_input_tokens') or 0) * r['cr'] / 1e6,
-                'write_5m': (w5 or 0) * r['cw5m'] / 1e6,
-                'write_1h': (w1 or 0) * r['cw1h'] / 1e6}
+        return {'input': (u.get('input_tokens') or 0) * r['in'] / 1e6 * mult,
+                'output': (u.get('output_tokens') or 0) * r['out'] / 1e6 * mult,
+                'cache_read': (u.get('cache_read_input_tokens') or 0) * r['cr'] / 1e6 * mult,
+                'write_5m': (w5 or 0) * r['cw5m'] / 1e6 * mult,
+                'write_1h': (w1 or 0) * r['cw1h'] / 1e6 * mult}
 
-    def per_token(self, model, kind):
+    def per_token(self, model, kind, mult=1.0):
         r = self.rate(model) or {}
-        return (r.get(kind) or 0) / 1e6
+        return (r.get(kind) or 0) / 1e6 * mult
 
 
 # ---------------------------------------------------------------------------------------------- loading
@@ -998,7 +1081,7 @@ class Model:
             if c is None:
                 c = calls[key] = dict(
                     key=key, sid=d.get('sessionId'), agent=d.get('agentId') if d.get('isSidechain') else None,
-                    proj=d['_proj'], model=canon_model(m.get('model')), effort=d.get('effort'), skill=d.get('attributionSkill'),
+                    proj=d['_proj'], model=canon_model(m.get('model')), raw=m.get('model'), effort=d.get('effort'), skill=d.get('attributionSkill'),
                     agt=d.get('attributionAgent'), t0=t, t1=t, u=m['usage'], stop=None, diag=None, blocks=[],
                     seen=set(), entry=d.get('entrypoint'), ver=d.get('version'),
                     err=d.get('error') if d.get('isApiErrorMessage') else None, errtext=None)
@@ -1042,7 +1125,10 @@ class Model:
             c['ctx'] = c['inp'] + c['cr'] + c['cw']
             stu = u.get('server_tool_use') or {}
             c['web'] = (stu.get('web_search_requests') or 0) + (stu.get('web_fetch_requests') or 0)
-            parts = None if c['synthetic'] else self.prices.cost(c['model'], u)
+            c['where'] = where_of(c.pop('raw'), u)
+            c['fast'] = u.get('speed') == 'fast'
+            c['pm'] = 1.0 if c['synthetic'] else self.prices.mult(c['model'], c['where'], c['fast'])
+            parts = None if c['synthetic'] else self.prices.cost(c['model'], u, c['pm'])
             c['cost'] = parts or {}
             c['usd'] = sum(parts.values()) if parts else 0.0
             c['tools'] = [(b, t) for b, t in c['blocks'] if b.get('type') == 'tool_use']
@@ -1402,7 +1488,7 @@ class Model:
                 lo = bisect.bisect_right(times, calls[i - 1]['t1']) if i else 0
                 hi = bisect.bisect_right(times, c['t0'])
                 window = lst[lo:hi]
-                rr = self.prices.per_token(c['model'], 'cr')
+                rr = self.prices.per_token(c['model'], 'cr', c['pm'])
                 reads = n - i - 1
 
                 def add(source, detail, tokens, tu=None):
@@ -1411,7 +1497,7 @@ class Model:
                     carry = tokens * reads
                     self.items.append(dict(thread=key, sid=key[0], source=source, detail=detail, tokens=tokens, k=i,
                                            reads=reads, carry=carry, carry_usd=carry * rr, t=c['t0'], tu=tu,
-                                           model=c['model']))
+                                           model=c['model'], pm=c['pm']))
                 W = sum(x[3] for x in window)
                 if i == 0:
                     scale = min(1.0, c['ctx'] / W) if W else 1.0
@@ -1489,7 +1575,7 @@ class Model:
     def miss_usd(self, c):
         r = self.prices.rate(c['model']) or {}
         write = r.get('cw1h' if c['ttl'] >= 3600 else 'cw5m') or 0
-        return c['rewritten'] * (write - (r.get('cr') or 0)) / 1e6
+        return c['rewritten'] * (write - (r.get('cr') or 0)) / 1e6 * c['pm']
 
 # ------------------------------------------------------------------------------------------- scope context
 
@@ -1499,6 +1585,7 @@ class G:
     def __init__(self, src, prices, scope, model_slots):
         self.src, self.prices, self.scope, self.model_slots = src, prices, scope, model_slots
         self.is_all = scope['kind'] == 'all'
+        self.where = {}
 
     def slot(self, model):
         return self.model_slots.get(model)
@@ -1749,7 +1836,8 @@ def ov7(m, g):
 def ov8(m, g):
     miss = sum(r['usd'] for r in _miss_rows(m))
     rep, _ = _read_seq(m)
-    reread = sum(it['carry_usd'] + it['tokens'] * g.prices.per_token(it['model'], 'cw5m') for it in m.items if it['tu'] and it['tu']['id'] in rep)
+    reread = sum(it['carry_usd'] + it['tokens'] * g.prices.per_token(it['model'], 'cw5m', it['pm']) for it in m.items
+                 if it['tu'] and it['tu']['id'] in rep)
     after_err = set()
     for t in m.tools:
         if t['res'] and t['res']['is_error']:
@@ -2319,7 +2407,7 @@ def _trace_text(m, r, trig):
             advice.append(f"It wasn't you who came back: a background task finished at {T(trig[0])} and woke the session after the "
                           f"cache had expired. A task that outlives the {ttlw} cache brings the whole context back at the write price.")
         base = median([s['baseline'] for s in m.sessions.values() if s['baseline']])
-        rate = m.prices.per_token(c['model'], 'cw1h' if ttl >= 3600 else 'cw5m')
+        rate = m.prices.per_token(c['model'], 'cw1h' if ttl >= 3600 else 'cw5m', c['pm'])
         if base and base < p['ctx']:
             advice.append(f"A fresh session starts at about {f_tok(base)} tokens (about {money(base * rate)} to write). When the next "
                           f"task is new, /clear or a new session with a short summary is cheaper than bringing back {f_tok(p['ctx'])} tokens.")
@@ -2466,7 +2554,7 @@ def trace_for(m, r):
     w1 = max(c['t1'], expiry + 1) if c['start'] <= expiry <= c['t1'] + 600 else c['t1']
     trig = _trigger(m, c)
     story, advice = _trace_text(m, r, trig)
-    rate = m.prices.rate(c['model']) or {}
+    rate = {k: v * c['pm'] for k, v in (m.prices.rate(c['model']) or {}).items() if isinstance(v, (int, float))}
     sub = c['is_sub']
     lanes = [('you', 'You'), ('main', 'Main agent'), ('claude', 'This subagent' if sub else 'Claude'),
              ('tools', 'Its tools' if sub else 'Tools'), ('subs', 'Other subagents' if sub else 'Subagents'), ('events', 'Session')]
@@ -2547,11 +2635,11 @@ FIX = {  # cause -> (who can fix it, how)
 
 
 def w_rate(m, c, ttl=None):
-    return m.prices.per_token(c['model'], 'cw1h' if (ttl or c['ttl']) >= 3600 else 'cw5m')
+    return m.prices.per_token(c['model'], 'cw1h' if (ttl or c['ttl']) >= 3600 else 'cw5m', c['pm'])
 
 
 def r_rate(m, c):
-    return m.prices.per_token(c['model'], 'cr')
+    return m.prices.per_token(c['model'], 'cr', c['pm'])
 
 
 def span_days(m):
@@ -2632,7 +2720,7 @@ def _sv_compact(m):
                 nxt = sim + growth
                 if nxt > T and sim > after:
                     n += 1
-                    cost += sim * r_rate(m, p) + SUMMARY_OUT * m.prices.per_token(p['model'], 'out') + (after - base) * w_rate(m, p)
+                    cost += sim * r_rate(m, p) + SUMMARY_OUT * m.prices.per_token(p['model'], 'out', p['pm']) + (after - base) * w_rate(m, p)
                     nxt = after + max(0, growth)
                 sim = min(nxt, c['ctx'])
                 d = c['ctx'] - sim
@@ -2764,8 +2852,8 @@ def _sv_models(m):
     names = list(m.prices.compare) + ([current] if current and current not in m.prices.compare else [])
     rows = []
     for mdl in names:
-        main = sum(sum(m.prices.cost(mdl, c['u']).values()) for c in m.real if not c['agent'])
-        sub = sum(sum(m.prices.cost(mdl, c['u']).values()) for c in m.real if c['agent'])
+        main = sum(sum(m.prices.cost(mdl, c['u'], m.prices.mult(mdl, c['where'])).values()) for c in m.real if not c['agent'])
+        sub = sum(sum(m.prices.cost(mdl, c['u'], m.prices.mult(mdl, c['where'])).values()) for c in m.real if c['agent'])
         rows.append(dict(model=mdl, main=main, sub=sub))
     act_main = sum(c['usd'] for c in m.real if not c['agent'])
     act_sub = sum(c['usd'] for c in m.real if c['agent'])
@@ -2777,11 +2865,12 @@ def _sv_models(m):
         if not mdl:
             return 0.0
         top = m.prices.rate(mdl)['out']
-        return sum(c['usd'] - sum(m.prices.cost(mdl, c['u']).values()) for c in calls
+        return sum(c['usd'] - sum(m.prices.cost(mdl, c['u'], m.prices.mult(mdl, c['where'])).values()) for c in calls
                    if (m.prices.rate(c['model']) or {}).get('out', 0) > top)
     sonnet = m.prices.pick('sonnet')
     m.cache['sv_models'] = out = dict(rows=rows, act_main=act_main, act_sub=act_sub, explore=sum(c['usd'] for c in explore),
-                                      explore_haiku=sum(sum(m.prices.cost(haiku, c['u']).values()) for c in explore) if haiku else None,
+                                      explore_haiku=sum(sum(m.prices.cost(haiku, c['u'], m.prices.mult(haiku, c['where'])).values()) for c in explore)
+                                      if haiku else None,
                                       current=current, sonnet=sonnet, haiku=haiku, main_saving=cheaper(main_calls, current),
                                       sub_saving=cheaper([c for c in m.real if c['agent']], sonnet))
     return out
@@ -2819,7 +2908,7 @@ def _sv_reads(m):
     items = [it for it in m.items if it['tu'] is not None and it['tu']['name'] == 'Read' and it['tokens'] >= BIG_READ
              and not ({'offset', 'limit'} & set(it['tu']['input']))]
     ttl = lambda it: m.ttl.get(it['thread'], 3600 if it['thread'][1] == 'main' else 300)
-    stake = sum(it['carry_usd'] + it['tokens'] * m.prices.per_token(it['model'], 'cw1h' if ttl(it) >= 3600 else 'cw5m')
+    stake = sum(it['carry_usd'] + it['tokens'] * m.prices.per_token(it['model'], 'cw1h' if ttl(it) >= 3600 else 'cw5m', it['pm'])
                 for it in items)
     m.cache['sv_reads'] = out = dict(items=items, tokens=sum(it['tokens'] for it in items), stake=stake, usd=stake * (1 - RANGE_KEEP))
     return out
@@ -2834,7 +2923,7 @@ def sv_levers(m):
     best = max(comp, key=lambda r: r['net']) if comp else None
     avoid = sum(r['usd'] for r in ms_ if r['who'] not in ('not in your control', 'unclear'))
     ttl_gain = max(0.0, m.usd - min(x['usd'] for x in ttl['combos']))
-    post, _ = _post_stop(m)
+    post = _post_stop(m)[0]
     levers = [
         dict(id='unused', label='Remove unused skills, MCP servers and agent types', usd=un['usd'], card='SV2'),
         dict(id='misses', label='Avoid the avoidable cache misses', usd=avoid, card='SV3'),
@@ -2874,17 +2963,42 @@ def sv1(m, g):
              '(a smaller context also makes misses and re-reads cheaper), so they do not add up.')
 
 
-def item_origin(src, kind, name):
-    """Where an unused item comes from, and how it can be switched off."""
-    home = src.home
-    cwds = [c for c in src.cwd.values() if c]
+def places(src, used, n=None):
+    """The projects that use an item (where_used()'s used), most uses first: '~/Dev/app and ~/Dev/web'; with n, at most n
+    of them and '… and 3 more' (for display only: advice names every project, or following it breaks the others)."""
+    ks = sorted(used, key=lambda k: (-used[k], k))
+    n = len(ks) if n is None else n
+    names = [src.label(k) for k in ks[:n]] + ([f'{len(ks) - n} more'] if len(ks) > n else [])
+    return names[0] if len(names) == 1 else ', '.join(names[:-1]) + ' and ' + names[-1]
+
+
+def scope_how(src, kind, name, w):
+    """How to load an item only in the projects that use it (w: its where_used() entry), instead of switching it off and on."""
+    there = places(src, w['used'])
+    if kind == 'MCP server':
+        return f"add it with claude mcp add … -s local (or to the project's .mcp.json) in {there}, then claude mcp remove {name} -s user"
+    if kind == 'plugin':
+        return (f'enabledPlugins "{w["pid"] or name}": true in .claude/settings.local.json of {there}, and false in '
+                f'{tilde(os.path.join(src.home, "settings.json"))}')
+    cmd = os.path.join(src.home, 'commands', name + '.md')         # a personal slash command rather than a skill folder
+    if not os.path.isdir(os.path.join(src.home, 'skills', name)) and os.path.exists(cmd):
+        return f'move {tilde(cmd)} into .claude/commands/ of {there}'
+    return f'move {tilde(os.path.join(src.home, "skills", name))} into .claude/skills/ of {there}'
+
+
+def item_origin(src, kind, name, where=None):
+    """Where an unused item comes from, and how to stop loading it: only in the projects that use it when another project
+    does (where: where_used()), else off or removed. Never "switch it off in each project": that is the toggling it avoids."""
+    home, where = src.home, where or {}
     if kind == 'skill':
         if name.startswith('anthropic-skills:'):
             return 'synced from your account', f'skillOverrides "{name}": "off"'
         if ':' in name:
-            return f"plugin {name.split(':')[0]}", 'disable the plugin (enabledPlugins)'
+            w = where.get(('plugin', name.split(':')[0]))
+            return f"plugin {name.split(':')[0]}", scope_how(src, 'plugin', name.split(':')[0], w) if w else 'disable the plugin (enabledPlugins)'
         if os.path.exists(os.path.join(home, 'skills', name, 'SKILL.md')) or os.path.exists(os.path.join(home, 'commands', name + '.md')):
-            return f'personal ({tilde(home)})', f'skillOverrides "{name}": "off"'
+            w = where.get(('skill', name))
+            return f'personal ({tilde(home)})', scope_how(src, 'skill', name, w) if w else f'skillOverrides "{name}": "off"'
         for p_, cwd in src.cwd.items():
             if cwd and (os.path.exists(os.path.join(cwd, '.claude', 'skills', name, 'SKILL.md'))
                         or os.path.exists(os.path.join(cwd, '.claude', 'commands', name + '.md'))):
@@ -2892,7 +3006,9 @@ def item_origin(src, kind, name):
         return 'built in, or no longer on disk', 'leave it'
     if kind == 'MCP server':
         if name in (src.mcp.get('user') or {}):
-            return 'your MCP config (user scope)', f'/mcp disable {name} in each project'
+            w = where.get(('MCP server', name))
+            return 'your MCP config (user scope)', (scope_how(src, 'MCP server', name, w) if w else
+                                                    f'claude mcp remove {name} -s user (add it with -s local where a project needs it)')
         if name.startswith('claude.ai'):
             return 'claude.ai connector', '"disableClaudeAiConnectors": true'
         if 'chrome' in name:
@@ -2908,22 +3024,35 @@ def item_origin(src, kind, name):
 
 def sv2(m, g):
     u, e = _sv_unused(m), _ext(m)
-    if not u['tok']:
+    wt = {group_of(p) for p in g.src.cwd if group_of(p) != p}                   # projects with task worktrees
+    scoped = [dict(n=(o['pid'] or name) if kind == 'plugin' else name, k=kind, o=o['origin'], w=places(g.src, o['used'], 3),
+                   wa=places(g.src, o['used']), x='yes' if set(o['used']) & wt else 'no', i=len(o['idle']), s=o['sessions'], t=round(o['tok']),
+                   u=r2(sum(o['idle'].values())), mo=r2(per_month(m, sum(o['idle'].values()))), h=scope_how(g.src, kind, name, o))
+              for (kind, name), o in (g.where if g.is_all else {}).items() if sum(o['idle'].values()) >= 0.005]
+    if not u['tok'] and not scoped:
         return card('SV2', 'What do unused skills, MCP servers and agent types cost me?', 'T P', [], empty='Nothing loaded went unused.')
     tot = sum(t for _, _, t in e['items']) or 1
     rows = []
     for kind, name, tok_ in sorted(e['items'], key=lambda x: -x[2]):
-        origin, how = item_origin(g.src, kind, name)
+        origin, how = item_origin(g.src, kind, name, g.where)
         rows.append(dict(n=name, k=kind, t=round(tok_), u=r2(u['usd'] * tok_ / tot), mo=r2(per_month(m, u['usd'] * tok_ / tot)), o=origin, h=how))
     removable = [r for r in rows if r['h'] != 'leave it']
-    return card('SV2', 'What do unused skills, MCP servers and agent types cost me?', 'T P', [
+    return card('SV2', 'What do unused skills, MCP servers and agent types cost me?', 'T P', ([
         K(kpi('Unused tokens per session', u['tok'], 'tokens', f"{len(e['un_sk'])} skills · {len(e['un_mcp'])} MCP · {len(e['un_ag'])} agent types"),
           kpi_save(m, 'Saved if removed', u['usd'], f"{u['calls']:,} calls in {u['sessions']} sessions re-read them"),
           kpi_save(m, 'Of which you can switch off', sum(r['u'] for r in removable), f"{len(removable)} items; the rest are built in")),
         TABLE([('n', 'Item', None), ('k', 'Kind', None), ('t', 'Tokens per session', 'tokens'), ('u', 'Saved, all time', 'usd'),
-               ('mo', 'Per 30 days', 'usd'), ('o', 'Comes from', None), ('h', 'How to switch it off', None)], rows, 'Every unused item, largest first', 12)],
-        why='Everything listed at session start is re-read on every later call of that session, used or not.',
-        insight=f"Unused listings add about {f_tok(u['tok'])} tokens to every session; removing them would have saved {f_save(m, u['usd'])}.",
+               ('mo', 'Per 30 days', 'usd'), ('o', 'Comes from', None), ('h', 'How to switch it off', None)], rows, 'Every unused item, largest first', 12)]
+        if u['tok'] else []) + ([
+        TABLE([('n', 'Item', None), ('k', 'Kind', None), ('w', 'Used in', None), ('i', 'Other projects loading it', 'count'),
+               ('s', 'Their sessions', 'count'), ('u', 'Saved, all time', 'usd'), ('mo', 'Per 30 days', 'usd'),
+               ('h', 'Set it up only there', None)],        # rows also keep wa (every project using it), x (task worktrees
+                                                             # there), t (tokens) and o (origin)
+              scoped, 'Used in some projects, loaded in every one: set up only where used', 12)] if scoped else []),
+        why='Everything listed at session start is re-read on every later call of that session, used or not. Something one project '
+            'needs can be set up in that project alone, so the others never load it and nothing has to be switched on and off.',
+        insight=f"Unused listings add about {f_tok(u['tok'])} tokens to every session; removing them would have saved {f_save(m, u['usd'])}."
+                if u['tok'] else None,
         note='Priced per main-thread call: re-read at the cache-read price, written at the write price on first calls and misses. '
              'Some built-in skills and agent types cannot be switched off.')
 
@@ -3358,9 +3487,9 @@ def cx5(m, g):
         K(kpi('A new session starts with', ctx, 'tokens', f'{model_name(mdl)} · {when}'),
           kpi('Of the context window', share(ctx, window), 'pct',
               f'{wlab} window · {f_tok(window - ctx)} free' + (f'\n{of200}' if of200 else '')),
-          kpi('Cost to load it', ctx * g.prices.per_token(mdl, 'cw1h' if c.get('ttl', 3600) >= 3600 else 'cw5m'), 'usd',
-              'written to the cache once'),
-          kpi('Carried per 100 calls', ctx * g.prices.per_token(mdl, 'cr') * 100, 'usd', 're-read on every later call')),
+          kpi('Cost to load it', ctx * g.prices.per_token(mdl, 'cw1h' if c.get('ttl', 3600) >= 3600 else 'cw5m', c.get('pm', 1.0)),
+              'usd', 'written to the cache once'),
+          kpi('Carried per 100 calls', ctx * g.prices.per_token(mdl, 'cr', c.get('pm', 1.0)) * 100, 'usd', 're-read on every later call')),
         PIE(pcats, [round(v) for v in pvals], 'tokens',
             title='What the first request of your latest session carried', center='tokens', total=ctx, width='half',
             slots=list(range(1, len(pcats) + 1))),
@@ -3827,6 +3956,91 @@ def se6(m, g):
 
 # ------------------------------------------------------------------------------------------ EX: plugins, MCP, tools & hooks (EX6–EX15, tools, are further up)
 
+def mcp_is(listed, used):
+    """Whether a tool call's server key (mcp__<key>__tool) is the server a listing names (claude.ai connectors differ in spelling)."""
+    return (used == listed or used.replace('_', ' ') == listed or listed.endswith(used)
+            or used.endswith(listed.replace('claude.ai ', '').replace(' ', '_')))
+
+
+def group_of(proj):
+    """The project a transcripts folder belongs to: a task worktree's counts as its checkout's (as the scopes group them)."""
+    return re.sub(r'--claude-worktrees-.*$', '', proj or '')
+
+
+def where_used(m):
+    """Skills, MCP servers and plugins that a user-level setting loads into every project, used in some projects and only
+    loaded in others: {(kind, name): dict(used={project: uses}, idle={project: usd}, sessions=idle sessions, tok=tokens per
+    session, origin=…, pid=the plugin's id)}, costliest idle first. Computed once, on all projects (build() hands it to every
+    scope): SV2 lists it and item_origin words its advice from it. Loading an item costs its listing on every main-thread call
+    of the session: written on the first call and after a miss, re-read on the others (as SV2 prices unused items)."""
+    if 'where_used' in m.cache:
+        return m.cache['where_used']
+    src, e = m.src, _ext(m)
+    home = src.home
+    enabled = {k.split('@')[0]: k for k, v in (src.settings.get('enabledPlugins') or {}).items() if v is True and isinstance(k, str)}
+    personal = lambda n: (os.path.exists(os.path.join(home, 'skills', n, 'SKILL.md'))
+                          or os.path.exists(os.path.join(home, 'commands', n + '.md')))
+
+    def item(kind, name):                     # the movable item a listed name belongs to, or None
+        if kind == 'skill':
+            ns = name.split(':')[0] if ':' in name else None
+            if ns and ns in enabled and not name.startswith('anthropic-skills:'):
+                return ('plugin', ns)
+            return ('skill', name) if not ns and personal(name) else None
+        return ('MCP server', name) if name in (src.mcp.get('user') or {}) else None
+    listed = collections.defaultdict(lambda: collections.defaultdict(set))    # session → item → the names it listed
+    for a in m.atts:
+        x = a['a']
+        kind = 'skill' if a['type'] == 'skill_listing' else 'MCP server' if a['type'] == 'mcp_instructions_delta' else None
+        for n in (x.get('names') if kind == 'skill' else x.get('addedNames') if kind else None) or []:
+            it = item(kind, n)
+            if it:
+                listed[a['sid']][it].add(n)
+    size = lambda it, names: sum(e['sk_tok'].get(n, 15) if it[0] != 'MCP server' else e['mcp_tok'].get(n, 0) for n in names)
+    used = collections.defaultdict(collections.Counter)                      # item → project → uses
+    for t in m.tools:
+        s = m.sessions.get(t['sid'])
+        if not s:
+            continue
+        names = []
+        if t['name'] == 'Skill':
+            names.append(('skill', t['input'].get('skill') or ''))
+        elif t['name'].startswith('mcp__'):
+            key = t['name'].split('__')[1]
+            names += [('MCP server', n) for n in (src.mcp.get('user') or {}) if mcp_is(n, key)]
+        for kind, n in names:
+            it = item(kind, n)
+            if it:
+                used[it][group_of(s['proj'])] += 1
+    for c in m.commands:
+        s = m.sessions.get(c['sid'])
+        it = item('skill', c['name']) if s else None
+        if it:
+            used[it][group_of(s['proj'])] += 1
+    out = {}
+    for sid, items in listed.items():
+        s = m.sessions.get(sid)
+        if not s:
+            continue
+        g_ = group_of(s['proj'])
+        rate = sum(w_rate(m, c) if c['idx'] == 0 or c['miss'] else r_rate(m, c) for c in s['main_calls'])
+        for it, names in sorted(items.items()):
+            tok = size(it, names)
+            if not used.get(it) or used[it].get(g_):
+                continue                              # used nowhere (SV2's unused rows) or used in this very project
+            o = out.setdefault(it, dict(used=dict(used[it]), idle=collections.defaultdict(float), sessions=0, tok=[]))
+            o['idle'][g_] += tok * rate
+            o['sessions'] += 1
+            o['tok'].append(tok)
+    for (kind, name), o in out.items():
+        o['idle'], o['tok'] = dict(o['idle']), mean(o['tok']) or 0
+        o['origin'] = ('your MCP config (user scope)' if kind == 'MCP server' else f'personal ({tilde(home)})' if kind == 'skill'
+                       else f'plugin, enabled in {tilde(os.path.join(home, "settings.json"))}')
+        o['pid'] = enabled.get(name) if kind == 'plugin' else None
+    m.cache['where_used'] = out = dict(sorted(out.items(), key=lambda kv: (-sum(kv[1]['idle'].values()), kv[0])))
+    return out
+
+
 def _ext(m):
     if 'ext' in m.cache:
         return m.cache['ext']
@@ -3840,7 +4054,7 @@ def _ext(m):
             for n in x.get('names') or []:
                 listed_sk[n] += 1
             for ln in (x.get('content') or '').splitlines():
-                mm = re.match(r'-\s+([^:]+):', ln)
+                mm = re.match(r'-\s+(.+?)(?::\s|:?$)', ln)         # "- plugin:skill: description", or a bare "- name"
                 if mm:
                     listing_line[mm.group(1).strip()] = len(ln)
         elif a['type'] == 'mcp_instructions_delta':
@@ -3868,7 +4082,7 @@ def _ext(m):
     used_mcp = collections.Counter(t['name'].split('__')[1] for t in m.tools if t['name'].startswith('mcp__'))
     used_ag = collections.Counter((t['input'].get('subagent_type') or 'general-purpose') for t in m.tools if t['name'] in ('Agent', 'Task'))
     un_sk = [n for n in listed_sk if n not in used_sk]
-    un_mcp = [n for n in listed_mcp if not any(k == n or k.replace('_', ' ') == n or n.endswith(k) or k.endswith(n.replace('claude.ai ', '').replace(' ', '_')) for k in used_mcp)]
+    un_mcp = [n for n in listed_mcp if not any(mcp_is(n, k) for k in used_mcp)]
     un_ag = [n for n in listed_ag if n not in used_ag]
     per_sess = (sum(listing_line.get(n, 60) for n in un_sk) + sum(sum(mcp_chars[n]) / max(1, listed_mcp[n]) for n in un_mcp)
                 + sum(mean(ag_chars[n]) or 0 for n in un_ag)) / 4
@@ -3880,7 +4094,8 @@ def _ext(m):
                 [('agent type', n, (mean(ag_chars[n]) or 0) / 4) for n in un_ag])
     out = dict(listed_sk=listed_sk, used_sk=used_sk, un_sk=un_sk, listed_mcp=listed_mcp, used_mcp=used_mcp, un_mcp=un_mcp,
                listed_ag=listed_ag, used_ag=used_ag, un_ag=un_ag, per_sess=per_sess, reread=reread, usd=reread * avg_cr,
-               n_sess=len(sess_with), items=item_tok)
+               n_sess=len(sess_with), items=item_tok, sk_tok={n: listing_line.get(n, 60) / 4 for n in listed_sk},
+               mcp_tok={n: (sum(mcp_chars[n]) / max(1, listed_mcp[n])) / 4 for n in listed_mcp})
     m.cache['ext'] = out
     return out
 
@@ -4018,47 +4233,80 @@ def ex5(m, g):
                 ins = ins.rstrip('.') + ('. No settings file uses that path any more' + (f' (last failure {day(last)})' if last else '') +
                                          ', so it looks fixed.')
         m.facts['hook_fail'] = ins
+    stops = _post_stop(m)[2]
     return card('EX5', 'What do my hooks cost: runs, time, failures and context injected?', 'T P', [
         K(kpi('Hook runs', len(m.hook_runs), 'count'), kpi('Time added', sum(h['ms'] for h in m.hook_runs) / 1000, 'sec'),
           kpi('Failures', len(fails), 'count'), kpi('Context injected', sum(inj.values()), 'tokens', f'{f_tok(carry)} tokens re-read later')),
         TABLE([('e', 'Event', None), ('s', 'Hook', None), ('n', 'Runs', 'count'), ('tot', 'Total time', 'sec'), ('p50', 'Median', 'ms'),
                ('mx', 'Max', 'ms'), ('f', 'Failures', 'count')], rows),
         TABLE([('e', 'Event', None), ('k', 'Context injected', 'tokens')], [dict(e=k, k=round(v)) for k, v in inj.items() if v], 'Injected context by event'),
+        TABLE([('h', 'Stop hook', None), ('sr', 'Stop runs', 'count'), ('go', 'Claude went on working after', 'count'),
+               ('fc', 'API calls that set off', 'count'), ('fu', 'Their cost', 'usd')],
+              [dict(h=k, sr=v[0], go=v[1], fc=v[2], fu=r2(v[3])) for k, v in sorted(stops.items(), key=lambda kv: (-kv[1][3], -kv[1][0], kv[0]))],
+              'What Stop hooks set off: work Claude did after a hook ran, before any new prompt'),
         TABLE([('t', 'When', None), ('e', 'Event', None), ('s', 'Hook', None), ('c', 'Exit code', None), ('err', 'Error', None)], fails, 'Failures', 8)],
         insight=ins, empty=None if m.hook_runs or inj else 'No hook activity in this scope.')
 
 
+def new_input(d):
+    """A record that starts new work on its thread: a prompt, command or queued message, a task notification or a message
+    from another session (anything with a promptSource), a prompt or task notification delivered as a queued_command
+    attachment, or a plain user message. Not a tool result (with or without an image beside it), not the text a hook or a
+    skill adds (isMeta without a promptSource), not a compaction summary."""
+    if d.get('type') == 'attachment':
+        return isinstance(d.get('attachment'), dict) and d['attachment'].get('type') == 'queued_command'
+    if d.get('type') != 'user' or d.get('isCompactSummary'):
+        return False
+    content = (d.get('message') or {}).get('content')
+    if isinstance(content, list) and any(isinstance(b, dict) and b.get('type') == 'tool_result' for b in content):
+        return False
+    return bool(d.get('promptSource')) or not d.get('isMeta')
+
+
+GOAL = 'Goal check (/goal)'       # a /goal condition, which Claude Code checks as a prompt-based Stop hook
+
+
 def _post_stop(m):
+    """What Stop hooks set off. Each Stop run on a main thread is logged as a stop_hook_summary record; the API calls that
+    descend from it (parentUuid links) before any new input are work Claude did because the hook sent something back (added
+    context, or blocked the stop). A hook that sends nothing back, such as a notification, sets off no call and costs
+    nothing here. Returns (the follow-up calls, except a /goal check's, the Stop runs, and per hook: [runs, runs that set off
+    work, calls, usd])."""
     if 'post_stop' in m.cache:
         return m.cache['post_stop']
-    stops = collections.defaultdict(list)
-    for d in m.sys.get('stop_hook_summary', []):
-        if d['_t'] is not None and not d.get('isSidechain'):
-            stops[d.get('sessionId')].append(d['_t'])
-    starts = collections.defaultdict(list)          # any new input: prompts, commands, SDK prompts, task notifications
-    for t in m.turns:
-        starts[t['sid']].append(t['start'])
-    for p in m.prompts:                             # queued prompts start new work too, but don't open a turn
-        if p['source'] == 'queued' and not p['side']:
-            starts[p['sid']].append(p['t'])
-    for n in m.notifs:
-        if not n['side']:
-            starts[n['sid']].append(n['t'])
-    post = []
-    for sid, st in stops.items():
-        s = m.sessions.get(sid)
-        if not s:
+    kids = collections.defaultdict(list)
+    for d in m.recs:
+        if not d.get('isSidechain') and d.get('parentUuid'):
+            kids[d['parentUuid']].append(d)
+    main = {c['key']: c for c in m.real if not c['agent']}
+    post, got, runs = [], set(), 0
+    per = collections.defaultdict(lambda: [0, 0, 0, 0.0])
+    for s in m.sys.get('stop_hook_summary', []):
+        if s.get('isSidechain') or s['_t'] is None:
             continue
-        st.sort()
-        sp = sorted(starts.get(sid, []))
-        for c in s['main_calls']:
-            i = bisect.bisect_right(st, c['t0']) - 1
-            if i < 0:
-                continue
-            j = bisect.bisect_right(sp, c['t0']) - 1
-            if st[i] > (sp[j] if j >= 0 else -1):
-                post.append(c)
-    m.cache['post_stop'] = (post, sum(len(v) for v in stops.values()))
+        runs += 1
+        who = ' + '.join(uniq(GOAL if h.get('promptText') is not None else hook_script(h.get('command'))
+                              for h in s.get('hookInfos') or [] if isinstance(h, dict))) or 'Stop hook'
+        mine, stack, seen = [], list(kids.get(s.get('uuid'), [])), set()
+        while stack:
+            d = stack.pop()
+            if id(d) in seen or new_input(d) or d.get('subtype') == 'stop_hook_summary':
+                continue                                   # the next Stop run's own follow-up is counted from its record
+            seen.add(id(d))
+            if d.get('type') == 'assistant':
+                c = main.get(((d.get('message') or {}).get('id'), d.get('requestId')))
+                if c is not None and c['key'] not in got:
+                    got.add(c['key'])
+                    mine.append(c)
+            stack.extend(kids.get(d.get('uuid'), []) if d.get('uuid') else [])
+        if who != GOAL:
+            post += mine                                   # a /goal check keeps Claude working on purpose: shown, not a saving
+        row = per[who]
+        row[0] += 1
+        row[1] += bool(mine)
+        row[2] += len(mine)
+        row[3] += sum(c['usd'] for c in mine)
+    m.cache['post_stop'] = (post, runs, dict(per))
     return m.cache['post_stop']
 
 
@@ -4276,7 +4524,7 @@ def _langs(m):
                 a['edited'].add(fp)
             tok = tool_tok.get(t['id'], 0.0)
             a['tw'] += tok
-            a['usd'] += tok * m.prices.per_token(t['call']['model'], 'out')
+            a['usd'] += tok * m.prices.per_token(t['call']['model'], 'out', t['call']['pm'])
         elif t['name'] == 'Bash':
             for op, p in bash_file_ops(t['input'].get('command')):
                 lg = lang_of(p, known=True)
@@ -4288,7 +4536,7 @@ def _langs(m):
             lg = lang_of(tu['input'].get('file_path'))
             if lg:
                 L[lg]['tr'] += it['tokens']
-                L[lg]['usd'] += it['carry_usd'] + it['tokens'] * m.prices.per_token(it['model'], 'cw5m')
+                L[lg]['usd'] += it['carry_usd'] + it['tokens'] * m.prices.per_token(it['model'], 'cw5m', it['pm'])
     for fp, v in per_file.items():
         lg = lang_of(fp)
         if lg:
@@ -4762,6 +5010,13 @@ def build(src, prices, log):
     order = sorted(uniq(c['model'] for c in all_m.real), key=lambda x: -sum(c['usd'] for c in all_m.real if c['model'] == x))
     slots = {mdl: i + 1 for i, mdl in enumerate(order[:8])}
     snaps = [dict(a, ver=all_m.sessions.get(a['sid'], {}).get('versions') or set()) for a in all_m.atts if a['type'] == 'prompt_snapshot']
+    try:                                 # outside any card, so guarded like one: it must not sink the report
+        where = where_used(all_m)
+    except Exception as e:
+        log(f'  ! what loads where it is unused could not be computed: {e}')
+        if os.environ.get('USAGE_REPORT_DEBUG'):
+            traceback.print_exc()
+        where = {}
     results, facts = {}, {}
     for sc in scopes:
         t0 = time.time()
@@ -4769,6 +5024,7 @@ def build(src, prices, log):
         m.window = all_m.window
         g = G(src, prices, sc, slots)
         g.snaps = snaps                  # prompt snapshots from every project: a scope may have none of its own
+        g.where = where                  # what is used in some projects and only loaded in others (all projects)
         cards = {}
         for f in CARDS:
             try:
@@ -5080,8 +5336,9 @@ def render(out, template, log=print):
     home = os.path.expanduser('~')
     tilde = lambda p_: '~' + p_[len(home):] if p_.startswith(home + os.sep) and re.fullmatch(r'[\w./~-]+', p_) else shlex.quote(p_)
     cd_ = report['meta'].get('claude_dir')
-    report['meta']['apply'] = (f"python3 {tilde(os.path.join(HERE, 'apply.py'))} --dir {tilde(out)}"
-                               + (f" --claude-dir {tilde(cd_)}" if cd_ and cd_ != os.path.join(home, '.claude') else ''))
+    if not report['meta'].get('shared'):       # someone else's report (share.py unpack): its optimizations are for their machine
+        report['meta']['apply'] = (f"python3 {tilde(os.path.join(HERE, 'apply.py'))} --dir {tilde(out)}"
+                                   + (f" --claude-dir {tilde(cd_)}" if cd_ and cd_ != os.path.join(home, '.claude') else ''))
     with open(template, encoding='utf-8') as fh:
         tpl = fh.read()
     marker = '/*__REPORT_DATA__*/null'
@@ -5180,6 +5437,9 @@ def main(argv=None):
     if not any(d.get('type') == 'assistant' and d['_t'] is not None for d in src.recs):
         sys.exit('No API calls found for that range.')
     prices = Prices(a.prices)
+    ALIASES.clear()
+    ALIASES.update(model_aliases(prices, [src.settings, src.local_settings]
+                                 + [js for f in src.project_settings.values() for js in f.values()]))
     log('Computing…')
     scopes, results, all_m = build(src, prices, log)
     rng = (min(c['t0'] for c in all_m.real), max(c['t1'] for c in all_m.real)) if all_m.real else (None, None)
@@ -5190,7 +5450,33 @@ def main(argv=None):
     if src.bad_lines:
         notes.append(f'{src.bad_lines} unreadable transcript lines were skipped.')
     if prices.missing:
-        notes.append('No price for: ' + ', '.join(sorted(prices.missing)) + ' (counted as $0).')
+        arn = any(str(x).startswith('arn:') for x in prices.missing)
+        notes.append('No price for: ' + ', '.join(sorted(prices.missing)) + ' (counted as $0).'
+                     + (' An arn:… is a Bedrock application inference profile: map it to its model in prices.json\'s _aliases (or in '
+                        'modelOverrides in your settings) to price it.' if arn else ''))
+    for v, (use, var) in sorted(prices.guessed.items()):
+        notes.append(f'{clip(v, 90)} (your {var}) names no model version, so it is priced as {model_name(use)}; map it in '
+                     "prices.json's _aliases to price it exactly.")
+    where = collections.Counter(c['where'] for c in all_m.real)
+    if set(where) - {None, 'api_global'}:                  # only native calls: nothing to say, the report reads as before
+        up = collections.Counter(c['where'] for c in all_m.real if prices.mult(c['model'], c['where']) > 1)   # location premium only
+
+        def above(k):
+            """prices.json's _modifiers[k] in words, e.g. '10% above list, Claude 4.5 and later'."""
+            mod = prices.modifiers.get(k) or {}
+            v = [str(x) for x in mod.get('from') or []]
+            return f"{(mod.get('mult') or 1) - 1:.0%} above list" + (f", Claude {'.'.join(v)} and later" if v else '')
+        parts = [(f"{where[k]:,} {what}" + (f" ({up[k]:,} priced {above(k)})" if up[k] else ' (list price)'))
+                 for k, what in (('api_global', 'on the Claude API, global'),
+                                 ('api_regional', 'on the Claude API, pinned to one location'),
+                                 ('bedrock_global', 'through Bedrock global profiles'),
+                                 ('bedrock_regional', 'through Bedrock regional profiles'),
+                                 ('bedrock', "on Bedrock, global or regional not recorded"),
+                                 (None, 'with no location recorded, as on a subscription')) if where[k]]
+        notes.append('Where the API calls ran: ' + '; '.join(parts) + '.')
+    fast = sum(1 for c in all_m.real if c['fast'])
+    if fast:
+        notes.append(f'{fast:,} API call' + ('s' if fast != 1 else '') + ' ran in fast mode: priced at its premium where the model has one (prices.json "fast").')
     if prices.estimated:
         notes.append('No exact price for ' + ', '.join(f'{k} (priced as {v})' for k, v in sorted(prices.estimated.items()))
                      + '; add it to prices.json to price it exactly.')

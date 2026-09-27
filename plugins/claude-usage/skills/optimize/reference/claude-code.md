@@ -9,8 +9,8 @@ documentation. For anything else, fetch the docs page (URLs at the end) before p
 - `~/.claude/settings.json` (user, all projects) < `<project>/.claude/settings.json` (checked in) <
   `<project>/.claude/settings.local.json` (personal, not checked in). Managed policy overrides everything. Later wins, so a
   project file can override a user setting.
-- `~/.claude.json` holds app state, including per-project MCP toggles. Don't edit it by hand while Claude Code runs; use the
-  commands that write it (`/mcp disable`).
+- `~/.claude.json` holds app state, including user- and local-scope MCP servers and per-project MCP toggles. Don't edit it by
+  hand while Claude Code runs; use the commands that write it (`claude mcp add/remove -s <scope>`, `/mcp`).
 - Settings and hooks are read when a session starts: changes apply to new sessions.
 
 ## Settings that affect cost, context and caching
@@ -111,9 +111,15 @@ re-sends its history; the report (CX8) shows whether that hit the cache for this
   a project skill: in that project's `.claude/settings.local.json`. `"name-only"` is a lighter option for rarely used skills.
 - Plugin: `"enabledPlugins": {"<name>@<marketplace>": false}` in the same scope that enabled it (a user-level false is
   overridden by a project-level true).
-- MCP server (user/local scope): `/mcp disable <server>` in Claude Code, per project, reversible with `/mcp enable`. Project
-  `.mcp.json` server: its name in `disabledMcpjsonServers` in `.claude/settings.local.json`. claude.ai connectors: 
-  `"disableClaudeAiConnectors": true`. Never `claude mcp remove` to disable.
+- MCP server (user/local scope): used nowhere, take it out of the user config (`claude mcp remove <server> -s user`, after
+  `claude mcp get <server>` to keep its definition); used in some projects, set it up there alone (`-s local`, or the
+  project's `.mcp.json`) and then remove it from the user scope. `/mcp disable <server>` switches one off in one project;
+  don't make it the advice for "every project where it's unused": that is the per-project toggling to avoid. Project
+  `.mcp.json` server: its name in `disabledMcpjsonServers` in `.claude/settings.local.json`. claude.ai connectors:
+  `"disableClaudeAiConnectors": true`.
+- Prefer setting a thing up where it is used over switching it off where it isn't: a personal skill used by one project
+  goes into that project's `.claude/skills/`; a plugin one project uses is enabled in that project's settings and off in
+  `~/.claude/settings.json`.
 - Never propose disabling bundled skills (skills not in the config's skills inventory and without a plugin namespace) or
   anything set by managed policy.
 

@@ -37,7 +37,7 @@ def main():
         S.state_put('ctx-' + sid, {'next': nxt, 'last': last['ctx']})
         return
     S.state_put('ctx-' + sid, {'next': last['ctx'] + step, 'last': last['ctx']})
-    r = S.price(last['model'], 'cr')
+    r = S.price(last['model'], 'cr', last)
     per = f" (≈{S.usd(last['ctx'] * r)} of cache reads per request)" if r else ''
     S.emit({'systemMessage': f"Context is {S.tok(last['ctx'])} tokens{per}. Your usage history says compacting past "
                              f"{S.tok(threshold)} pays off: /compact (optionally with what to keep) when this task allows."})

@@ -2,14 +2,22 @@
   "_source": "USD per million tokens at Anthropic API list prices (current models from the claude-api skill model table, cached 2026-06-24; older models from Anthropic's published pricing). Cache writes = 1.25x input (5m) and 2x input (1h). Long-context surcharges some older models charge above 200K input tokens are not modelled. Confirm on the Anthropic pricing page before relying on the dollars.",
   "_note": "Keys are canonical model ids: provider prefixes and suffixes (us.anthropic.…-v1:0, @20250929, -20251001, [1m]) are stripped and old names like claude-3-5-sonnet become claude-sonnet-3-5 before lookup. A model missing here is priced like the nearest version of its family (opus, sonnet, haiku, fable, mythos) and flagged as estimated in the report. Add a line to price a new model exactly.",
   "_compare": ["claude-haiku-4-5", "claude-sonnet-5", "claude-opus-5-5", "claude-opus-5", "claude-fable-5-1"],
+  "_modifiers": {
+    "_note": "Multipliers on every token price of a call, from the model version \"from\" on. Global routing is list price on both platforms. bedrock_regional: a Bedrock inference profile other than global. before anthropic. in the model id (us., eu., apac., jp., au., us-gov. and any new one). api_regional: the call's usage says an inference_geo other than \"global\" (the Claude API's \"us\" today). A model's own \"fast\" below multiplies calls whose usage says speed \"fast\" (fast mode; cache prices scale with it).",
+    "bedrock_regional": {"mult": 1.1, "from": [4, 5]},
+    "api_regional":     {"mult": 1.1, "from": [4, 6]}
+  },
+  "_aliases": {
+    "_note": "Model ids that name no model, mapped to a canonical id, e.g. a Bedrock application inference profile: \"arn:aws:bedrock:us-east-2:123456789012:application-inference-profile/abc123\": \"claude-opus-4-8\". modelOverrides in your Claude Code settings are read the same way without being listed here."
+  },
 
   "claude-fable-5-1":  {"in": 10,   "out": 50,   "cr": 0.25, "cw5m": 12.50, "cw1h": 20},
   "claude-fable-5":    {"in": 10,   "out": 50,   "cr": 1.00, "cw5m": 12.50, "cw1h": 20},
   "claude-mythos-5-1": {"in": 10,   "out": 50,   "cr": 0.25, "cw5m": 12.50, "cw1h": 20},
   "claude-mythos-5":   {"in": 10,   "out": 50,   "cr": 1.00, "cw5m": 12.50, "cw1h": 20},
-  "claude-opus-5-5":   {"in": 4,    "out": 20,   "cr": 0.20, "cw5m": 5.00,  "cw1h": 8},
-  "claude-opus-5":     {"in": 5,    "out": 25,   "cr": 0.50, "cw5m": 6.25,  "cw1h": 10},
-  "claude-opus-4-8":   {"in": 5,    "out": 25,   "cr": 0.50, "cw5m": 6.25,  "cw1h": 10},
+  "claude-opus-5-5":   {"in": 4,    "out": 20,   "cr": 0.20, "cw5m": 5.00,  "cw1h": 8, "fast": 2},
+  "claude-opus-5":     {"in": 5,    "out": 25,   "cr": 0.50, "cw5m": 6.25,  "cw1h": 10, "fast": 2},
+  "claude-opus-4-8":   {"in": 5,    "out": 25,   "cr": 0.50, "cw5m": 6.25,  "cw1h": 10, "fast": 2},
   "claude-opus-4-7":   {"in": 5,    "out": 25,   "cr": 0.50, "cw5m": 6.25,  "cw1h": 10},
   "claude-opus-4-6":   {"in": 5,    "out": 25,   "cr": 0.50, "cw5m": 6.25,  "cw1h": 10},
   "claude-opus-4-5":   {"in": 5,    "out": 25,   "cr": 0.50, "cw5m": 6.25,  "cw1h": 10},

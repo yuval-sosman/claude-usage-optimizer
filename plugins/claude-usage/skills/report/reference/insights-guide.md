@@ -75,7 +75,8 @@ Non-cost insights may carry `savings` too when a number exists.
 2. **Context size** (SV4, CX1–CX4, CX6): where compaction pays off; how big contexts get before /clear.
 3. **Cache misses** (SV3, CX8): avoidable vs not; the top causes; the costliest single misses and their story (CX8 traces them step by step).
 4. **Breaks** (SV7, CX8, ME3): returns to expired sessions; fresh start vs resume.
-5. **Automation** (EX5, SV1): hook failures, Stop-hook follow-up work (SV1's lever).
+5. **Automation** (EX5, SV1): hook failures, Stop-hook follow-up work (SV1's lever; EX5's "What Stop hooks set off" says
+   which hook and how often Claude went on working after it. A hook that sends nothing back sets off nothing: no insight).
 6. **Setup overhead** (SV2, EX2, CX5): unused skills/MCP/agents loaded every session; what a new session starts with and its biggest parts.
 7. **Big reads and outputs** (SV8, CX3, EX6, EX8): files read whole and re-read for the rest of the session.
 8. **Subagents** (SE5, SE6, CX8): do they return small results for big internal work; duplicate reads; resumes.

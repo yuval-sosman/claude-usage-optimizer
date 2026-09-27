@@ -69,7 +69,14 @@ Sessions, human prompts, API calls, tool calls, subagents, active hours, and tok
 
 **OV2. What would my usage cost at API list prices, per project, model and day?** `T P S W`
 - Why: raw token totals mislead. Within one model an output token costs 50× a cache-read token.
-- How: `prices.json` × token types [B16].
+- How: `prices.json` × token types [B16], times what the call paid over list price. Global routing is list price on both
+  platforms (a `global.` Bedrock profile, `inference_geo: "global"`). 1.1× through any other Bedrock inference profile
+  (`us.`, `eu.`, `apac.`, `jp.`, `au.`, `us-gov.`… before `anthropic.` in the model id; Claude 4.5 and later) or with the
+  Claude API's inference pinned to one location (an `inference_geo` other than `"global"`, e.g. `"us"`; Claude 4.6 and
+  later), and the model's fast-mode premium (usage `speed: "fast"`, `"fast"` in `prices.json`). A native call (no location
+  recorded, or global) is never changed. The notes say where the calls ran whenever any ran off the native path. A Bedrock application inference profile ARN names no model: `_aliases` in `prices.json`, then
+  `modelOverrides` in the settings map it to one; `ANTHROPIC_DEFAULT_<FAMILY>_MODEL` set to the ARN gives only its family, so
+  it is priced as that family's comparison model and the notes say so. An unmapped ARN costs $0 and is named in the notes.
 - Check: ✓ about $590. Opus 5 $375, Fable 5 $171, Sonnet 5 $39. claudepit (including worktrees) is 98%.
 
 **OV3. Which token type dominates the bill: output, cache reads, or 5m vs 1h cache writes?** `T P S`
@@ -222,6 +229,8 @@ Cost per skill comes from the tokens attributed to it (`attributionSkill`).
 
 **EX2. What loads into every session but never gets used, and what does that cost?** `T P`
 Skills, MCP servers and agent types; cost per session and in total.
+- How: each item's own line in the listing gives its size; a plugin's or synced skill's line is named `<namespace>:<skill>`
+  (`- anthropic-skills:docx: …`), and the whole name is the key.
 - Check: ✓ 33 of 41 skills never used. claude-in-chrome and pencil MCP servers loaded in 56–66 sessions with 0 calls. The statusline-setup agent was never used.
 
 **EX3. How often does the tool list change mid-session, and what does each change cost?** `T S`
@@ -233,6 +242,11 @@ E.g. swift-lsp diagnostics injected into context: count, tokens, errors surfaced
 - Check: ✓ 44 diagnostics injections, 149 issues, about 37k characters.
 
 **EX5. What do my hooks cost: runs, time added, failures, context injected and its carry cost?** `T P`
+- What Stop hooks set off: per Stop hook, its runs, how many times Claude went on working afterwards without a new prompt, the
+  API calls that took and their cost. How: the calls that descend from a Stop run's `stop_hook_summary` record (`parentUuid`
+  links) before any new input: a prompt, command or queued message, a task notification, or a message from another session.
+  A hook that sends nothing back (a notification, a logger) sets off nothing and costs $0 here; one that adds context or
+  blocks the stop makes Claude go on. `/goal` checks show as "Goal check (/goal)" and are not counted as a saving.
 - Check: ✓ Stop hook: 377 runs, 45 s, 3 failures. The UserPromptSubmit summary hook failed 4 times with exit 127 (it points at a path from an old machine, `/Users/i501817`). Hooks injected about 178k tokens, re-read about 7.9M times (estimate).
 
 **EX6. Which tools does Claude use, how often, and what do they cost in tokens?** `T P S`
@@ -334,12 +348,18 @@ series. Rows that each describe one event (SV7's returns, SV8's reads) keep a si
 **SV1. How much could I have saved so far, lever by lever?** `T P`
 Every lever below side by side, with its share of spend and a 30-day projection.
 - Why: the cost questions say where the money went; this says which change would have kept the most of it.
-- Check: ✓ main-thread work on Opus 5.5 instead of Opus 5 / Fable 5: $230 (36%). Subagents on Sonnet 5: $75. /compact at ~150K: $75. Stop-hook follow-up work: $57 (upper bound). Avoidable misses: $34.
+- Check: ✓ main-thread work on Opus 5.5 instead of Opus 5 / Fable 5: $230 (36%). Subagents on Sonnet 5: $75. /compact at ~150K: $75. Stop-hook follow-up work: $48 (upper bound; the work EX5's "What Stop hooks set off" charges to the memory hook). Avoidable misses: $34.
 
 **SV2. What do unused skills, MCP servers and agent types cost me?** `T P`
 Per item: tokens per session, its share of the saving, where it comes from (built in, personal, synced, project, plugin, MCP config, connector), and how to switch it off.
 - How: listing sizes from `skill_listing`, `mcp_instructions_delta` and `agent_listing_delta` for items never used through Skill, a slash command, an MCP tool or Agent. Priced on every main-thread call of the sessions that loaded them.
-- Check: ✓ 3.5K tokens per session, $8.73 so far. $4.51 of it can be switched off: the Chrome extension's MCP server $1.74, the claude.ai Docs connector $1.19, and so on. The rest are built in.
+- Used in some projects, loaded in every one (all projects only): an MCP server in the user config, a personal skill or a
+  plugin enabled in `~/.claude/settings.json` that some projects use and others only load. Per item: the projects that use it,
+  the other projects' sessions that loaded it, what that cost (priced the same way), and how to set it up only where it is
+  used (`claude mcp add … -s local` or the project's `.mcp.json`, the project's `.claude/skills/`, `enabledPlugins` in the
+  project's settings). The "how" never says to switch something off in each project: that is the toggling it replaces. An
+  item no project uses keeps the first table's advice (off, or out of the user config).
+- Check: ✓ 4.2K tokens per session, $11.79 so far. $7.88 of it can be switched off: the claude.ai Docs connector $1.32, the synced anthropic-skills (about 240 tokens each), and so on. The rest are built in. Nothing is used in some projects and loaded in others.
 
 **SV3. Which cache misses were avoidable, and what would avoiding them have saved?** `T P S`
 - How: the CX8 cause of each miss, plus "computer went to sleep" API errors, mapped to who can fix it: your habits, how Claude delegates, your setup, or not in your control.

@@ -104,7 +104,8 @@ def scan(lines, st):
         st['w5'] += cc.get('ephemeral_5m_input_tokens') or 0
         if st['last'] is None:
             st['last'] = dict(t=parse_ts(d.get('timestamp') or ''), model=m.get('model') or '',
-                              ctx=(u.get('input_tokens') or 0) + (u.get('cache_read_input_tokens') or 0) + (u.get('cache_creation_input_tokens') or 0))
+                              ctx=(u.get('input_tokens') or 0) + (u.get('cache_read_input_tokens') or 0) + (u.get('cache_creation_input_tokens') or 0),
+                              geo=u.get('inference_geo'), speed=u.get('speed'))
         if st['w1'] + st['w5'] > 0 and st['last'] is not None:
             return True
     return False
@@ -129,19 +130,24 @@ def canon_model(m):
     return re.sub(r'^(claude-[a-z]+-\d+)-0$', r'\1', s)
 
 
-def price(model, kind):
+def price(model, kind, call=None):
     """USD per token from prices.json next to this script (or the plugin's), else None. Unknown Claude models are priced
-    like the nearest version of their family."""
+    like the nearest version of their family, and ids in its _aliases (a Bedrock application inference profile) like the
+    model they map to (never a Claude id). With call (from last_usage()), the report's multipliers too: a Bedrock inference
+    profile other than global. or an inference_geo other than "global" (_modifiers), and fast mode (the model's "fast")."""
     import re
     parts = lambda k: (lambda mm: (mm.group(1), (int(mm.group(2)), int(mm.group(3) or 0))) if mm else (None, None))(
         re.match(r'claude-([a-z]+)-(\d+)(?:-(\d{1,2}))?$', k))
-    cm = canon_model(model)
     for p in (os.path.join(HERE, 'prices.json'), os.path.join(os.path.dirname(HERE), 'prices.json')):
         try:
             with open(p, encoding='utf-8') as fh:
-                table = {canon_model(k): v for k, v in json.load(fh).items() if not k.startswith('_') and isinstance(v, dict)}
+                js = json.load(fh)
+            table = {canon_model(k): v for k, v in js.items() if not k.startswith('_') and isinstance(v, dict)}
         except Exception:
             continue
+        bare = re.sub(r'\[.*?\]$', '', (model or '').strip())
+        alias = (js.get('_aliases') or {}).get(bare) if 'claude-' not in bare.lower() else None     # a Claude id is never aliased
+        cm = canon_model(alias if isinstance(alias, str) else model)
         r = table.get(cm)
         if r is None:
             fam, v = parts(cm)
@@ -150,7 +156,19 @@ def price(model, kind):
                 older = [k for kv, k in same if kv <= v]
                 r = table[older[-1] if older else same[0][1]]
         if isinstance(r, dict) and kind in r:
-            return r[kind] / 1e6
+            x = r[kind] / 1e6
+            call = call or {}
+            prof = re.search(r'(?:^|[/:])([a-z]{2,6}(?:-[a-z]+)?)\.anthropic\.', model or '', re.I)
+            geo = str(call.get('geo') or '').lower()
+            where = (('bedrock_regional' if prof.group(1).lower() != 'global' else None) if prof
+                     else 'api_regional' if geo not in ('', 'global', 'not_available', 'none') else None)
+            mod = (js.get('_modifiers') or {}).get(where) if where else None
+            fam, v = parts(cm)
+            if isinstance(mod, dict) and fam and v >= tuple(mod.get('from') or (0, 0)):
+                x *= mod.get('mult') or 1
+            if call.get('speed') == 'fast':
+                x *= r.get('fast') or 1
+            return x
     return None
 
 

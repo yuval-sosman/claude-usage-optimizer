@@ -18,8 +18,10 @@ the user's Claude Code transcripts and renders an HTML report. Claude then write
 
 A third skill, `/claude-usage:brainstorm`, talks the data through with the user and can edit insights.json. A fourth,
 `/claude-usage:video`, turns the report into a 30–60 s video of the user's highlights to share (an MP4 and a self-playing
-HTML page, in the promo videos' style). `optimize`, `brainstorm` and `video` are manual-only (`disable-model-invocation: true`);
-`report` can also be triggered by the model.
+HTML page, in the promo videos' style). A fifth, `/claude-usage:share`, packs the whole report folder into one JSON file
+to send to whoever collects and compares usage, and (`open FILE`) unpacks one someone sent back into a report folder.
+`optimize`, `brainstorm`, `video` and `share` are manual-only (`disable-model-invocation: true`); `report` can also be
+triggered by the model.
 
 `docs/CATALOG.md` and `docs/lib.sh` hold the original jq extraction commands; QUESTIONS.md cites them by catalog id (e.g. `[B06]`).
 The engine doesn't use them. The gotchas table at the top of CATALOG.md (G1–G9) still applies to any new counting. The main one:
@@ -63,6 +65,15 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
   video.py render   → <OUT>/video/video.html (video_template.html + the figures from metrics/insights/optimizations + the
                       fonts in scripts/fonts/, embedded) → <OUT>/video/claude-usage-video.mp4 (video_capture.py: a headless
                       Chromium browser over the DevTools protocol draws every frame; ffmpeg encodes H.264)
+
+  share.py pack     → <OUT>/share/claude-usage-share-<who>-<date>.json (schema: schemas/share.schema.json), made on demand
+                      by skills/share: metrics.json whole, insights/optimizations (with a status: current / out of date),
+                      candidates.json, config.json, applied.json's records (id, when, files) and every CSV row (numeric
+                      columns typed), plus who (account, optional name/team) and the UTC offset. Names are kept: it holds
+                      what report.html holds.
+  share.py unpack   → <OUT>/received/<file name>/: the same files back (CSVs byte-identical), a digest, and report.html
+                      rendered with meta.shared set, so render() leaves out the apply commands. Refuses a folder
+                      holding the user's own report.
 ```
 
 ## Invariants (don't break these)
@@ -84,6 +95,9 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
   - optimizations' `related` links are two-sided (except `requires`). Two optimizations that change the same settings key,
     or act on the same cost (`SAME_LEVER`: the main-thread cache lifetime vs the stale-cache guard, auto-compact vs the
     context guard), must be linked.
+- **A share file round-trips.** `share.py unpack` of a `pack` gives back metrics.json, insights, optimizations,
+  candidates and config equal, and the CSVs byte-identical. It never reads transcripts, and a received report never shows
+  apply commands (`meta.shared`; `apply.py apply` refuses one too).
 - **The video quotes only the data.** Its storyboard names what to show; `video.py` takes every figure from metrics.json,
   insights.json and optimizations.json, and `check` rejects a number in a headline or title that none of them has (`facts()`),
   and project names, session titles and paths unless `allow_names` is set. The video never shows prompt text.
@@ -119,6 +133,12 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
   - Most tiles come from `m.facts`, which cards fill in as a side effect (OV1, OV7, CX1, CX7, CX8, CX9…), so a card that sets a fact must run.
   - The two median tiles are read by label from the KPI block of hidden OV6, so renaming those labels blanks the tiles.
   - The headline insights come from the cards listed in `HEADLINE_ORDER`.
+- **Across scopes:** `where_used()` runs once on all projects in `build()` and reaches every scope as `g.where`: what a
+  user-level setting loads everywhere but only some projects use (SV2's "used in some projects" table, `item_origin()`'s
+  advice, which never says "switch it off in each project").
+- **Stop hooks:** `_post_stop()` charges a Stop hook only the calls that descend from its `stop_hook_summary` record
+  (`parentUuid`) before a `new_input()`; EX5's "What Stop hooks set off" and SV1's lever both read it. Don't go back to a
+  time window: work started by another input (another session's message, a `/loop` wake-up) would be charged to the hook.
 - **Digest:** `md_card()` writes every card into digest.md, including hidden blocks and the blocks inside tabs.
 - **Loading and speed** (≈5 s and ≈320 MB for ~300 MB of transcripts; memory grows with the records kept):
   - `slim()` runs on every record as it is read and drops what no card reads (file contents of Read results, stdout,
@@ -190,6 +210,17 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
 
 **Prices or models:**
 - Edit `scripts/prices.json` (canonical ids; `_compare` sets SV6's comparison set).
+- What a call paid over list price is its `pm` (`Prices.mult()`, set once per call from its raw model id and usage):
+  `_modifiers` (`bedrock_regional`: any Bedrock inference profile but `global.`; `api_regional`: an `inference_geo` other
+  than `"global"`; both from `where_of()`) from a model version on, times the model's own `"fast"` when `usage.speed` is `"fast"`. Everything that prices a call's own tokens
+  passes it (`cost(model, u, c['pm'])`, `per_token(…, c['pm'])`, `w_rate`/`r_rate`, items carry `pm`); a what-if on another
+  model (SV6) passes `mult(other, c['where'])`, without fast mode. With every `pm` at 1 the numbers match the list-price
+  engine exactly: keep the arithmetic order (`… / 1e6 * mult`).
+- Ids that name no model (a Bedrock application inference profile ARN) resolve through `ALIASES` (`model_aliases()`:
+  `_aliases`, then settings' `modelOverrides`, then `ANTHROPIC_DEFAULT_<FAMILY>_MODEL` as the family's comparison model,
+  noted as guessed); `canon_model()` checks it first. Only an id with no `claude-` in it can be an alias (`names_no_model()`),
+  so a pinned native model (`ANTHROPIC_DEFAULT_OPUS_MODEL=claude-opus-4-8`) is never re-priced. Test with a fake Claude
+  folder whose transcripts use those ids, and with those variables set to native ids.
 - Installed hooks carry their own copy of prices.json and `_session.py`. They pick up changes only when re-applied (`apply.py undo <id>` then `apply <id>`).
 
 **The video (`skills/video`, `scripts/video.py`, `video_capture.py`, `video_template.html`, `scripts/fonts/`):**
@@ -202,10 +233,20 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
   in video_capture.py (per package manager; `user_runs` when it needs sudo or an admin shell). `find_ffmpeg()` also looks
   where installers put ffmpeg, since a fresh install isn't on the shell's PATH yet. The skill asks before installing.
 
+**The share file (`skills/share`, `scripts/share.py`, `schemas/share.schema.json`):**
+- It embeds the report folder's files as they are, so a new card, field or CSV column needs nothing here. A new file in
+  `<OUT>` that the report depends on goes into `pack`, `unpack` and the schema together; a new CSV only into
+  `layout.DATA_FILES` (share.py reads its table list from there).
+- Changing the share file's own shape (top-level fields, status values, how tables are stored) raises `format_version`
+  (`VERSION` in share.py and the schema's `const`); `unpack` must keep reading older versions and refuses newer ones.
+- Check a change with the round trip: `share.py pack --out <copy of OUT>`, then `unpack` it, compare the files, and
+  render the received report.html (all three tabs).
+
 **Hooks (`scripts/hooks/`):**
 - Hooks must fail open: never block on an error. That includes `import _session` (wrapped in try; a missing helper makes the hook a no-op).
 - apply.py installs `_session.py` and `prices.json` only beside hooks that import `_session`.
-- Keep `_session.py`'s `canon_model`/price fallback in step with the engine's.
+- Keep `_session.py`'s `canon_model`/price fallback in step with the engine's, `_aliases` and `_modifiers` included (the
+  hooks pass the call from `last_usage()` to `price()`; they don't read `modelOverrides`).
 - Changes reach users only when they re-apply the optimization.
 - Hooks run on every Read, prompt or status-line refresh, so keep them cheap (~25 ms, most of it Python starting):
   no argparse (`S.arg()`), imports only where needed, and `last_usage()` reads the transcript's last 64 KB first (growing
@@ -221,7 +262,7 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
 - Undoing an optimization never restores an older `_session.py` under hooks that other applied optimizations still use.
 
 **Paths or portability:**
-- `claude_dir()`/`default_out()` in the engine, `layout.py` (every file's place inside `<OUT>`), `CLAUDE_DIR`/`expand()` in apply.py, `STATE` in `_session.py`, and the `<OUT>` wording in the three SKILL.md files and README.
+- `claude_dir()`/`default_out()` in the engine, `layout.py` (every file's place inside `<OUT>`), `CLAUDE_DIR`/`expand()` in apply.py, `STATE` in `_session.py`, and the `<OUT>` wording in the SKILL.md files and README.
 - The optimize skill always writes `~/.claude/…` paths; apply.py maps them to a custom Claude folder.
 
 **Skills:**
@@ -263,6 +304,8 @@ claude plugin validate --strict . && claude plugin validate --strict plugins/cla
 python3 $S/video.py tools                                          # browser and ffmpeg found? if not, how to install them here
 python3 $S/video.py plan --out /tmp/usage-check && python3 $S/video.py check --out /tmp/usage-check   # after the full run
 python3 $S/video.py render --out /tmp/usage-check --stills 3,12,20   # PNG frames in video/stills/; without --stills, the MP4
+python3 $S/share.py pack --out /tmp/usage-check                   # the share file; then unpack it:
+python3 $S/share.py unpack /tmp/usage-check/share/<file>.json --out /tmp/usage-check   # → received/<file>/report.html
 ```
 
 - A full run on `<OUT>` itself changes the `generated` stamp. After that, both `validate.py` commands fail on

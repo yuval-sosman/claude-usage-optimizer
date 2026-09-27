@@ -14,6 +14,7 @@ write what to change, with the dollars each change would have saved so far. Noth
 /claude-usage:optimize      turn the insights into changes you can apply one by one
 /claude-usage:brainstorm    dig into the numbers with Claude and test what-ifs
 /claude-usage:video         a 30–60 second video of your own highlights, to share
+/claude-usage:share         the whole report as one file, to send to whoever compares usage
 ```
 
 Install, screenshots, options and privacy: the [repository README](../../README.md). Every question, how it's counted

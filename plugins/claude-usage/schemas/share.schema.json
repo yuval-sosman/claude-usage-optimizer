@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "claude-usage share file",
+  "description": "One person's whole usage report in one file, written by share.py pack (/claude-usage:share) from their report folder, to send to someone who collects and compares usage; share.py unpack turns it back into a report folder. It holds everything report.html holds and more: the report data (every scope, card, chart, table and miss trace), the insights and optimizations Claude wrote, the optimization drafts, the setup, the optimizations applied, and every row of the CSV exports. Like report.html, it holds project names, session titles, file paths, prompt snippets and commands. Times inside it are the sender's local wall-clock time (machine.utc_offset when the file was made). A change to this shape raises format_version; unpack reads every version up to its own.",
+  "type": "object",
+  "required": ["format", "format_version", "created", "plugin_version", "person", "machine", "status", "notes", "report",
+               "insights", "optimizations", "candidates", "config", "applied", "tables"],
+  "additionalProperties": false,
+  "properties": {
+    "format": {"const": "claude-usage-share"},
+    "format_version": {"const": 1},
+    "created": {"type": "string", "description": "When the file was made: local time with its UTC offset, e.g. 2026-09-27T21:40:12+03:00"},
+    "plugin_version": {"type": ["string", "null"], "description": "The claude-usage plugin version that made it"},
+    "person": {
+      "type": "object",
+      "required": ["account", "name", "team"],
+      "additionalProperties": false,
+      "properties": {
+        "account": {"type": "string", "description": "The sender's computer account name (it already shows in the file paths)"},
+        "name": {"type": ["string", "null"], "description": "The name the sender chose to add, if any"},
+        "team": {"type": ["string", "null"], "description": "The team the sender chose to add, if any"}
+      }
+    },
+    "machine": {
+      "type": "object",
+      "required": ["platform", "utc_offset"],
+      "additionalProperties": false,
+      "properties": {
+        "platform": {"type": "string", "description": "darwin, linux or win32"},
+        "utc_offset": {"type": "string", "description": "The sender's UTC offset when the file was made, e.g. +03:00"}
+      }
+    },
+    "status": {
+      "type": "object",
+      "description": "Each part's state. out of date: written from an older report than the one in this file (the report page shows its banner). partial: some tables are missing.",
+      "required": ["insights", "optimizations", "candidates", "config", "tables"],
+      "additionalProperties": false,
+      "properties": {
+        "insights": {"enum": ["current", "out of date", "missing"]},
+        "optimizations": {"enum": ["current", "out of date", "missing"]},
+        "candidates": {"enum": ["current", "out of date", "missing"]},
+        "config": {"enum": ["current", "missing"]},
+        "tables": {"enum": ["current", "partial", "missing"]}
+      }
+    },
+    "notes": {"type": "array", "items": {"type": "string"}, "description": "What is out of date or missing, and how the sender can fix it"},
+    "report": {
+      "type": "object",
+      "description": "data/metrics.json as the report run wrote it: meta (generated, range, notes), the scopes (all projects, repo groups, folders), the sections, every card of every scope with its blocks, and the miss traces",
+      "required": ["meta", "scopes", "sections", "data", "traces"],
+      "properties": {
+        "meta": {"type": "object", "required": ["generated", "range"]},
+        "scopes": {"type": "array"},
+        "sections": {"type": "array"},
+        "data": {"type": "object"},
+        "traces": {"type": "object"}
+      }
+    },
+    "insights": {"type": ["object", "null"], "description": "insights.json (schemas/insights.schema.json), or null"},
+    "optimizations": {"type": ["object", "null"], "description": "optimizations.json (schemas/optimizations.schema.json), or null"},
+    "candidates": {"type": ["object", "null"], "description": "data/candidates.json: the optimization catalog evaluated against this report, or null"},
+    "config": {"type": ["object", "null"], "description": "data/config.json: settings, hooks, MCP servers, skills and plugins, with secrets removed, or null"},
+    "applied": {
+      "type": "array",
+      "description": "The optimizations the sender applied with apply.py",
+      "items": {
+        "type": "object",
+        "required": ["id", "applied", "status", "files"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {"type": "string"},
+          "applied": {"type": ["string", "null"], "description": "When, local time"},
+          "status": {"type": ["string", "null"], "description": "done, or partial when applying stopped partway"},
+          "files": {"type": "array", "items": {"type": "string"}, "description": "The files it changed or created"}
+        }
+      }
+    },
+    "tables": {
+      "type": "object",
+      "description": "Every row of the CSV exports, keyed by file name without .csv (calls, tool_calls, sessions, subagents, cache_misses). A column whose every value is a number holds numbers; an empty cell is null.",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["columns", "rows"],
+        "additionalProperties": false,
+        "properties": {
+          "columns": {"type": "array", "items": {"type": "string"}},
+          "rows": {"type": "array", "items": {"type": "array"}}
+        }
+      }
+    }
+  }
+}

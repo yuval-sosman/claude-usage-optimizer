@@ -860,6 +860,16 @@ def do_undo(oid, out):
     print(f'Undid {oid}.')
 
 
+def shared_report(out):
+    """Whether <out> holds a report someone shared with you (share.py unpack sets meta.shared): its optimizations, and the
+    Claude folder its config.json names, are the sender's."""
+    try:
+        with open(layout.data(out, 'metrics.json'), encoding='utf-8') as fh:
+            return bool(json.load(fh)['meta'].get('shared'))
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return False
+
+
 def report_claude_dir(out):
     """The Claude folder the report in <out> was built from (config.json records it), or None."""
     try:
@@ -894,6 +904,9 @@ def main(argv=None):
         CLAUDE_DIR = os.path.abspath(os.path.expanduser(a.claude_dir))
     out = os.path.abspath(os.path.expanduser(a.dir or os.environ.get('CLAUDE_USAGE_OUT') or CLAUDE_DIR.rstrip('/\\') + '-usage'))
     layout.migrate(out, log=print)
+    if a.cmd == 'apply' and shared_report(out):
+        raise SystemExit(f'{out} holds a report someone shared with you: its optimizations were written for their machine. '
+                         'Run /claude-usage:report and /claude-usage:optimize for your own.')
     if not a.claude_dir:                                    # apply to the Claude folder the optimizations were computed for
         CLAUDE_DIR = report_claude_dir(out) or CLAUDE_DIR
     if a.cmd == 'undo':

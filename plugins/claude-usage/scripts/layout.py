@@ -6,9 +6,11 @@
   <out>/data/                  rebuilt by usage_report.py on every run: metrics.json, digest.md, config.json, candidates.json, *.csv
   <out>/applied/               apply.py's record (applied.json) and backups/, once you apply an optimization
   <out>/video/                 /claude-usage:video: storyboard.json (Claude), video.html and claude-usage-video.mp4 (video.py)
+  <out>/share/                 /claude-usage:share: the one-file copies of the report you made to send (share.py pack)
+  <out>/received/<name>/       share files others sent you, unpacked into report folders (share.py unpack)
 
 Older versions wrote everything flat into <out>; migrate() moves those files into place (once, on the next run).
-Standard library only; shared by usage_report.py, apply.py and video.py.
+Standard library only; shared by usage_report.py, apply.py, video.py and share.py.
 """
 import json
 import os
@@ -17,6 +19,8 @@ import shutil
 DATA = 'data'
 APPLIED = 'applied'
 VIDEO = 'video'
+SHARE = 'share'
+RECEIVED = 'received'
 DATA_FILES = ('metrics.json', 'digest.md', 'config.json',
               'calls.csv', 'tool_calls.csv', 'sessions.csv', 'subagents.csv', 'cache_misses.csv')
 
@@ -35,6 +39,14 @@ def applied_dir(out):
 
 def video(out, name):
     return os.path.join(out, VIDEO, name)
+
+
+def share(out, name):
+    return os.path.join(out, SHARE, name)
+
+
+def received(out, name):
+    return os.path.join(out, RECEIVED, name)
 
 
 def migrate(out, log=None):

@@ -67,7 +67,10 @@ rules cover pairs the catalog doesn't list:
 - **Related**: main-model `overlaps`.
 
 ### stop-hook-followup: make Stop-hook follow-up work cheaper (judgment)
-- **When**: SV1's "Stop-hook follow-up work" lever > $5. The draft is generic: make it name the hook's real source and change.
+- **When**: SV1's "Stop-hook follow-up work" lever > $5. The lever counts only the work a Stop hook set off: EX5's "What Stop
+  hooks set off" gives, per hook, its runs, how often Claude went on working afterwards without a new prompt, and that
+  work's cost. A hook that sends nothing back (a notification) scores $0, so it never reaches this entry: nothing to read or
+  review for it. The draft is generic: make it name the hook's real source and change.
 - **Saving**: that lever (`upper_bound`: some of that work is wanted).
 - **Apply**: none generic (it's the user's own automation). **Manual**: show which hook (EX5, config hooks) and options:
   run it only when the turn was long or changed files; check `stop_hook_active` so it can't loop; move summarisation out of
@@ -185,8 +188,8 @@ rules cover pairs the catalog doesn't list:
 - **When**: SV3 has "Tool list changed (MCP/tools)" misses. Folded into mcp-off-where-unused as a manual step when that entry
   applies; alone (a habit) only when no MCP server is unused, and then **(judgment)**: EX3 shows whether the changes came right
   at session start.
-- **Kind**: habit. **Manual**: wait until the startup MCP line settles (or check `/mcp`) before the first prompt; disable
-  servers the project doesn't use (mcp-off-where-unused).
+- **Kind**: habit. **Manual**: wait until the startup MCP line settles (or check `/mcp`) before the first prompt; keep
+  servers a project doesn't use out of it (mcp-off-where-unused, scope-where-used).
 
 ---
 
@@ -206,13 +209,33 @@ rules cover pairs the catalog doesn't list:
   it), so nothing comes back on; the user's own entries are never copied into the step.
 - **Verify**: the next session's skill listing (or `/skills`) no longer shows them.
 
-### mcp-off-where-unused: disconnect MCP servers you never call
-- **When**: SV2's table has MCP servers switched off by hand (`/mcp disable <server>`, `/chrome`).
-- **Apply**: none: `/mcp disable <server>` in each project where it's unused (per project, reversible with `/mcp enable`); the
-  Chrome extension's server from `/chrome` (turn off "enabled by default"). Never `claude mcp remove`. When SV3 has
-  tool-list-change misses, add mcp-connect-first's habit as a step. The draft's notes name servers EX2 shows nearly unused.
+### mcp-off-where-unused: stop loading MCP servers you never call
+- **When**: SV2's "Every unused item" table (all projects) has MCP servers no project uses: one in the user MCP config, or the
+  Chrome extension's (`/chrome`).
+- **Apply**: none: `claude mcp get <server>` and keep what it prints, then `claude mcp remove <server> -s user`; a project that
+  later needs it gets it there alone (`claude mcp add … -s local`, or its `.mcp.json`). The Chrome extension's server:
+  `/chrome`, turn off "enabled by default". Never "`/mcp disable` in each project": switching a server off and on per
+  project is the chore this avoids. When SV3 has tool-list-change misses, add mcp-connect-first's habit as a step. The
+  draft's notes name servers EX2 shows nearly unused.
 - **Saving**: those rows' "Saved, all time" (SV2). The tool-list-change misses (SV3) could shrink too, but the transcripts don't
   say which server changed, so they are not counted.
+
+### scope-where-used: load an MCP server, skill or plugin only where it is used (judgment)
+- **When**: SV2's "Used in some projects, loaded in every one" table (all projects) adds up to $1 or more: a user-level MCP
+  server, personal skill (`~/.claude/skills`) or plugin enabled in `~/.claude/settings.json` that some projects use and
+  others only load.
+- **Apply**: none (by hand), a one-time move instead of switching it off and on per project:
+  - MCP server: `claude mcp get <server>` (keep the definition); in each project that uses it, `claude mcp add … -s local`
+    (just you) or its `.mcp.json` (the team too); then `claude mcp remove <server> -s user`.
+  - Plugin: `"enabledPlugins": {"<plugin>@<marketplace>": true}` in those projects' `.claude/settings.local.json` (just you)
+    or `.claude/settings.json` (the team too), then `false` in `~/.claude/settings.json` (a project-level true wins).
+  - Personal skill: move `~/.claude/skills/<name>` into each using project's `.claude/skills/`.
+- **Judgment**: where each goes. The local scope and `settings.local.json` are personal but reach neither teammates nor task
+  worktrees (`.claude/worktrees/…`, a fact names projects that have them); the shared `.mcp.json` / `.claude/settings.json`
+  do, and are checked in.
+- **Saving**: those rows' "Saved, all time" (`theoretical`: each item's listing, re-read on every main-thread call of the
+  sessions in projects that never used it).
+- **Verify**: the next report's SV2 no longer lists them in that table.
 
 ### fix-broken-hook: a hook that fails every time (judgment)
 - **When**: EX5 lists failures with "No such file or directory" (or a path from another machine) and config.json shows the

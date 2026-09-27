@@ -42,8 +42,8 @@ def main():
         return
     if not S.state_put('stale-' + sid, {'warned': time.time()}):
         return                                             # unrecorded, sending again would be blocked again
-    w = S.price(last['model'], 'cw1h' if ttl >= 3600 else 'cw5m')
-    r = S.price(last['model'], 'cr')
+    w = S.price(last['model'], 'cw1h' if ttl >= 3600 else 'cw5m', last)
+    r = S.price(last['model'], 'cr', last)
     cost = f" (≈{S.usd(last['ctx'] * w)} at list prices, vs {S.usd(last['ctx'] * r)} for a cache hit)" if w and r else ''
     reason = (f"Paused by the claude-usage cache guard. This session has been idle for {S.span(idle)}, longer than its "
               f"{S.span(ttl)} prompt cache, so this message would re-write all {S.tok(last['ctx'])} tokens of context{cost}.\n"

@@ -31,7 +31,7 @@ def type_ok(v, t):
 
 
 def check(v, sch, path, errs):
-    """The subset of JSON Schema the two schemas use."""
+    """The subset of JSON Schema the plugin's schemas use."""
     if 'const' in sch and v != sch['const']:
         errs.append(f'{path}: must be {sch["const"]!r}')
     if 'enum' in sch and v not in sch['enum']:
@@ -64,11 +64,14 @@ def check(v, sch, path, errs):
         for k in sch.get('required', []):
             if k not in v:
                 errs.append(f'{path}: missing "{k}"')
+        extra = sch.get('additionalProperties')
         for k, x in v.items():
             if k in props:
                 check(x, props[k], f'{path}.{k}', errs)
-            elif sch.get('additionalProperties') is False:
+            elif extra is False:
                 errs.append(f'{path}: unknown field "{k}"')
+            elif isinstance(extra, dict):
+                check(x, extra, f'{path}.{k}', errs)
 
 
 def load(path, what):

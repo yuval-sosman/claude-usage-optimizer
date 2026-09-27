@@ -353,6 +353,13 @@ def skip(reason):
 
 # ---------- figures several entries share ----------
 
+def stop_hooks(R):
+    """EX5's Stop hooks that set off work (Claude went on after they sent something back), costliest first; /goal checks,
+    which keep Claude working on purpose, left out."""
+    return sorted([r for r in R.rows('EX5', 'go') if (r.get('fu') or 0) > 0 and r.get('h') != 'Goal check (/goal)'],
+                  key=lambda r: (-(r.get('fu') or 0), r.get('h') or ''))
+
+
 def lever_row(R, key):
     """SV1's row for a lever: SV1 shows each lever's card and a label; the model levers share SV6 and differ in wording."""
     card, prefix = LEVER_ROWS[key]
@@ -624,19 +631,20 @@ def stop_hook_followup(R, S, v):
     row = lever_row(R, 'stop_hook')
     if not row or (row.get('u') or 0) <= 5:
         return skip('SV1: Stop-hook follow-up work is under $5' if row else 'SV1 has no Stop-hook follow-up lever')
-    hooks = sorted([r for r in R.rows('EX5', 'tot') if r.get('e') == 'Stop'], key=lambda r: -(r.get('n') or 0))
-    name = hooks[0]['s'] if hooks else 'Your Stop hook'
-    where = sorted({S.tilde(f) for f, e, _, cmd in S.hooks() if e == 'Stop' and (not hooks or hooks[0]['s'] in cmd)}, key=lambda f: (len(f), f))
+    hooks = stop_hooks(R)
+    name = hooks[0]['h'] if hooks else 'Your Stop hook'
+    where = sorted({S.tilde(f) for f, e, _, cmd in S.hooks() if e == 'Stop' and (not hooks or hooks[0]['h'] in cmd)}, key=lambda f: (len(f), f))
     facts = [R.row_fact('SV1', 'c', row, ('l', 'u', 'mo'))]
-    facts += [R.row_fact('EX5', 'tot', r, ('e', 's', 'n', 'tot')) for r in hooks[:3]]
+    facts += [R.row_fact('EX5', 'go', r, ('h', 'sr', 'go', 'fc', 'fu')) for r in hooks[:3]]
     mem = next((r for r in R.rows('OUT3', 'n') if r.get('k') == 'Memory'), None)
     if mem:
         facts.append(R.row_fact('OUT3', 'n', mem, ('k', 'n', 'a')))
     if where:
         facts.append({'config': ', '.join(where), 'fact': f'the Stop hook command is set in {plural(len(where), "settings file")}'})
     o = opt('stop-hook-followup', f"Make {name}'s follow-up work cheaper", 'cost', 'hook',
-            sentence(f"{name} ran {plural(hooks[0]['n'], 'time')} on Stop (EX5)." if hooks else '',
-                     f"The work Claude does after it and before your next prompt costs up to {save(row['u'], row['mo'], 'SV1')}."),
+            sentence(f"{name} ran {plural(hooks[0]['sr'], 'time')} on Stop, and {hooks[0]['go']} times Claude went on working "
+                     'because of what it sent back (EX5).' if hooks else '',
+                     f"That work, before your next prompt, costs up to {save(row['u'], row['mo'], 'SV1')}."),
             'Makes the hook ask for less: it speaks up only after turns that changed files or ran long, does nothing when stop_hook_active '
             'is set (so it cannot loop), and asks for one short, specific write instead of an open-ended task.',
             R.questions('SV1', 'EX5', 'OUT3' if mem else 'EX5'), 'minutes', 'low',
@@ -646,8 +654,9 @@ def stop_hook_followup(R, S, v):
              'Read stop_hook_active from its JSON input and do nothing when it is true, so it cannot loop.',
              'Keep what it asks Claude to write short and specific, or move summarising to a script that calls a cheaper model.'],
             'Revert the change to the hook script.', docs('hooks', 'hooks-guide'),
-            sv=savings(row['u'], row['mo'], 'upper_bound', "SV1's Stop-hook follow-up lever: the calls Claude makes after the hook fires and "
-                                                          'before your next prompt; an upper bound, since some of that work is wanted.'),
+            sv=savings(row['u'], row['mo'], 'upper_bound', "SV1's Stop-hook follow-up lever: the calls Claude made because the hook sent "
+                                                          'something back (they follow its Stop run, before any new prompt); an upper bound, '
+                                                          'since some of that work is wanted.'),
             tradeoffs='A turn that mattered but changed no files no longer gets the reminder; you can still ask for it. If a tool '
                       'generates the hook, change it at the source or a rebuild overwrites the edit.',
             verify="In the next report, SV1's Stop-hook lever drops.", insights=['stop_hook'])
@@ -1081,7 +1090,9 @@ def mcp_off_where_unused(R, S, v):
         o = opt('mcp-connect-first', "Don't send the first prompt while MCP servers connect", 'cache', 'habit',
                 tl_text or f"{tl['n']} cache misses followed a tool-list change ({usd(tl['u'])}, SV3).",
                 'A habit: let the MCP servers finish connecting before the first prompt, so their tools join the prompt before anything is cached.',
-                R.questions('SV3', 'EX3', 'CX8'), 'habit', 'low', [connect, 'Disconnect servers a project never uses (/mcp disable <server>).'],
+                R.questions('SV3', 'EX3', 'CX8'), 'habit', 'low',
+                [connect, 'Keep servers a project never uses out of it: take unused ones out of your user MCP config, and set up the '
+                          'rest only in the projects that use them.'],
                 "Nothing to undo: it's a habit.", docs('mcp', 'prompt-caching'), verify='In the next report, SV3 shows fewer “Tool list changed” misses.')
         return judge(f"SV3: {tl['n']} misses after a tool-list change ({usd(tl['u'])}); no MCP server is unused.",
                      'Did those changes happen right at session start (EX3 lists them)? Only then is waiting for the servers the fix.',
@@ -1090,28 +1101,94 @@ def mcp_off_where_unused(R, S, v):
     so = round(sum(r['u'] for r in rows), 2)
     mo = month(R, so)
     chrome = [r for r in rows if r.get('h') == '/chrome settings']
-    plain = [r for r in rows if r not in chrome]
-    manual = [f"In each project where you don't use {r['n']}, run /mcp disable {r['n']} in a Claude Code session (reversible with /mcp enable {r['n']})."
-              for r in plain]
+    plain = [r for r in rows if r not in chrome and r.get('o') == 'your MCP config (user scope)']     # in the user MCP config
+    other = [r for r in rows if r not in chrome and r not in plain]      # connected another way (a project's, a plugin's): SV2's own advice
+    manual = [f"Keep {r['n']}'s definition: run claude mcp get {r['n']} and save what it prints." for r in plain]
+    manual += [f"Remove it from your user config: claude mcp remove {r['n']} -s user. When a project needs it, add it there alone "
+               f"(claude mcp add … -s local in that project, or its .mcp.json)." for r in plain]
+    manual += [f"{r['n']} is not in your user MCP config ({r.get('o') or 'connected another way'}): {r['h']} in the project that "
+               f"connects it, or remove it where it is defined." for r in other]
     manual += ['Run /chrome and turn off “enabled by default”; turn it on in the sessions where you want browser automation.'] if chrome else []
     manual += [connect] if tl else []
     oid = 'mcp-off-where-unused'
-    o = opt(oid, f"Disconnect {and_list(names)} where you don't use {'it' if len(names) == 1 else 'them'}", 'tooling', 'command',
+    o = opt(oid, f"Stop loading {and_list(names)} in every session", 'tooling', 'command',
             sentence(*[f"{r['n']} loaded in {plural(ex2[r['n']]['s'], 'session')} with {plural(ex2[r['n']]['u'], 'tool call')} (EX2)."
                        for r in rows if r['n'] in ex2], tl_text),
-            f"Turns {and_list(names)} off per project with /mcp disable where you don't use {'it' if len(names) == 1 else 'them'}"
-            + (' (the Chrome extension: connect only when asked)' if chrome else '') + '. Reversible, and the server configs stay in place.',
+            sentence(f"Takes {and_list([r['n'] for r in plain])} out of your user MCP config, which loads "
+                     f"{'it' if len(plain) == 1 else 'them'} into every session of every project; a project that needs one gets it "
+                     'set up there alone, once, so nothing is switched off and on per project.' if plain else '',
+                     f"Switches {and_list([r['n'] for r in other])} off where {'it connects' if len(other) == 1 else 'they connect'}."
+                     if other else '',
+                     'The Chrome extension connects only when asked.' if chrome else ''),
             R.questions('SV2', 'EX2', 'EX3', 'SV3') if tl else R.questions('SV2', 'EX2'), 'minutes', 'low', manual,
-            ' '.join([f'/mcp enable {r["n"]} in each project.' for r in plain] + (["Turn Chrome's default back on in /chrome."] if chrome else [])
-                     + ['Never use claude mcp remove, which deletes the config.']), docs('mcp'),
+            ' '.join([f"claude mcp add-json {r['n']} '<the definition you saved>' -s user." for r in plain]
+                     + [f"/mcp enable {r['n']} where you switched it off." for r in other]
+                     + (["Turn Chrome's default back on in /chrome."] if chrome else [])), docs('mcp'),
             sv=savings(so, mo, 'theoretical', f"SV2's {and_list(names)} row{'s' if len(rows) > 1 else ''} ("
                        + ', '.join(f"{r['t']:,} tokens per session" for r in rows) + ')'
                        + (f". The tool-list-change misses (SV3, {usd(tl['u'])}) could shrink too, but the transcripts don't say which server changed, "
                           'so they are not counted.' if tl else '.')),
-            tradeoffs=f'Re-enable with /mcp enable {names[0]}' + (' (or /chrome)' if chrome else '') + f' when you need {"it" if len(names) == 1 else "them"}.',
-            verify=f'/mcp in those projects shows {and_list(names)} disabled.', insights=['unused'])
+            tradeoffs=(f'A project that later needs {plain[0]["n"]} gets it with one claude mcp add there' if plain else
+                       f'Turn {other[0]["n"]} back on with /mcp enable when you need it' if other else
+                       'Turn it on in /chrome when you want browser automation') + '.',
+            verify=f'/mcp in a new session no longer lists {and_list(names)}.', insights=['unused'])
     return draft(f"SV2: {and_list(names)} unused, switched off by hand, worth {save(so, mo)}" + ('; SV3 has tool-list-change misses.' if tl else '.'),
                  o, ['unused', 'misses'] if tl else ['unused'], notes)
+
+
+@entry('scope-where-used')
+def scope_where_used(R, S, v):
+    """(judgment) SV2's "used in some projects, loaded in every one" rows over $1: a user-level MCP server, personal skill
+    or plugin that loads everywhere but is used in a few projects. Setting it up there alone is a one-time change, instead
+    of switching it off and on per project. Which file (shared .mcp.json or .claude/settings.json, or the personal local
+    scope, which a task worktree doesn't inherit) is the user's call, so the steps are by hand."""
+    rows = R.rows('SV2', 'i', 'Used in some projects, loaded in every one: set up only where used')
+    rows = [r for r in rows if (r.get('u') or 0) > 0]
+    so = round(sum(r['u'] for r in rows), 2)
+    if not rows or so < 1:
+        return skip(f'SV2: what loads in projects that never use it adds up to {usd(so)}, under $1' if rows
+                    else 'SV2 lists nothing used in some projects and only loaded in others')
+    mo = month(R, so)
+    names = [r['n'] for r in rows]
+    what = {'MCP server': 'MCP server', 'skill': 'skill', 'plugin': 'plugin'}
+    manual = []
+    for r in rows[:6]:
+        there = r.get('wa') or r['w']                 # every project that uses it (last, so a long list is what gets clipped)
+        if r['k'] == 'MCP server':
+            manual += [f"{r['n']}: run claude mcp get {r['n']} and keep its definition; add it with claude mcp add … -s local (just you) "
+                       f"or to the project's .mcp.json (the team too) in each project that uses it, then claude mcp remove {r['n']} -s user. "
+                       f"Used in {there}."]
+        elif r['k'] == 'plugin':
+            manual += [f"{r['n']}: set \"enabledPlugins\": {{\"{r['n']}\": true}} in .claude/settings.local.json (just you) or "
+                       f".claude/settings.json (the team too) of each project that uses it, then false in {SETTINGS}. Used in {there}."]
+        else:
+            manual += [f"{r['n']}: {r['h']} (a copy in each)."]              # SV2's advice names the skill folder or command file
+    manual.append('Start a new session in one of those projects and one elsewhere to check.')
+    facts = [R.row_fact('SV2', 'i', r, ('n', 'k', 'w', 'i', 's', 'u', 'mo'), 'Used in some projects, loaded in every one: set up only where used')
+             for r in rows[:6]]
+    wt = [r['n'] for r in rows if r.get('x') == 'yes']
+    facts += [ev('SV2', f"{r['n']}: {r['w']} has task worktrees (.claude/worktrees)") for r in rows[:6] if r.get('x') == 'yes']
+    o = opt('scope-where-used', f"Load {and_list(names[:3] + ([f'{len(names) - 3} more'] if len(names) > 3 else []))} only where "
+            f"{'it is' if len(names) == 1 else 'they are'} used", 'tooling', 'setting',
+            sentence(*[f"{r['n']} ({what.get(r['k'], r['k'])}) is used in {r['w']} but loads in {plural(r['s'], 'session')} of "
+                       f"{plural(r['i'], 'other project')} too (SV2)." for r in rows[:3]],
+                     f'Loading them where they are never used costs {save(so, mo, "SV2")}.'),
+            'Sets each one up in the projects that use it and takes it out of your user-level setup, so the other projects never load '
+            'it: a one-time change instead of switching it off and on.',
+            R.questions('SV2', 'EX2'), 'minutes', 'low', manual,
+            'Put each back at user level: claude mcp add-json <name> \'<its definition>\' -s user, the skill folder (or command '
+            f'file) back where it was in ~/.claude, or the plugin back to true in {SETTINGS}.', docs('mcp', 'skills', 'settings'),
+            sv=savings(so, mo, 'theoretical', "SV2's “used in some projects” rows: each item's listing, re-read on every main-thread "
+                                              'call of the sessions in projects that never used it.'),
+            tradeoffs=sentence('A new project that needs one of them gets it set up there, once.',
+                               f"{and_list(wt)}'s project has task worktrees: the personal local scope and settings.local.json don't reach "
+                               "them, so the project's shared .mcp.json or .claude/settings.json fits better if the team can have it."
+                               if wt else ''),
+            verify="In the next report, SV2's “used in some projects” table no longer lists them.", insights=['unused'])
+    return judge(f"SV2: {plural(len(rows), 'item')} used in some projects load in others that never use them, worth {save(so, mo)}.",
+                 'For each item, pick where it goes: the personal local scope (settings.local.json, claude mcp add -s local) or the '
+                 "project's shared file (.mcp.json, .claude/settings.json) when the team uses it too or the project has task worktrees.",
+                 facts, o, ['unused'])
 
 
 @entry('fix-broken-hook')
@@ -1319,14 +1396,15 @@ def lever_bundle(R, key, row):
                   f"{(k.get('sub') or '').strip()} (SV3).")
         actions = [f"Start with the biggest cause: {top['k'].lower()} ({top['h']})" if top and top.get('h') else 'Start with the biggest cause in SV3']
     elif key == 'stop_hook':
-        hooks = sorted([r for r in R.rows('EX5', 'tot') if r.get('e') == 'Stop'], key=lambda r: -(r.get('n') or 0))
+        hooks = stop_hooks(R)
         oid, qs, kind = 'cost-stop-hook-followup', ('SV1', 'EX5', 'OUT3'), 'upper_bound'
         facts = [R.row_fact('SV1', 'c', row, ('l', 'u', 'mo'))]
-        facts += [R.row_fact('EX5', 'tot', r, ('e', 's', 'n', 'tot')) for r in hooks[:2]]
-        basis = ("SV1's Stop-hook follow-up lever: the calls Claude makes after the hook fires and before your next prompt; an upper bound "
-                 'since some of that work is wanted.')
-        title = 'A Stop hook sets off extra work after every turn'
-        bottom = f"The work Claude does after {hooks[0]['s'] if hooks else 'your Stop hook'} fires costs up to {save(so, mo, pct(pct_) + ' of spend', 'SV1')}."
+        facts += [R.row_fact('EX5', 'go', r, ('h', 'sr', 'go', 'fc', 'fu')) for r in hooks[:2]]
+        basis = ("SV1's Stop-hook follow-up lever: the calls Claude made because the hook sent something back (they follow its Stop run, "
+                 'before any new prompt); an upper bound since some of that work is wanted.')
+        title = 'A Stop hook sets off extra work after turns'
+        bottom = (f"{hooks[0]['h'] if hooks else 'Your Stop hook'} made Claude go on working after {hooks[0]['go'] if hooks else 'some'} "
+                  f"of its runs; that work costs up to {save(so, mo, pct(pct_) + ' of spend', 'SV1')}.")
         actions = ['Make the hook fire only after turns that changed files or ran long', 'Keep what it asks Claude to write short and specific']
     elif key == 'fresh':
         k = R.kpi('SV7', 'Saved by starting fresh')
