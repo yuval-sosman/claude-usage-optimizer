@@ -3,8 +3,9 @@
 //   node promo/render.mjs promo/claude-usage-video.mp4            # 1080 x 1080, 30 fps, drawn at 2x and scaled down
 //   node promo/render.mjs promo/claude-usage-short.mp4 --src promo/claude-usage-short.html
 //   node promo/render.mjs sheet.png --stills 2,9,14,18,24,30,38,44,50   # one contact sheet of those moments
-// The README preview GIF, from the short MP4:
+// The README preview GIFs, from the MP4s (the plugin README shows the short one, the root README the full one):
 //   ffmpeg -i promo/claude-usage-short.mp4 -vf "fps=12,scale=600:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle" -loop 0 promo/claude-usage-short.gif
+//   ffmpeg -i promo/claude-usage-video.mp4 -vf "fps=10,scale=600:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=96:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle" -loop 0 promo/claude-usage-video.gif
 import { spawn } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';

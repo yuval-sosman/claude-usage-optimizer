@@ -128,7 +128,7 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
 3. `skills/report/reference/insights-guide.md`: the "Usually cites" column and the checklist.
 4. `skills/optimize/reference/catalog.md` and `skills/optimize/reference/claude-code.md`: the `When`/`Saving` rules cite ids.
 5. The examples in `skills/report/SKILL.md` and `skills/brainstorm/SKILL.md`.
-6. The question count ("62 questions" = every card id in metrics.json, hidden ones included) in the root `README.md`, the plugin's `README.md`, `.claude-plugin/plugin.json`, QUESTIONS.md and the promo videos (`promo/*.html`; re-render their MP4s and the plugin README's GIF with `promo/render.mjs`). Keep it out of the skills: the report skill's description loads in every session.
+6. The question count ("62 questions" = every card id in metrics.json, hidden ones included) in the root `README.md`, the plugin's `README.md`, `.claude-plugin/plugin.json`, QUESTIONS.md and the promo videos (`promo/*.html`; re-render their MP4s with `promo/render.mjs`, then the GIFs in both READMEs as its header says). Keep it out of the skills: the report skill's description loads in every session.
 7. The user's existing `<OUT>/insights.json` and `optimizations.json`: remap cited ids (`questions`, `evidence[].question`, ids inside text), or regenerate them.
 8. Ids are link targets, so renumbering breaks old links. Prefer hiding (`HIDDEN_CARDS`), folding (`alias`), `CARD_ORDER`
    or, to move a card to another section, `CARD_SECTION` when a stable id matters.

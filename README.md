@@ -2,6 +2,10 @@
 
 **See where your Claude Code money goes, and what would have kept it.**
 
+[![A 53-second tour: what 62 days of Claude Code cost, the report command, the 62 questions, one costly cache miss traced step by step, Claude's insights with what each fix would have saved, applying a fix, the combined saving, and how to install](promo/claude-usage-video.gif)](promo/claude-usage-video.mp4)
+
+<sub>Demo data. Watch as video: [full 53-second tour](promo/claude-usage-video.mp4) · [25-second cut](promo/claude-usage-short.mp4).</sub>
+
 A Claude Code plugin marketplace with one plugin, **claude-usage**. It reads your local transcripts, answers 62 questions
 about cost, caching, context and habits, and has Claude write what to change, with the dollars each change would have
 saved so far. Nothing leaves your machine.
