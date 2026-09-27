@@ -7,20 +7,17 @@ hook shows a one-line notice when the current context passes it, then stays quie
 
   python3 context_guard.py --threshold 150000 [--step 50000]
 """
-import argparse
 import sys
 
 try:
     import _session as S
-except Exception:       # a missing or broken helper must never break Claude Code: the hook then does nothing
-    S = None
+except Exception:       # a missing or broken helper must never break Claude Code: exit and do nothing
+    sys.exit(0)
 
 
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument('--threshold', type=int, default=150000)
-    ap.add_argument('--step', type=int, default=50000, help='repeat the notice every this many more tokens')
-    a = ap.parse_args()
+    threshold = S.arg('--threshold', 150000)
+    step = S.arg('--step', 50000)                              # repeat the notice every this many more tokens
     inp = S.read_stdin()
     if not inp.get('transcript_path') or (inp.get('prompt') or '').lstrip().startswith('/'):
         return
@@ -29,7 +26,7 @@ def main():
         return
     sid = inp.get('session_id') or 'unknown'
     st = S.state_get('ctx-' + sid)
-    if last['ctx'] < a.threshold:
+    if last['ctx'] < threshold:
         if st:
             S.state_put('ctx-' + sid, {})                     # back under the threshold (/compact, /clear): start over
         return
@@ -39,11 +36,11 @@ def main():
     if last['ctx'] < nxt:
         S.state_put('ctx-' + sid, {'next': nxt, 'last': last['ctx']})
         return
-    S.state_put('ctx-' + sid, {'next': last['ctx'] + a.step, 'last': last['ctx']})
+    S.state_put('ctx-' + sid, {'next': last['ctx'] + step, 'last': last['ctx']})
     r = S.price(last['model'], 'cr')
     per = f" (≈{S.usd(last['ctx'] * r)} of cache reads per request)" if r else ''
     S.emit({'systemMessage': f"Context is {S.tok(last['ctx'])} tokens{per}. Your usage history says compacting past "
-                             f"{S.tok(a.threshold)} pays off: /compact (optionally with what to keep) when this task allows."})
+                             f"{S.tok(threshold)} pays off: /compact (optionally with what to keep) when this task allows."})
 
 
 if __name__ == '__main__':

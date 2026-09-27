@@ -1,15 +1,30 @@
 """Shared helpers for the claude-usage hooks: read the tail of the session transcript, price tokens, keep tiny state.
 
-Hooks must be fast and must never get in the way: every helper swallows its own errors and returns None.
+Hooks must be fast and must never get in the way: the helpers swallow their own errors and return None (or False),
+except arg(), which raises on a malformed value so that the hook's own catch-all makes it do nothing. They run on every
+prompt or tool call, so heavy modules (argparse, datetime) are left out or imported only when needed.
 """
-import datetime as dt
 import json
 import os
 import time
 
 HERE = os.path.dirname(os.path.realpath(__file__))
 STATE = os.environ.get('CLAUDE_USAGE_HOOK_STATE') or os.path.join(HERE, 'state')      # next to the installed hooks
-TAIL = 3 * 1024 * 1024       # bytes of transcript to scan from the end
+FIRST = 64 * 1024            # bytes of transcript read first: the last API call is usually a few KB from the end
+TAIL = 3 * 1024 * 1024       # at most this many, when a large tool result follows the last call
+
+
+def arg(name, default):
+    """--name N or --name=N from the command line as an int (the last one wins), else default. A malformed value raises,
+    so the hook does nothing (argparse, which costs more to import than the rest of a hook, exited 2 instead)."""
+    import sys
+    v = default
+    for i, a in enumerate(sys.argv[1:], 1):
+        if a == name:
+            v = int(sys.argv[i + 1])
+        elif a.startswith(name + '='):
+            v = int(a[len(name) + 1:])
+    return v
 
 
 def read_stdin():
@@ -21,6 +36,7 @@ def read_stdin():
 
 
 def parse_ts(s):
+    import datetime as dt
     try:
         return dt.datetime.fromisoformat(s.replace('Z', '+00:00')).timestamp()
     except Exception:
@@ -28,15 +44,48 @@ def parse_ts(s):
 
 
 def last_usage(transcript):
-    """The newest main-thread API call in the transcript: its end time, context size, model and cache lifetime."""
-    try:
-        size = os.path.getsize(transcript)
-        with open(transcript, 'rb') as fh:
-            fh.seek(max(0, size - TAIL))
-            lines = fh.read().decode('utf-8', 'replace').splitlines()
-    except Exception:
+    """The newest main-thread API call in the transcript: its end time, context size, model and cache lifetime.
+
+    Scans back from the end of the file (at most TAIL bytes) until it has the newest call and a cache write to tell the
+    lifetime by, which is usually within the first 64 KB read."""
+    st = {'last': None, 'w1': 0, 'w5': 0}
+    batches = tail(transcript)
+    while True:
+        try:
+            lines = next(batches, None)
+        except Exception:
+            return None
+        if lines is None or scan(lines, st):
+            break
+    last, w1, w5 = st['last'], st['w1'], st['w5']
+    if last is None or last['t'] is None:
         return None
-    last, w1, w5 = None, 0, 0
+    last['ttl'] = 3600 if w1 >= w5 and w1 > 0 else 300 if w5 > 0 else 3600
+    return last
+
+
+def tail(path):
+    """The lines of the file's last TAIL bytes in batches, newest batch first: the last FIRST bytes, then 8x as much at a
+    time. Each byte is read once; a line cut by a batch's start goes with the next (older) batch, except at TAIL."""
+    size = os.path.getsize(path)
+    stop = max(0, size - TAIL)
+    with open(path, 'rb') as fh:
+        pos, n, carry = size, FIRST, b''
+        while True:
+            start = max(stop, size - n)
+            fh.seek(start)
+            buf = (fh.read() if pos == size else fh.read(pos - start)) + carry      # the first read goes to the end,
+            pos, n, carry = start, n * 8, b''                                        # as the file may have grown
+            if pos > stop:
+                cut = buf.find(b'\n')
+                carry, buf = (buf, b'') if cut < 0 else (buf[:cut], buf[cut + 1:])
+            yield buf.decode('utf-8', 'replace').splitlines()
+            if pos == stop:
+                return
+
+
+def scan(lines, st):
+    """Go on from st through lines, newest first: True once it has the newest call and a cache write at or before it."""
     for ln in reversed(lines):
         if '"assistant"' not in ln or '"usage"' not in ln:
             continue
@@ -51,17 +100,14 @@ def last_usage(transcript):
         if not u or m.get('model') == '<synthetic>':
             continue
         cc = u.get('cache_creation') or {}
-        w1 += cc.get('ephemeral_1h_input_tokens') or 0
-        w5 += cc.get('ephemeral_5m_input_tokens') or 0
-        if last is None:
-            last = dict(t=parse_ts(d.get('timestamp') or ''), model=m.get('model') or '',
-                        ctx=(u.get('input_tokens') or 0) + (u.get('cache_read_input_tokens') or 0) + (u.get('cache_creation_input_tokens') or 0))
-        if w1 + w5 > 0 and last is not None:
-            break
-    if last is None or last['t'] is None:
-        return None
-    last['ttl'] = 3600 if w1 >= w5 and w1 > 0 else 300 if w5 > 0 else 3600
-    return last
+        st['w1'] += cc.get('ephemeral_1h_input_tokens') or 0
+        st['w5'] += cc.get('ephemeral_5m_input_tokens') or 0
+        if st['last'] is None:
+            st['last'] = dict(t=parse_ts(d.get('timestamp') or ''), model=m.get('model') or '',
+                              ctx=(u.get('input_tokens') or 0) + (u.get('cache_read_input_tokens') or 0) + (u.get('cache_creation_input_tokens') or 0))
+        if st['w1'] + st['w5'] > 0 and st['last'] is not None:
+            return True
+    return False
 
 
 def canon_model(m):
@@ -134,16 +180,24 @@ def state_get(name):
 
 
 def state_put(name, value):
+    """Whether the state was written. A guard blocks only when it was: otherwise the retry it promises could never pass."""
     try:
         os.makedirs(STATE, exist_ok=True)
         with open(os.path.join(STATE, name + '.json'), 'w', encoding='utf-8') as fh:
             json.dump(value, fh)
-        for f in os.listdir(STATE):                      # keep the folder small: drop state older than two days
-            p = os.path.join(STATE, f)
-            if time.time() - os.path.getmtime(p) > 2 * 86400:
-                os.remove(p)
+    except Exception:
+        return False
+    try:
+        mark = os.path.join(STATE, '.swept')             # keep the folder small (swept at most once an hour):
+        if abs(time.time() - (os.path.getmtime(mark) if os.path.exists(mark) else 0)) > 3600:   # abs: the clock may go back
+            open(mark, 'w').close()
+            for f in os.listdir(STATE):                  # drop state older than two days
+                p = os.path.join(STATE, f)
+                if f != '.swept' and time.time() - os.path.getmtime(p) > 2 * 86400:
+                    os.remove(p)
     except Exception:
         pass
+    return True
 
 
 def emit(obj):

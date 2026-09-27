@@ -1,10 +1,16 @@
 # Catalog of optimizations
 
 Each entry: **when** it applies (read the named questions in digest.md), **saving** (where the number comes from), the
-**apply** template for optimizations.json (adapt names, paths and thresholds to the data), the **manual** steps, the
-**tradeoff**, and **related**: how it interacts with other entries. Paths use `~`; apply.py expands them and refuses anything
-outside the home directory. Check config.json first: never overwrite an existing `statusLine`, never add a second copy of a
-hook, skip settings already at the proposed value.
+**apply** template for optimizations.json, the **manual** steps, the **tradeoff**, and **related**: how it interacts with other
+entries. Paths use `~`; apply.py expands them and refuses anything outside the home directory. Never overwrite an existing
+`statusLine`, never add a second copy of a hook, skip settings already at the proposed value.
+
+`scripts/candidates.py` evaluates every entry below, in this order (one function per entry, its rule in the docstring;
+mcp-connect-first is part of mcp-off-where-unused), against metrics.json and config.json, and writes
+`<OUT>/data/candidates.json`: a finished draft for each entry whose rule holds and isn't in place, with the numbers, apply
+steps and the **Related** links filled in, and the reason for each entry it skips. Entries marked **(judgment)** come back
+with their facts (and a draft when one can be written) for Claude to decide. This file stays the documentation: change a
+rule here and in candidates.py together.
 
 ## How optimizations interact
 
@@ -24,7 +30,10 @@ rules cover pairs the catalog doesn't list:
 ## Cost & model choice
 
 ### main-model: keep main-thread work on the cheaper model you already use
-- **When**: SV6 "Main threads on <current model>" saving > $10, or OV2's by-model split shows a pricier model doing most of the work.
+- **When**: SV6 "Main threads on <current model>" saving > $10. When the `model` setting already names that model or its
+  family's alias (`opus`, `opus[1m]`, …), it is a habit (draft `main-model-habit`); when it names another model, or none,
+  **(judgment)**: the draft `main-model-<alias>` sets it, or keep it a habit. The problem names only the models pricier than
+  the current one (prices.json), and says OV2's split includes subagents.
 - **Saving**: SV6 main-thread figure (`theoretical`; same tokens at list prices).
 - **Apply** (only if `model` in `~/.claude/settings.json` isn't already that model): `set_json` `~/.claude/settings.json`
   pointer `/model` value `"<alias>"` (e.g. `"opus[1m]"`, `"sonnet"`). Often this is a **habit** instead: the default is already
@@ -35,7 +44,7 @@ rules cover pairs the catalog doesn't list:
   effort cuts the tokens).
 
 ### subagent-model: run subagents on Sonnet by default
-- **When**: SV6 "Subagents on Sonnet 5" > $5 and `env.CLAUDE_CODE_SUBAGENT_MODEL` isn't set.
+- **When**: SV6 "Subagents on <model>" > $5 and `env.CLAUDE_CODE_SUBAGENT_MODEL` isn't set (id `subagent-model-<alias>`).
 - **Saving**: SV6 subagent figure (`theoretical`).
 - **Apply**: `merge_json` `~/.claude/settings.json` value `{"env": {"CLAUDE_CODE_SUBAGENT_MODEL": "sonnet"}}`.
 - **Manual**: add the same to settings.json; or give specific agents `model: sonnet` / `model: haiku` in their agent files
@@ -45,17 +54,20 @@ rules cover pairs the catalog doesn't list:
 - **Related**: subagent-briefs and cache-ttl-fit (when it changes the subagent lifetime) `overlaps`: SV3's resume misses and
   SV5's subagent cache writes are priced at the model the subagents ran on, so on Sonnet both are worth less.
 
-### effort-default: lower the default effort (only with strong evidence)
-- **When**: OV4 thinking share > 35% of output and `effortLevel` is `high`/`xhigh`/`max`, and OV3 shows output is a big part
-  of cost. Confidence low: effort changes quality.
+### effort-default: lower the default effort (only with strong evidence) (judgment)
+- **When**: OV4 thinking share > 35% of output, an effort level (`effortLevel`, or a model's in `modelSettings`) is
+  `high`/`xhigh`/`max`, and OV3 shows output is at least 10% of cost. Confidence low: effort changes quality. When
+  `modelSettings` raise one model above the global level, the draft removes that override (`unset_json`
+  `/modelSettings/<model>/effortLevel`, id `effort-<model>-<global level>`, no saving claimed); otherwise it sets medium on
+  the global level and on each model's own level that is high or above (a model's level beats the global one).
 - **Saving**: a stated fraction of thinking cost (OV3 output cost × OV4 thinking share); mark `upper_bound` and explain.
 - **Apply**: `set_json` `~/.claude/settings.json` pointer `/effortLevel` value `"medium"`.
 - **Manual**: `/effort high` for hard tasks, back to medium after.
 - **Tradeoff**: less thinking on hard problems. Changing effort mid-session can also invalidate the cache.
 - **Related**: main-model `overlaps`.
 
-### stop-hook-followup: make Stop-hook follow-up work cheaper
-- **When**: SV1's "Stop-hook follow-up work" lever > $5.
+### stop-hook-followup: make Stop-hook follow-up work cheaper (judgment)
+- **When**: SV1's "Stop-hook follow-up work" lever > $5. The draft is generic: make it name the hook's real source and change.
 - **Saving**: that lever (`upper_bound`: some of that work is wanted).
 - **Apply**: none generic (it's the user's own automation). **Manual**: show which hook (EX5, config hooks) and options:
   run it only when the turn was long or changed files; check `stop_hook_active` so it can't loop; move summarisation out of
@@ -66,10 +78,12 @@ rules cover pairs the catalog doesn't list:
 ## Context
 
 ### auto-compact-window: let Claude Code compact at your break-even size
-- **When**: SV4 best threshold net saving > $5 and the threshold is well below the model's window (1M models especially).
-- **Saving**: SV4 net saving (`theoretical`).
-- **Apply**: `merge_json` `~/.claude/settings.json` value `{"autoCompactWindow": <SV4 best threshold, rounded, e.g. 200000>}`.
-  Round up (compaction triggers as usage *approaches* the window).
+- **When**: SV4 best threshold net saving > $5, and the window below is under ¾ of the model's window (CX5; 1M models
+  especially); `autoCompactWindow` (or its env variable) isn't set at or below it, and auto-compact isn't off.
+- **Saving**: the net saving of SV4's row at that window (`theoretical`).
+- **Apply**: `merge_json` `~/.claude/settings.json` value `{"autoCompactWindow": <W>}`, W = the first SV4 threshold above the best
+  one that still saves money (e.g. best 150K → 200000): compaction triggers as usage *approaches* the window, so it lands
+  between the two. Id `auto-compact-<W>k`.
 - **Manual**: `/config` → auto-compact window, or the settings line above.
 - **Tradeoff**: Claude Code recommends its automatic window; compaction drops detail and costs one summary. Risk `medium`.
   Offer **context-guard** as the gentle alternative.
@@ -78,11 +92,14 @@ rules cover pairs the catalog doesn't list:
   `overlaps` (see them).
 
 ### context-guard: a notice when the context passes the break-even size
-- **When**: same data as auto-compact-window; preferred when the user wants to decide when to compact.
+- **When**: SV4 best threshold net saving > $5 (the threshold below the model's window); preferred when the user wants to
+  decide when to compact. Id `context-guard-<T>k`, T = SV4's best threshold. When the user's own `autoCompactWindow` already
+  sits at or below the next SV4 row, **(judgment)**, with no saving claimed: the notice fires just before a compaction that
+  happens anyway.
 - **Saving**: SV4 (`theoretical`, if acted on).
 - **Apply**: `write_file` `~/.claude/hooks/claude-usage/context_guard.py` from `hooks/context_guard.py` (mode 755), then
   `merge_json` `~/.claude/settings.json` value
-  `{"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command", "command": "python3 \"$HOME/.claude/hooks/claude-usage/context_guard.py\" --threshold <T>", "timeout": 10}]}]}}`.
+  `{"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command", "command": "python3 \"$HOME/.claude/hooks/claude-usage/context_guard.py\" --threshold <T> --step 50000", "timeout": 10}]}]}}`.
 - **Tradeoff**: none beyond a line of text; it never blocks.
 - **Related**: auto-compact-window `alternative`. statusline-cache `complements` (the status line shows the context size all
   the time; the guard speaks up at the threshold). stale-cache-guard and big-read-guard `overlaps` (see them).
@@ -91,20 +108,21 @@ rules cover pairs the catalog doesn't list:
 - **When**: SV8 saving > $3 (large whole-file reads re-read for the rest of the session; CX3's costliest-item insight and EX8 show which files).
 - **Saving**: SV8 (`upper_bound`, assumes a range keeps half).
 - **Apply**: `write_file` `~/.claude/hooks/claude-usage/big_read_guard.py` from `hooks/big_read_guard.py` (mode 755);
-  `merge_json` `~/.claude/settings.json` value `{"hooks": {"PreToolUse": [{"matcher": "Read", "hooks": [{"type": "command", "command": "python3 \"$HOME/.claude/hooks/claude-usage/big_read_guard.py\" --max-kb 60", "timeout": 10}]}]}}`.
+  `merge_json` `~/.claude/settings.json` value `{"hooks": {"PreToolUse": [{"matcher": "Read", "hooks": [{"type": "command", "command": "python3 \"$HOME/.claude/hooks/claude-usage/big_read_guard.py\" --max-kb <KB>", "timeout": 10}]}]}}`,
+  KB = SV8's size threshold at ~4 bytes a token, rounded up to 10 KB (8K tokens → 40), so the guard catches the reads SV8 counts.
 - **Tradeoff**: one extra round-trip the first time a big file is needed whole (the retry goes through).
 - **Related**: auto-compact-window / context-guard `overlaps` (SV8 counts carrying each big read for the rest of the session;
   compacting earlier drops it from the context too).
 
-### bash-output-cap: smaller inline Bash output
-- **When**: CX3 shows Bash results among the top context sources and the digest's EX10 lists very large Bash outputs (EX10 is
-  hidden: cite CX3 and EX6).
+### bash-output-cap: smaller inline Bash output (judgment)
+- **When**: Bash results are among CX3's three biggest context sources and the digest's EX10 lists Bash outputs over 15,000
+  characters (EX10 is hidden: cite CX3 and EX6). No saving is measured, so whether it is worth a setting is a call.
 - **Apply**: `merge_json` `~/.claude/settings.json` value `{"bashOutputMaxChars": 15000}` (default 30000; the rest goes to a file
   Claude can read on demand).
 - **Tradeoff**: Claude sees less of long logs inline; risk `medium`.
 
 ### transcript-retention: keep more history for the next report
-- **When**: the digest's period is close to 30 days (the default `cleanupPeriodDays`) and it isn't set higher.
+- **When**: the digest's period is 25 days or more, close to the 30-day default `cleanupPeriodDays`, and it isn't set higher.
 - **Apply**: `merge_json` `~/.claude/settings.json` value `{"cleanupPeriodDays": 90}`. No saving; better analysis.
 
 ---
@@ -116,9 +134,9 @@ rules cover pairs the catalog doesn't list:
 - **Saving**: SV7 (`upper_bound`) or the "You came back after a break" row of SV3 (`measured` extra cost).
 - **Apply**: `write_file` `~/.claude/hooks/claude-usage/stale_cache_guard.py` from `hooks/stale_cache_guard.py` (mode 755);
   `merge_json` `~/.claude/settings.json` value
-  `{"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command", "command": "python3 \"$HOME/.claude/hooks/claude-usage/stale_cache_guard.py\" --min-context 60000", "timeout": 10}]}]}}`.
-  Set `--min-context` well above what a new session starts with (CX5): a fresh start only saves once the context is past
-  start-up + 15K (SV7), so use about twice the start-up size (60000 suits a ~30K start-up) and small sessions are never stopped.
+  `{"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command", "command": "python3 \"$HOME/.claude/hooks/claude-usage/stale_cache_guard.py\" --min-context <N> --grace 180", "timeout": 10}]}]}}`.
+  N = SV7's "A fresh session starts at" rounded up to 10K, at least 60000: a fresh start only saves once the context is past
+  that size (start-up + 15K), so smaller sessions are never stopped.
 - **Manual**: after a break over the cache lifetime with a big context, `/clear` and paste a short summary (or `/compact` first).
 - **Tradeoff**: one extra Enter when you really do want to continue.
 - **Related**:
@@ -145,62 +163,72 @@ rules cover pairs the catalog doesn't list:
 - **When**: SV5's "Cheapest mix" differs from the actual mix and saves > $3 (current: main 1h on a subscription, else 5m;
   subagents 5m unless configured). SV5 replays the whole history under each of the 4 main × subagent combinations and prints
   the total bill for each. Cite its break-even line as the evidence: pauses of 5–60 min per 100 calls against the user's rate.
-  When the margin is marked "a close call", or the last 7 days favour the other lifetime, say so and don't push a change.
+  When the margin is under 5% ("a close call"), or the last 7 days favour the other lifetime, it is **(judgment)**: say so
+  and don't push a change.
 - **Saving**: actual total − the cheapest mix's total (`theoretical`).
-- **Apply**: `merge_json` `~/.claude/settings.json` value `{"promptCacheTtl": "5m"}` or `{"subagentPromptCacheTtl": "1h"}`; a single subagent type
+- **Apply**: `merge_json` `~/.claude/settings.json` value `{"promptCacheTtl": "5m"}` or `{"subagentPromptCacheTtl": "1h"}`, plus
+  (as in unused-listings-off) the other lifetime key when an applied earlier version set it; a single subagent type
   can differ with `experimental.cacheTtl` in its agent file (SV5 lists each type).
 - If SV5 agrees with the current defaults, don't propose a change: write an insight that the lifetimes already fit.
 - **Related**: stale-cache-guard: `alternative` when the main thread goes to 1h, `complements` when it goes to 5m (see
   stale-cache-guard). subagent-model `overlaps` when the subagent lifetime changes.
 
 ### keep-awake: don't let the Mac sleep mid-run
-- **When**: SV3 has a "Computer went to sleep" row (ME7 shows the errors) and the user is on macOS.
+- **When**: SV3 has a "Computer went to sleep" row (ME7 shows the errors) and the user is on macOS (config.json's home is
+  under `/Users/`).
 - **Saving**: that row's extra cost (`measured`), plus the cut-off work.
 - **Apply**: `write_file` `~/.claude/hooks/claude-usage/keep_awake.sh` from `hooks/keep_awake.sh` (mode 755); `merge_json`
   `~/.claude/settings.json` value `{"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command", "command": "bash \"$HOME/.claude/hooks/claude-usage/keep_awake.sh\" 7200", "timeout": 10}]}]}}`.
 - **Tradeoff**: the Mac stays awake up to 2 h after each prompt (closing the lid on battery still sleeps).
 
 ### mcp-connect-first: don't send the first prompt while MCP servers connect
-- **When**: CX8/EX3 show a "tool list changed" miss right at session start.
+- **When**: SV3 has "Tool list changed (MCP/tools)" misses. Folded into mcp-off-where-unused as a manual step when that entry
+  applies; alone (a habit) only when no MCP server is unused, and then **(judgment)**: EX3 shows whether the changes came right
+  at session start.
 - **Kind**: habit. **Manual**: wait until the startup MCP line settles (or check `/mcp`) before the first prompt; disable
-  servers the project doesn't use (unused-mcp-off).
-- **Related**: unused-mcp-off `overlaps` (fewer servers, fewer tool-list changes at start; its saving already counts that miss).
+  servers the project doesn't use (mcp-off-where-unused).
 
 ---
 
 ## Setup
 
-### unused-skills-off: stop listing skills you never use
-- **When**: SV2's table "Every unused item" has skills whose "How to switch it off" is a `skillOverrides` entry (personal,
-  synced `anthropic-skills:<name>`, or project skills). Leave items marked built in.
-- **Saving**: the sum of those rows' "Saved, all time" and "Per 30 days" (SV2 splits its total by each item's size; `theoretical`).
-- **Apply**: `merge_json` `~/.claude/settings.json` value `{"skillOverrides": {"<name>": "off", ...}}` with the names exactly as in
-  SV2 (synced skills keep their `anthropic-skills:` prefix). Project skills: one more `merge_json` step into that project's
-  `.claude/settings.local.json`. Use `"name-only"` instead of `"off"` for skills used rarely.
+### unused-listings-off: stop listing skills and connectors you never use
+- **When**: SV2's table "Every unused item" has rows a user setting switches off: skills whose "How to switch it off" is a
+  `skillOverrides` entry (personal, or synced `anthropic-skills:<name>`), and `"disableClaudeAiConnectors": true` rows (only
+  when EX2 shows no claude.ai connector used at all). Leave items marked built in. Project skills are left out (the draft's
+  notes name them): they belong to the project; add one more `merge_json` into that project's `.claude/settings.local.json`
+  only when the user doesn't use them there.
+- **Saving**: the sum of those rows' "Saved, all time" (SV2 splits its total by each item's size; `theoretical`).
+- **Apply**: `merge_json` `~/.claude/settings.json` value `{"skillOverrides": {"<name>": "off", ...}, "disableClaudeAiConnectors": true}`
+  with the names exactly as in SV2 (synced skills keep their `anthropic-skills:` prefix). Use `"name-only"` instead of `"off"`
+  for skills used rarely. When a newer version replaces an applied one (apply.py undoes the old version first), assemble.py
+  adds back what the applied version switched off (read from apply.py's record, and only where settings.json still holds
+  it), so nothing comes back on; the user's own entries are never copied into the step.
 - **Verify**: the next session's skill listing (or `/skills`) no longer shows them.
 
-### unused-mcp-off: disconnect MCP servers you never call
-- **When**: SV2's table has MCP servers.
-- **Apply**: rows whose way to switch off is `"disableClaudeAiConnectors": true` → `merge_json` that into `~/.claude/settings.json`
-  (only when no claude.ai connector is used at all). Everything else is manual: `/mcp disable <server>` in each project where
-  it's unused (per project, reversible with `/mcp enable`); the Chrome extension's server from `/chrome` (turn off "enabled by
-  default"). Never `claude mcp remove`.
-- **Saving**: those rows' "Saved, all time" and "Per 30 days" (SV2), plus a tool-list-change miss at session start if EX3/CX8 show one.
-- **Related**: mcp-connect-first `overlaps`.
+### mcp-off-where-unused: disconnect MCP servers you never call
+- **When**: SV2's table has MCP servers switched off by hand (`/mcp disable <server>`, `/chrome`).
+- **Apply**: none: `/mcp disable <server>` in each project where it's unused (per project, reversible with `/mcp enable`); the
+  Chrome extension's server from `/chrome` (turn off "enabled by default"). Never `claude mcp remove`. When SV3 has
+  tool-list-change misses, add mcp-connect-first's habit as a step. The draft's notes name servers EX2 shows nearly unused.
+- **Saving**: those rows' "Saved, all time" (SV2). The tool-list-change misses (SV3) could shrink too, but the transcripts don't
+  say which server changed, so they are not counted.
 
-### fix-broken-hook: a hook that fails every time
+### fix-broken-hook: a hook that fails every time (judgment)
 - **When**: EX5 lists failures with "No such file or directory" (or a path from another machine) and config.json shows the
-  hook command in a settings file.
+  hook command in a settings file (with `~` and `$HOME` spelled out as the report's home; by the script's name only when the
+  command builds its path from another variable). The facts give each file and the JSON pointer of the command; which path
+  is right is yours to check.
 - **Apply**: `set_json` on that settings file with the pointer to the command, e.g. `/hooks/UserPromptSubmit/0/hooks/0/command`,
   value = the same command with the correct path. Only if the corrected script exists (check with `ls`). Worktree copies of a
   project often carry their own `.claude/settings.json`: fix each file that has the bad path.
 - **Category**: reliability; no saving, but the hook's intended work (e.g. summaries) starts happening again.
 
 ### subagent-briefs: prefer a fresh subagent over resuming a big one
-- **When**: CX8/SV3 show "Subagent resumed via SendMessage" misses.
+- **When**: SV3's "Subagent resumed via SendMessage" row is worth $1 or more.
 - **Saving**: that SV3 row (`measured` extra cost; `upper_bound` of what a fresh brief saves).
-- **Apply**: `append_text` `~/.claude/CLAUDE.md` marker `subagent-briefs` content (≤ 3 lines), e.g. "- When a subagent has
-  finished and its context is large, start a fresh subagent with a short brief of what changed instead of resuming it with
-  SendMessage (resuming re-writes its whole history to the cache)."
+- **Apply**: `append_text` `~/.claude/CLAUDE.md` marker `subagent-briefs` content (≤ 3 lines): "- When a finished subagent has
+  a large context (over ~100K), start a fresh subagent with a short brief of what changed and what to check instead of
+  resuming it with SendMessage: resuming re-writes its whole history to the cache."
 - **Tradeoff**: CLAUDE.md loads in every session; keep it short. The fresh subagent may need to re-read some files.
 - **Related**: subagent-model `overlaps`.

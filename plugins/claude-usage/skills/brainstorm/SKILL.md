@@ -26,7 +26,7 @@ to try, and what is worth changing.
 
 ## Start
 
-1. If `<OUT>/data/digest.md` doesn't exist, say so and offer to run `/claude-usage:report` first (it takes ~10 s
+1. If `<OUT>/data/digest.md` doesn't exist, say so and offer to run `/claude-usage:report` first (it takes ~5 s
    for the numbers, a few minutes with insights).
 2. Read `data/digest.md` (in parts if it is too big for one read), and `insights.json` / `optimizations.json` if present. Note their `source.metrics_generated`: if it
    differs from the digest's "Generated" line, the insights are out of date; mention it once.

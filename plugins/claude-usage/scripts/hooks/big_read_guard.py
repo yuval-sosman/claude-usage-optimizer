@@ -7,22 +7,19 @@ with offset/limit). Reading the same file whole again goes through, so nothing i
 
   python3 big_read_guard.py [--max-kb 60]
 """
-import argparse
 import os
 import sys
 
 try:
     import _session as S
-except Exception:       # a missing or broken helper must never break Claude Code: the hook then does nothing
-    S = None
+except Exception:       # a missing or broken helper must never break Claude Code: exit and do nothing
+    sys.exit(0)
 
 BINARY = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.pdf', '.ipynb', '.heic', '.bmp', '.tiff', '.ico'}
 
 
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument('--max-kb', type=int, default=60)
-    a = ap.parse_args()
+    max_kb = S.arg('--max-kb', 60)
     inp = S.read_stdin()
     if inp.get('tool_name') != 'Read':
         return
@@ -34,14 +31,15 @@ def main():
         size = os.path.getsize(path)
     except OSError:
         return
-    if size < a.max_kb * 1024:
+    if size < max_kb * 1024:
         return
     sid = inp.get('session_id') or 'unknown'
     st = S.state_get('read-' + sid)
     seen = st.get('files') or []
     if path in seen:
         return
-    S.state_put('read-' + sid, {'files': (seen + [path])[-200:]})
+    if not S.state_put('read-' + sid, {'files': (seen + [path])[-200:]}):
+        return                                             # unrecorded, the second Read would be denied again
     try:
         with open(path, 'rb') as fh:
             lines = sum(1 for _ in fh)

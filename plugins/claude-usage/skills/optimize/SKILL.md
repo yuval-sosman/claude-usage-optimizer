@@ -8,17 +8,20 @@ allowed-tools: Read, Write, Edit, Bash(python3 *), Bash(ls *), Bash(open *), Bas
 
 # Optimizations: from insights to changes
 
-You read what the usage report extracted and the insights written from it, pick the changes that would have saved the most
-(or fix something broken), prepare each one so it can be applied **change by change**, and publish them as the report's
-**Optimizations** tab.
+The script has already evaluated the catalog of known optimizations against this report and drafted every one whose rule
+holds: numbers, apply steps, manual/undo/verify, docs and the links between them. You review those drafts, decide what needs
+judgment, look for what the catalog doesn't cover, weigh the pairs, and publish the result as the report's **Optimizations**
+tab, where each change can be applied on its own.
 
 If `$ARGUMENTS` starts with `apply`, skip to "Applying on request" below.
 
 ## Ground rules
 
 - Work only from the script's output in `<OUT>`, the output folder (`~/.claude-usage` by default; `usage_report.py --where
-  [--claude-dir …]` prints it): `insights.json`, and in `<OUT>/data/`: `digest.md`, `config.json` (current setup, secrets
-  removed), `metrics.json`, the CSVs. **Never read session transcripts** (`<claude dir>/projects/**/*.jsonl`).
+  [--claude-dir …]` prints it): `insights.json`, and in `<OUT>/data/`: `candidates.json`, `digest.md`, `config.json` (current
+  setup, secrets removed), `metrics.json`, the CSVs. **Never read session transcripts** (`<claude dir>/projects/**/*.jsonl`).
+  For a number the digest cuts short (it shows the first rows of a table),
+  `python3 "${CLAUDE_SKILL_DIR}/../../scripts/candidates.py" --out "<OUT>" --show card:EX1` prints every figure of one card.
 - Recommend only settings, hooks and features that exist in the user's Claude Code version. The verified reference is
   [reference/claude-code.md](reference/claude-code.md); if you need something it doesn't cover, check the official docs
   (`https://code.claude.com/docs/en/<page>.md`, e.g. settings, hooks, statusline, sub-agents, mcp, costs) and `claude --version`.
@@ -26,98 +29,159 @@ If `$ARGUMENTS` starts with `apply`, skip to "Applying on request" below.
 - Never change anything yourself unless the user asks you to apply a specific optimization (see the end).
 - Never propose disabling Claude Code's bundled skills or anything enabled by managed policy; never `claude mcp remove` to
   disable a server (it deletes its config and tokens); keep every change reversible.
+- Never write `optimizations.json` yourself: `assemble.py` writes it from your notes (step 3).
+- Run every command exactly as shown: one `python3 …` command, without `cd`, pipes, redirection or variables, so it matches
+  the allowed tools and needs no permission prompt.
 
 Scripts live in `${CLAUDE_SKILL_DIR}/../../scripts` (or two levels up from this skill's base directory).
 
 ## 1. Load the inputs
 
-1. If `<OUT>/insights.json` is missing, or its `source.metrics_generated` differs from the "Generated …"
-   line of `<OUT>/data/digest.md`, run the report skill's steps first (`/claude-usage:report`), or tell the user to.
-2. Read `data/digest.md` (numbers; in parts if it is too big for one read), `insights.json` (what matters), `data/config.json` (what is already set: settings per file, hooks,
-   MCP servers, installed plugins, a skills inventory telling user/project/synced/plugin skills apart from bundled ones).
-3. Read [reference/claude-code.md](reference/claude-code.md) and [reference/catalog.md](reference/catalog.md).
+The optimizations cover the report's period (the last 60 days unless the report was run with `--days`, `--since` or
+`--all`). If the user asks for another period, run `/claude-usage:report` with it first (or tell them to).
 
-## 2. Find the optimizations
+1. What the report and its insights hold, in one call:
+   ```bash
+   python3 "${CLAUDE_SKILL_DIR}/../../scripts/candidates.py" --out "<OUT>" --show insights,optimizations,judgment,links,skipped,problems --brief
+   ```
+   - `insights`: its first line says whether `insights.json` is current for this report. If it says stale or missing, run the
+     report skill's steps first (`/claude-usage:report`), or tell the user to. Then one line per insight: id (what
+     optimizations link to), category, title, bottom line, saving per 30 days. Read `<OUT>/insights.json` itself only when
+     you need an insight's detail.
+   - `optimizations`: one draft per catalog entry whose rule holds and isn't in place yet, with the `rule` (why, with the
+     numbers) and `notes` (what the script left for you to decide, e.g. project skills it left out).
+   - `judgment`: entries whose call is yours (a habit or a setting, effort, a Stop hook's real source, a close call, a path to
+     check), with the facts and, where one can be written, a `draft` you can adopt.
+   - `links`: how the drafts relate (the catalog's pairs, with a note from each side).
+   - `skipped`: entries whose rule doesn't hold, or that are already in place, and why.
+   - `problems`: what validate.py says about the drafts taken together; normally empty. A problem there follows the draft
+     into assemble: fix it in the notes (`edit`) or `drop` the draft.
+   Without `--brief` the drafts are shown whole (manual, verify, undo, docs, apply steps).
+2. `digest.md`, for the research pass (if you already read it in this conversation, don't read it again), and `config.json`
+   when you need the setup's details.
+3. [reference/catalog.md](reference/catalog.md): its "How optimizations interact" rules, and the entries named in `judgment`.
+   [reference/claude-code.md](reference/claude-code.md) before proposing anything the drafts don't already cover.
 
-Two passes:
+## 2. Decide
 
-**Catalog pass.** Go through every entry of the catalog. For each: evaluate its "when" rule against the digest and config;
-if it applies, quantify it with the named questions, check the current config so you don't duplicate, conflict with or
-overwrite something (an existing `statusLine`, an existing hook on the same event, a setting already at that value), and adapt
-the apply template (paths, thresholds from the data, names from the inventory). Skip entries whose rule doesn't hold; don't pad.
+**Review the drafts.** Their numbers come straight from the cards, and the script already checked the current setup (no
+duplicate hook, no setting already at that value, no existing status line). Read each one as the user will: keep it as is,
+drop it when something the rule can't see argues against it, or edit the prose where it should be specific to this user
+(name the project, the file, the real cause). Don't rewrite a draft that already reads right.
+
+**Make the judgment calls.** For each `judgment` entry: adopt its draft (with edits), write your own version, or leave it out
+(an insight can say it instead). Say why in the summary when you leave out something with a real saving.
 
 **Research pass.** Then look for what the catalog doesn't cover, specific to this user: a failing hook and its cause, a
 project whose settings differ, a slash command or prompt repeated often enough to become a skill, a subagent type that
 could run on a cheaper model through its own agent file, a noisy tool output a PostToolUse hook could trim, a Claude Code
 feature the data shows they'd benefit from (plan mode, /rewind, /context, output styles, background tasks). Check anything
-new against the docs before proposing it. Prefer fewer, stronger changes.
+new against the docs before proposing it. Prefer fewer, stronger changes. For each, decide `kind` (hook, setting,
+statusline, claude_md, agent, command, habit), `effort` (`one-click` only when apply.py can make the whole change;
+`minutes` when the user must act, `habit` for behaviour), `risk`, `tradeoffs`, and `savings` (from the SV questions or a
+measured cost: `usd_so_far` all time, `usd_per_month` per 30 days, `basis`, `kind`). Habits and manual changes still get
+exact steps.
 
 **Weigh them against each other.** Each saving is measured alone, as if that change were the only one. So go through the
-candidates in pairs and ask whether one changes the case for the other. Do they fix the same cost (the same misses, the same
-big contexts, the same calls repriced)? Change the same setting? Does one only pay off once the other is in place? The
-catalog's **Related** lines cover the known pairs. For example, a guard that warns before prompting into an expired cache
-and a switch of the main thread to the 1h cache go after the same misses: with one in place the other saves little, so they
-are an `alternative`. For pairs the catalog doesn't list, use its "How optimizations interact" rules. For each pair that interacts:
+optimizations in pairs and ask whether one changes the case for the other. Do they fix the same cost (the same misses, the
+same big contexts, the same calls repriced)? Change the same setting? Does one only pay off once the other is in place?
+`links` already carries the catalog's pairs between the drafts; check each note holds for this user, and add the pairs your
+own items create (use the catalog's "How optimizations interact" rules). For example, a guard that warns before prompting
+into an expired cache and a switch of the main thread to the 1h cache go after the same misses: with one in place the
+other saves little, so they are an `alternative`. For each pair that interacts:
 - `alternative` or `conflicts`: recommend one. Lead with the one the data favours and keep the other only as a stated
   choice (or drop it when the data clearly favours the first). Never present both as things to do.
 - `overlaps`: keep both, name the shared part in each `savings.basis`, and never add them up in the summary.
 - `complements` / `requires`: say so. For `requires`, the prerequisite comes first.
 
-For every optimization decide: `kind` (hook, setting, statusline, claude_md, agent, command, habit), `effort` (`one-click`
-only when apply.py can make the whole change; `minutes` when the user must act, `habit` for behaviour), `risk`, `tradeoffs`,
-and `savings` (from the SV questions or a measured cost; same rules as insights: `usd_so_far` (all time), `usd_per_month` (required: per 30 days),
-`basis`, `kind`). Habits and manual changes still get exact steps.
+## 3. Write the notes, assemble
 
-## 3. Write optimizations.json
-
-If `<OUT>/optimizations.json` already exists (an earlier run), **Read it first**. Claude Code refuses to overwrite a file
-that hasn't been read in this conversation (a Bash `cat` doesn't count), and the refused Write wastes the whole file you
-generated. Keep the `id` of every optimization that still applies: apply.py records applied changes by id
-(`<OUT>/applied/applied.json`), and the tab keeps its "done" marks by id, so a new id for the same change loses both.
-
-Follow `${CLAUDE_SKILL_DIR}/../../schemas/optimizations.schema.json`:
-
-- `source.metrics_generated` = digest's "Generated" timestamp; `source.insights_generated` = insights.json `generated`;
-  `source.claude_code_version` from `claude --version`.
-- `apply.steps` use these actions (apply.py executes them; everything must stay under the home directory):
-  - `write_file` with `source` = a bundled file under scripts/ (e.g. `hooks/stale_cache_guard.py`) or literal `content`, plus
-    `mode` for scripts. Installing a bundled hook also installs its helper `_session.py` and `prices.json` next to it.
-  - `merge_json` (deep-merge an object into a JSON file; arrays gain missing items, so hook groups are appended, never replaced),
-    `set_json` / `unset_json` with a JSON `pointer` (array indices allowed, e.g. `/hooks/UserPromptSubmit/0/hooks/0/command`).
-  - `append_text` with a `marker` (idempotent; for CLAUDE.md snippets; keep them to 1–3 lines, they load in every session).
-  - `run` for a shell command (shown and confirmed before running; prefer settings over commands).
-- Install hooks as copies under `~/.claude/hooks/claude-usage/` and reference them as
-  `python3 "$HOME/.claude/hooks/claude-usage/<name>.py" <args>` (plugin paths can change on update). Always write `~/.claude/…`
-  paths: when the report was built from another Claude folder (`$CLAUDE_CONFIG_DIR` or `--claude-dir`), apply.py maps them
-  there, hook commands included (it reads that folder from `<OUT>/data/config.json`). User settings are
-  `~/.claude/settings.json` in that same sense.
-- `manual`: numbered steps a person can follow without this plugin. `undo`: how to revert by hand (apply.py also has `undo <id>`).
-  `verify`: how to see it working. `docs`: the official doc pages.
-- Link both ways: `insights` (ids) on each optimization, and add the optimization ids to the matching insights'
-  `optimizations` arrays in insights.json.
-- `related`: every interaction from "Weigh them against each other", listed on both optimizations with the same relation
-  (`requires` only on the one that needs the other). Each has a one-sentence `note` from that optimization's side (for
-  `alternative`: when to pick which; the tab shows it under that option as "Why this one"). The tab turns alternatives and
-  conflicts into one choice, shows `requires` as "Do first" on the card that needs it, and lists overlaps and complements
-  inside each card. validate.py
-  rejects one-sided links. It also rejects two optimizations that change the same setting, or act on the same cost (the
-  main-thread cache lifetime and the stale-cache guard; auto-compact and the context guard), when they aren't linked.
-- `summary`: name the choices ("pick one: auto-compact at 200K or a notice at 150K") and give overlapping savings as a range
-  or the larger one, never a sum. The tab shows the first sentence larger, as the lead: make it short and the one to remember.
-- `title`: the change, without its saving (the card shows the saving beside it).
-
-## 4. Validate, render, open
-
-Replace `<OUT>` with the real output folder (see the ground rules).
+Write your notes with the Write tool to `<OUT>/data/notes-optimizations.json` (if Write refuses because the file exists,
+Read it first), then run:
 
 ```bash
-python3 "${CLAUDE_SKILL_DIR}/../../scripts/validate.py" optimizations "<OUT>/optimizations.json" --metrics "<OUT>/data/metrics.json" --insights "<OUT>/insights.json"
-python3 "${CLAUDE_SKILL_DIR}/../../scripts/validate.py" insights "<OUT>/insights.json" --metrics "<OUT>/data/metrics.json"
-python3 "${CLAUDE_SKILL_DIR}/../../scripts/apply.py" list --dir "<OUT>"
+python3 "${CLAUDE_SKILL_DIR}/../../scripts/assemble.py" optimizations --out "<OUT>"
+```
+
+It builds `optimizations.json` from the drafts and your notes: source stamps (`insights_generated` included), `generated`,
+`author`, `related` on both sides, links to the insights (and back, in insights.json). An optimization that is already
+applied keeps its id when a newer version of the same change replaces it, so apply.py undoes the old one first instead of
+adding a second copy; you don't need to read the old file. It validates both files and writes only when everything passes.
+The notes file stays either way: after problems (nothing was written), `note:` lines, or an `apply.py check` ERROR (step 4),
+Edit the notes file (don't write it again) and run the same command. The next full report run clears it. When the problems are in insights.json itself (for example
+after a hand edit in `/claude-usage:brainstorm`), fix them in insights.json with Edit (Read it first, keep its `generated`),
+or run `/claude-usage:report` again.
+
+The notes, for example:
+
+```json
+{
+  "summary": "Start with … For context size, pick one: auto-compact at 200K ($119 all time, ≈ $173 per 30 days) or a notice at 150K. …",
+  "claude_code_version": "2.1.283",
+  "drop": {"keep-awake": "the user works on a desktop that never sleeps"},
+  "edit": {
+    "effort-opus55-high": {},
+    "stop-hook-followup": {"id": "memory-hook-turn-scope", "title": "…", "problem": "…", "manual": ["…"]},
+    "mcp-off-where-unused": {"insights": ["tooling-unused-listings", "cache-tool-list-changes"]}
+  },
+  "add": [{"id": "claudepit-phase-inputs", "title": "…", "category": "workflow", "kind": "command", "problem": "…",
+           "what_it_does": "…", "questions": ["EX1", "CX11"], "effort": "minutes", "risk": "low", "manual": ["…"],
+           "undo": "…", "docs": [{"title": "Skills", "url": "https://code.claude.com/docs/en/skills"}]}],
+  "relate": [{"a": "claudepit-phase-inputs", "b": "big-read-guard", "relation": "overlaps",
+              "note_a": "…from this one's side", "note_b": "…from big-read-guard's side"}]
+}
+```
+
+- `summary` (required): name the choices ("pick one: auto-compact at 200K or a notice at 150K"), give overlapping savings as a
+  range or the larger one, never a sum, and say which savings are upper bounds. The tab shows the first sentence larger, as
+  the lead: make it short and the one to remember. At most 900 characters (the schema's limit; aim for ~600).
+- Length limits the schema enforces (characters): `title` 90, `problem` 500, `what_it_does` 700, `tradeoffs` 500, a
+  `related` note 300, a `manual` step 400, `verify` and `undo` 300; at most 6 `questions` and 6 `related`.
+- `claude_code_version`: from `claude --version`.
+- `drop`: candidates to leave out (by id, or by catalog entry name), with a reason for yourself; it isn't written anywhere.
+  Every draft in `optimizations` is kept unless dropped.
+- `edit`: fields to change, per candidate id (or entry name). A value replaces the field, `null` removes it, `savings` is
+  merged key by key, `"id"` renames it. A `judgment` draft is included only when it appears here (`{}` keeps it as drafted).
+  `insights` replaces the links the script would add (the insights of the lever each draft acts on).
+- `add`: your own optimizations, whole. Every field the schema requires: `id`, `title` (the change, without its saving),
+  `category`, `kind`, `problem` (what it fixes, with the report's numbers), `what_it_does`, `questions`, `effort`, `risk`,
+  `manual` (numbered steps a person can follow without this plugin), `undo` (how to revert by hand; apply.py also has
+  `undo <id>`), `docs` (the official doc pages); plus as needed `insights`, `savings`, `tradeoffs`, `apply`, and `verify`
+  (how to see it working).
+- `relate`: pairs to add or change, set on both sides at once: `a`, `b`, `relation` (`alternative`, `conflicts`, `overlaps`,
+  `complements`, or `requires` = a needs b first, with `note_a` only; `none` removes a pair), and a one-sentence note from
+  each side (`note_a`, `note_b`; for `alternative`: when to pick which, the tab shows it as "Why this one").
+
+Apply steps (for your own items) use these actions; apply.py executes them and everything must stay under the home directory:
+- `write_file` with `source` = a bundled file under scripts/ (e.g. `hooks/stale_cache_guard.py`) or literal `content`, plus
+  `mode` for scripts. Installing a bundled hook also installs its helper `_session.py` and `prices.json` next to it.
+- `merge_json` (deep-merge an object into a JSON file; arrays gain missing items, so hook groups are appended, never replaced),
+  `set_json` / `unset_json` with a JSON `pointer` (array indices allowed, e.g. `/hooks/UserPromptSubmit/0/hooks/0/command`).
+- `append_text` with a `marker` (idempotent; for CLAUDE.md snippets; keep them to 1–3 lines, they load in every session).
+- `run` for a shell command (shown and confirmed before running; prefer settings over commands).
+Install hooks as copies under `~/.claude/hooks/claude-usage/` and reference them as
+`python3 "$HOME/.claude/hooks/claude-usage/<name>.py" <args>`. Always write `~/.claude/…` paths: apply.py maps them to the
+Claude folder the report was built from.
+
+validate.py (which assemble runs) rejects one-sided links, and two optimizations that change the same setting or act on the
+same cost without a link. `note:` lines name judgment drafts you left out and applied changes no longer in the file.
+
+## 4. Check, render, open
+
+Replace `<OUT>` with the real output folder.
+
+```bash
+python3 "${CLAUDE_SKILL_DIR}/../../scripts/apply.py" check --dir "<OUT>"
 python3 "${CLAUDE_SKILL_DIR}/../../scripts/usage_report.py" --render --out "<OUT>" --open --tab optimizations
 ```
 
-Also run `apply.py show <id> --dir "<OUT>"` for each one-click optimization and read the preview: it must change exactly what you intended.
+`check` previews every one-click optimization against the user's current files in one call, one line each. `ok` (with
+the change it would make), `in place` (the setup already has it), `applied` (applied earlier with apply.py) and `update`
+(applied earlier, this version differs) are all fine: just make sure each describes the change you intended. An `ERROR`
+line needs action: when it is about the optimization (a path, a step, a value), fix the notes and assemble again; when
+it names one of the user's own files (e.g. "is not valid JSON: fix it by hand first"), leave the notes and tell the user
+in the reply. Relation warnings describe what the user already applied; mention them in the reply, don't drop items
+because of them.
 
 ## 5. Reply
 
@@ -127,8 +191,15 @@ alternatives and conflicts as one choice ("X or Y: I'd pick X because …"), not
 
 ## Applying on request
 
-When the user asks to apply specific optimizations (by id or title): run `apply.py show <id> --dir "<OUT>"`, summarise what will change,
-and apply with `apply.py apply <id> --yes --dir "<OUT>"` only after they confirm in the conversation. Afterwards give the undo command.
+When the user asks to apply specific optimizations (by id or title), preview it:
+
+```bash
+python3 "${CLAUDE_SKILL_DIR}/../../scripts/apply.py" show <id> --dir "<OUT>"
+```
+
+Summarise what will change, and only after they confirm in the conversation apply it with
+`python3 "${CLAUDE_SKILL_DIR}/../../scripts/apply.py" apply <id> --yes --dir "<OUT>"`. Afterwards give the undo command
+(`python3 "${CLAUDE_SKILL_DIR}/../../scripts/apply.py" undo <id> --dir "<OUT>"`).
 One optimization at a time. `show` also lists how it relates to the others. It warns when an alternative or a conflicting
 one is already applied, or when one it needs isn't. Tell the user, and let them choose (undo the other first, apply the
 prerequisite, or skip) before applying.

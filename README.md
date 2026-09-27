@@ -43,6 +43,7 @@ library only); runs on macOS, Linux and Windows.
 /claude-usage:report        build the report, write the Insights tab, open it
 /claude-usage:optimize      turn the insights into changes you can apply one by one
 /claude-usage:brainstorm    dig into the numbers with Claude and test what-ifs
+/claude-usage:video         a 30–60 second video of your own highlights, to share
 ```
 
 Or just ask *"why did Claude Code cost so much last week?"*
@@ -139,23 +140,83 @@ Each question, how it's counted and how to check it: [docs/QUESTIONS.md](plugins
 </details>
 
 <details>
-<summary><b>Options, and running without Claude</b></summary>
+<summary><b>All options</b>: skills, scripts and environment variables</summary>
 
-`/claude-usage:report` takes `--days 30`, `--since 2026-09-01 --until 2026-09-15`, `--claude-dir DIR`, `--no-insights`
-(numbers only) and `--no-open`. `/claude-usage:optimize` takes a focus (`/claude-usage:optimize cache`) or
-`apply <id>`.
+**Skills.** You can also ask in words ("report on the last 3 months", "optimize for cache") and Claude picks the options.
 
-The numbers alone, in about 10 seconds, from a clone of this repo (or the copy Claude Code keeps in
-`~/.claude/plugins/marketplaces/claude-usage-optimizer/`):
+| Command | Options |
+|---|---|
+| `/claude-usage:report` | `--days N` (default 60) · `--since YYYY-MM-DD --until YYYY-MM-DD` · `--all` (every transcript on disk) · `--claude-dir DIR` · `--no-insights` (numbers only) · `--no-open` |
+| `/claude-usage:optimize` | a focus: `cost`, `cache`, `context`, `hooks` or anything else · `apply <id>`: apply one optimization, after a preview |
+| `/claude-usage:brainstorm` | a question or topic, e.g. `why are subagents so expensive?` |
+| `/claude-usage:video` | what to highlight, e.g. `cache misses and savings` · `--seconds 30-60` · `--no-mp4` |
 
-```bash
-S=plugins/claude-usage/scripts
-python3 $S/usage_report.py --open    # --days 30, --since/--until, --out DIR, --no-csv
-python3 $S/usage_report.py --render  # re-embed insights/optimizations after editing them
-python3 $S/usage_report.py --where   # which Claude folder and output folder it uses
+```text
+/claude-usage:report --days 30
+/claude-usage:report --since 2026-09-01 --until 2026-09-15
+/claude-usage:report --all --no-open
+/claude-usage:optimize cache
+/claude-usage:optimize apply context-guard-150k
 ```
 
-If `python3` isn't on your PATH (common on Windows), use `python`, or set `PYTHON` for `$S/usage-report.sh`.
+**The report without Claude**, in about 5 seconds, from a clone of this repo (or the copy Claude Code keeps in
+`~/.claude/plugins/marketplaces/claude-usage-optimizer/`). With `S=plugins/claude-usage/scripts`, run
+`python3 $S/usage_report.py [options]` (or `$S/usage-report.sh [options]`):
+
+| Option | What it does |
+|---|---|
+| `--days N` | only the last N days (default 60), counted back from `--until` when given |
+| `--since YYYY-MM-DD`, `--until YYYY-MM-DD` | the first and last day to include (local time) |
+| `--all` | every transcript on disk, however old |
+| `--claude-dir DIR` | the folder Claude Code keeps its data in (with `projects/` inside); default `$CLAUDE_CONFIG_DIR`, else `~/.claude` |
+| `--projects DIR` | the transcripts folder, if not `<claude dir>/projects` |
+| `--out DIR` | the output folder; default `$CLAUDE_USAGE_OUT`, else `<claude dir>-usage` (`~/.claude-usage`) |
+| `--open`, `--tab report\|insights\|optimizations` | open the report when done, on that tab |
+| `--render` | only rebuild report.html from the data and your edited insights/optimizations (no recounting) |
+| `--where` | print the Claude folder and the output folder it would use, then exit |
+| `--no-csv` | skip the CSV exports |
+| `--quiet` | no progress output |
+| `--prices FILE`, `--template FILE` | another price table or HTML template |
+
+**Applying optimizations**: `python3 $S/apply.py <command> [id] [--dir DIR] [--claude-dir DIR] [--yes]`
+
+| Command | What it does |
+|---|---|
+| `list` | what can be applied, and what already is |
+| `check` | preview every optimization in one call, one line each (nothing is written) |
+| `show <id>` | the exact changes for one, as a diff (nothing is written) |
+| `apply <id>` | preview, confirm (or `--yes`), back up, apply |
+| `undo <id>` | revert just that change; later changes to the same files are kept |
+
+`--dir` is the report folder (default as for `--out`); `--claude-dir` is the Claude folder to change (default: the one
+the report was built from).
+
+**The video**: `python3 $S/video.py <command> [--out DIR]`
+
+| Command | Options |
+|---|---|
+| `tools` | can this machine make the MP4 (a Chromium-based browser and ffmpeg)? If not, how to install them |
+| `plan` | `--seconds 30-60`: draft the storyboard |
+| `check` | check the storyboard: length, ids, numbers, no private names |
+| `render` | `--no-mp4` (the page only) · `--open` · `--stills 3,20` (PNG frames instead) · `--fps N` · `--scale N` · `--browser PATH` · `--ffmpeg PATH` |
+
+**What the skills run for you** (rarely needed by hand):
+- `candidates.py --out DIR [--show SECTIONS] [--brief]`: the optimization drafts and savings bundles;
+  `--show card:CX3` prints every figure of one card.
+- `assemble.py insights|optimizations --out DIR [--notes FILE]`: builds insights.json or optimizations.json from
+  Claude's notes, and writes it only when it validates.
+- `validate.py insights|optimizations FILE --metrics <out>/data/metrics.json [--insights <out>/insights.json]`: checks
+  either file against the report (and optimizations' links against the insights).
+
+**Environment variables**
+
+| Variable | What it sets |
+|---|---|
+| `CLAUDE_CONFIG_DIR` | where Claude Code keeps its data (Claude Code reads it too) |
+| `CLAUDE_USAGE_OUT` | the output folder, instead of `~/.claude-usage` |
+| `PYTHON` | the Python `usage-report.sh` runs, when `python3` isn't on your PATH (common on Windows; `python` works too) |
+| `CLAUDE_USAGE_BROWSER`, `FFMPEG` | the browser and ffmpeg the video uses |
+| `CLAUDE_USAGE_HOOK_STATE` | where the installed hooks keep their small state files (default: beside the hooks) |
 </details>
 
 <details>
@@ -164,7 +225,7 @@ If `python3` isn't on your PATH (common on Windows), use `python`, or set `PYTHO
 Each one-command card in the Optimizations tab has a **Copy** button for its `apply.py apply <id>` command. It shows a
 diff per file and asks before writing, backs up every file it touches, and only touches files under your home directory.
 `apply.py undo <id>` removes just that change and keeps other optimizations and your own later edits. `apply.py list`
-shows what's applied. Settings and hooks take effect in new sessions.
+shows what's applied, and `apply.py check` previews them all in one go. Settings and hooks take effect in new sessions.
 
 The tab shows how optimizations interact:
 - **Pick one**: two fixes for the same cost (e.g. the stale-cache guard vs a 1-hour cache) appear as one choice. Mark the one
@@ -186,6 +247,22 @@ They fail open: an error in a hook never blocks you.
 </details>
 
 <details>
+<summary><b>A video of your own highlights</b></summary>
+
+`/claude-usage:video` turns your report into a square video to post (LinkedIn, Slack, a team update), in the style of the
+one above: what your usage cost with its daily spend, the headline numbers, cost by model, your costliest cache miss step by
+step, the top insights, the optimizations (applied ones checked) and what they would save together. Tell it what to focus
+on and it picks and words the scenes; it runs 30 to 60 seconds.
+
+- Every figure comes from your report's data; a headline can only quote a number the data has.
+- It leaves out project names, session titles, file paths and prompts unless you ask for them.
+- It writes `~/.claude-usage/video/claude-usage-video.mp4` (1080 × 1080, H.264) and `video.html`, which plays the same
+  video in a browser, offline. The MP4 needs Chrome (or Edge, Chromium, Brave) and ffmpeg. The skill checks for both
+  first and, if one is missing, offers to install it with your system's package manager (it asks before installing
+  anything); without them you still get the page, ready to screen-record.
+</details>
+
+<details>
 <summary><b>Where it reads and writes</b></summary>
 
 It reads the transcripts Claude Code keeps in `<claude dir>/projects`. `<claude dir>` is `--claude-dir DIR`, else
@@ -200,7 +277,8 @@ where Claude Code guards every write. To change it, pass `--out DIR`, or set `CL
 ├── report.html          open this: Report · Insights · Optimizations, a project selector, light and dark themes
 ├── insights.json        written by /claude-usage:report; yours to edit
 ├── optimizations.json   written by /claude-usage:optimize
-├── data/                rebuilt on every run: metrics.json, digest.md (what Claude reads), config.json, *.csv
+├── data/                rebuilt on every run: metrics.json, digest.md and candidates.json (what Claude reads), config.json, *.csv
+├── video/               /claude-usage:video: storyboard.json, video.html and claude-usage-video.mp4
 └── applied/             once you apply something: applied.json and backups/
 ```
 </details>
@@ -237,7 +315,8 @@ where Claude Code guards every write. To change it, pass `--out DIR`, or set `CL
 
 Everything stays local, and the report makes no network requests. It contains prompt snippets, file paths and session
 titles, so treat it like your transcripts. `config.json` and the digest drop anything that looks like a key, token or
-secret, and list MCP servers by name only.
+secret, and list MCP servers by name only. The video, meant for sharing, shows numbers only: no prompts, and no project
+names, session titles or paths unless you ask.
 </details>
 
 <details>
@@ -248,14 +327,17 @@ secret, and list MCP servers by name only.
 CLAUDE.md                            for working on the plugin
 plugins/claude-usage/
   .claude-plugin/plugin.json         the plugin manifest
-  skills/report|optimize|brainstorm/ the three skills and their reference guides
+  skills/report|optimize|brainstorm|video/  the four skills and their reference guides
   scripts/usage_report.py            the engine (stdlib Python 3.8+); report_template.html is the offline UI
   scripts/apply.py, validate.py      apply/undo optimizations; check Claude's output
+  scripts/candidates.py, assemble.py the optimization drafts and savings bundles; merge Claude's notes into the final JSON
+  scripts/video*.py, fonts/          the highlights video: storyboard, checks, template, recorder (headless browser + ffmpeg)
   scripts/prices.json                USD per million tokens per model
   scripts/hooks/                     hooks and status line the optimizations install
-  schemas/                           the insights and optimizations contracts
+  schemas/                           the insights, optimizations and video storyboard contracts
   docs/QUESTIONS.md                  every question: why, how, what it found
   docs/screenshots/                  the made-up data and script behind docs/images/
+promo/                               the launch videos (HTML), their MP4s and GIFs, and render.mjs
 ```
 
 Disable with `claude plugin disable claude-usage@claude-usage-optimizer`; remove with

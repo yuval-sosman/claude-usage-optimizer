@@ -15,7 +15,8 @@ counting (no LLM involved), and writes to <out> (default $CLAUDE_USAGE_OUT, else
 them fast. The full layout is in layout.py.
 
 Usage: python3 usage_report.py [--claude-dir DIR] [--out DIR] [--since YYYY-MM-DD] [--until YYYY-MM-DD]
-                               [--days N] [--prices FILE] [--open] [--quiet] [--render]
+                               [--days N | --all] [--prices FILE] [--open] [--quiet] [--render]
+Without --since, --days or --all it covers the last 60 days (DEFAULT_DAYS).
 Only the Python 3.8+ standard library is used.
 """
 from __future__ import annotations
@@ -23,8 +24,10 @@ from __future__ import annotations
 import argparse
 import bisect
 import collections
+import contextlib
 import csv
 import datetime as dt
+import functools
 import glob
 import json
 import math
@@ -41,6 +44,7 @@ HERE = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, HERE)
 import layout  # noqa: E402
 VERSION = '2.0'
+DEFAULT_DAYS = 60     # the window without --since, --days or --all: recent enough to act on, long enough to see habits
 USER_HOME = os.path.expanduser('~')
 
 
@@ -112,8 +116,16 @@ def local(t):
     return dt.datetime.fromtimestamp(t)
 
 
+@functools.lru_cache(maxsize=None)
 def day(t):
+    """The local date. Cached: every scope asks again for the same timestamps."""
     return local(t).strftime('%Y-%m-%d')
+
+
+def uniq(xs):
+    """Distinct values in first-seen order. A set's order changes from run to run (hash seeds), and with it the order of
+    ties in a sort and the last digits of a float sum."""
+    return list(dict.fromkeys(xs))
 
 
 def pctl(vals, p):
@@ -226,12 +238,66 @@ def images_deep(x):
     return 0
 
 
+FAIL_RX = re.compile(r'error:|FAILED|\bfailed\b|Exit code [1-9]')     # a tool result that reports a failure
+
+
+def reports_failure(text):
+    """FAIL_RX.search(text), faster on long tool output: the regex runs only when a plain substring check can't decide."""
+    return 'error:' in text or 'FAILED' in text or (('failed' in text or 'Exit code ' in text) and FAIL_RX.search(text) is not None)
+
+
+def slim(d):
+    """Drop, in place, the bulk of a record that no card reads: tool output and file contents are most of a transcript's
+    bytes, and keeping them made memory grow with every transcript. A tool_result block keeps only what Model._tools
+    reads, as `_res` = (characters, first 600 characters, images, failure flag); a Read result keeps its line counts.
+    Edit results lose their copies of the file and strings, thinking blocks their text and signature, images their data,
+    and usage its per-iteration breakdown (cards read the totals)."""
+    tur = d.get('toolUseResult')
+    if isinstance(tur, dict):
+        f = tur.get('file')
+        if isinstance(f, dict):
+            f.pop('content', None)
+            f.pop('base64', None)
+        for k in ('stdout', 'stderr', 'originalFile', 'oldString', 'newString'):
+            tur.pop(k, None)
+    msg = d.get('message')
+    if not isinstance(msg, dict):
+        return
+    if isinstance(msg.get('usage'), dict):
+        msg['usage'].pop('iterations', None)
+    for b in msg['content'] if isinstance(msg.get('content'), list) else []:
+        if not isinstance(b, dict):
+            continue
+        typ = b.get('type')
+        if typ == 'tool_result' and 'content' in b:
+            bc = b.pop('content')
+            if isinstance(bc, str):
+                text = bc
+            elif isinstance(bc, list):
+                text = '\n'.join(x['text'] if isinstance(x.get('text'), str) else '' for x in bc
+                                 if isinstance(x, dict) and x.get('type') == 'text')
+            else:
+                text = ''
+            b['_res'] = (len(text), text[:600], images_in(bc), reports_failure(text))
+        elif typ == 'image' and isinstance(b.get('source'), dict):
+            b['source'] = {k: v for k, v in b['source'].items() if k != 'data'}
+        elif typ in ('thinking', 'redacted_thinking'):
+            for k in ('thinking', 'signature', 'data'):
+                b.pop(k, None)
+
+
 def canon_model(m):
     """One id per model, whatever the provider wrote: 'us.anthropic.claude-sonnet-4-5-20250929-v1:0',
     'claude-sonnet-4-5@20250929', 'claude-opus-5[1m]' and 'claude-3-5-sonnet-latest' become 'claude-sonnet-4-5',
     'claude-opus-5' and 'claude-sonnet-3-5'. Ids that are not Claude models are returned unchanged."""
     if not isinstance(m, str) or not m or m.startswith('<'):
         return m or '?'
+    return _canon_id(m)
+
+
+@functools.lru_cache(maxsize=None)
+def _canon_id(m):
+    """canon_model for a model id string. Cached: it runs for every API call of every scope, and ids are few."""
     s = m.strip().lower()
     i = s.rfind('claude-')
     if i < 0:
@@ -279,7 +345,12 @@ def short_path(p, cwd=None):
 
 
 def clip(s, n=90):
-    s = re.sub(r'\s+', ' ', s or '').strip()
+    s = s or ''
+    if len(s) > 4 * n:          # long text: when a prefix fills the clip, the rest can't change it (and is costly to collapse)
+        head = re.sub(r'\s+', ' ', s[:4 * n]).lstrip()
+        if len(head) > n + 1:
+            return head[:n - 1] + '…'
+    s = re.sub(r'\s+', ' ', s).strip()
     return s if len(s) <= n else s[:n - 1] + '…'
 
 
@@ -556,6 +627,45 @@ class Prices:
 
 # ---------------------------------------------------------------------------------------------- loading
 
+REPEATED = {'type', 'sessionId', 'session_id', 'cwd', 'gitBranch', 'userType', 'version', 'entrypoint', 'role', 'slug', 'model',
+            'service_tier', 'inference_geo', 'speed', 'stop_reason', 'effort', 'permissionMode', 'promptSource', 'agentId',
+            'name', 'subtype', 'level', 'hookEvent'}          # keys whose values recur from record to record
+
+
+def json_decoder():
+    """json.loads for transcript lines, with records sharing their strings: one object per distinct key, and per distinct
+    value of a REPEATED key. json.loads makes new ones for every record, which was a third of the memory."""
+    pool = {}
+    share = pool.setdefault
+
+    def pairs(kv):
+        return {share(k, k): (share(v, v) if k in REPEATED and type(v) is str else v) for k, v in kv}
+    return json.JSONDecoder(object_pairs_hook=pairs).decode
+
+
+def last_time(path, n=65536):
+    """The latest timestamp among the whole records in the last n bytes of a transcript (records are appended in time
+    order), or None when that tail holds none."""
+    try:
+        with open(path, 'rb') as fh:
+            fh.seek(0, os.SEEK_END)
+            end = fh.tell()
+            fh.seek(max(0, end - n))
+            lines = fh.read().split(b'\n')
+    except OSError:
+        return None
+    times = []
+    for line in lines[1:] if end > n else lines:                      # the first line of a tail is cut
+        try:
+            d = json.loads(line.decode('utf-8', errors='replace'))
+        except ValueError:
+            continue
+        if isinstance(d, dict) and isinstance(d.get('timestamp'), str):
+            times.append(parse_ts(d['timestamp']))
+    times = [t for t in times if t is not None]
+    return max(times) if times else None
+
+
 class Source:
     """Everything read from disk once. Scopes are built from subsets of `recs`."""
 
@@ -563,16 +673,21 @@ class Source:
         self.dir = os.path.abspath(os.path.expanduser(projects_dir))
         self.home = home or os.path.dirname(self.dir)          # the Claude Code config folder (~/.claude by default)
         self.recs, self.bad_lines, self.files = [], 0, 0
+        decode = json_decoder()
         for path in sorted(glob.glob(os.path.join(self.dir, '**', '*.jsonl'), recursive=True)):
             parts = os.path.relpath(path, self.dir).split(os.sep)
             proj, sub = parts[0], 'subagents' in parts[:-1]
+            if since and os.path.getmtime(path) < since - 86400:     # untouched since before the range (a day's slack)...
+                last = last_time(path)
+                if last is not None and last < since:                # ...and so is its last record (a copy can keep an old mtime)
+                    continue
             self.files += 1
             with open(path, encoding='utf-8', errors='replace') as fh:
                 for i, line in enumerate(fh):
                     if not line.strip():
                         continue
                     try:
-                        d = json.loads(line)
+                        d = decode(line)
                     except ValueError:
                         self.bad_lines += 1
                         continue
@@ -582,6 +697,7 @@ class Source:
                     if t is not None and ((since and t < since) or (until and t >= until)):
                         continue
                     d['_t'], d['_proj'], d['_sub'], d['_f'], d['_i'] = t, proj, sub, path, i
+                    slim(d)
                     self.recs.append(d)
         log(f'  read {len(self.recs):,} records from {self.files} transcript files')
         self.metas = {}
@@ -619,7 +735,7 @@ class Source:
             if d.get('cwd') and not d['_sub'] and d['_f'] not in seen:
                 seen.add(d['_f'])
                 cnt[d['_proj']][d['cwd']] += 1
-        for p in {d['_proj'] for d in self.recs}:
+        for p in sorted({d['_proj'] for d in self.recs}):       # sorted: set order changes from run to run
             self.cwd[p] = cnt[p].most_common(1)[0][0] if cnt[p] else None
         self.project_settings = {}                  # settings files of every project that has sessions
         for p, cwd in self.cwd.items():
@@ -763,8 +879,14 @@ _BASH = [
 
 
 def bash_class(cmd):
+    return _bash_class(cmd if isinstance(cmd, str) else '')
+
+
+@functools.lru_cache(maxsize=None)
+def _bash_class(cmd):
+    """bash_class for a command string. Cached: every scope that holds a command classifies it again."""
     for name, rx in _BASH:
-        if rx.search(cmd or ''):
+        if rx.search(cmd):
             return name
     return 'other'
 
@@ -998,16 +1120,9 @@ class Model:
                 tu = self.tool_uses.get(b.get('tool_use_id'))
                 if tu is None or tu['res'] is not None:
                     continue
-                bc = b.get('content')
-                if isinstance(bc, str):
-                    text = bc
-                elif isinstance(bc, list):
-                    text = '\n'.join(x.get('text') or '' for x in bc if isinstance(x, dict) and x.get('type') == 'text')
-                else:
-                    text = ''
-                tu['res'] = dict(t=d['_t'], is_error=bool(b.get('is_error')), chars=len(text), images=images_in(bc),
-                                 text=text[:600], tur=tur if isinstance(tur, dict) else None,
-                                 fail=bool(b.get('is_error')) or bool(re.search(r'error:|FAILED|\bfailed\b|Exit code [1-9]', text)))
+                chars, head, images, failed = b.get('_res') or (0, '', 0, False)       # see slim()
+                tu['res'] = dict(t=d['_t'], is_error=bool(b.get('is_error')), chars=chars, images=images,
+                                 text=head, tur=tur if isinstance(tur, dict) else None, fail=bool(b.get('is_error')) or failed)
                 if d['_t'] is not None and tu['t'] is not None:
                     tu['latency'] = max(0.0, d['_t'] - tu['t'])
                 if d.get('toolDenialKind'):
@@ -1487,7 +1602,7 @@ def ov3(m, g):
     tot = sum(parts.values())
     if not tot:
         return card('OV3', 'Which token type dominates the bill?', 'T P S', [])
-    models = sorted({c['model'] for c in m.real}, key=lambda x: -sum(c['usd'] for c in m.real if c['model'] == x))
+    models = sorted(uniq(c['model'] for c in m.real), key=lambda x: -sum(c['usd'] for c in m.real if c['model'] == x))
     per = {x: {k: sum(c['cost'].get(k, 0) for c in m.real if c['model'] == x) for k, _, _ in TOKEN_TYPES} for x in models}
     top = max(parts, key=parts.get)
     label = {'cache_read': 'Cache reads are', 'write_1h': '1-hour cache writes are', 'output': 'Output tokens are',
@@ -1661,7 +1776,7 @@ def ov8(m, g):
 def cx7(m, g):
     main = [c for c in m.real if not c['agent']]
     sub = [c for c in m.real if c['agent']]
-    models = sorted({c['model'] for c in m.real}, key=lambda x: -sum(1 for c in m.real if c['model'] == x))
+    models = sorted(uniq(c['model'] for c in m.real), key=lambda x: -sum(1 for c in m.real if c['model'] == x))
     worst = []
     for sid, s in m.sessions.items():
         if len(s['calls']) >= 20:
@@ -1686,7 +1801,7 @@ def cx9(m, g):
     out = sum(c['out'] for c in m.real)
     amp = sum(c['cr'] for c in m.real) / out if out else None
     m.facts['amp'] = amp
-    models = sorted({c['model'] for c in m.real}, key=lambda x: -sum(1 for c in m.real if c['model'] == x))
+    models = sorted(uniq(c['model'] for c in m.real), key=lambda x: -sum(1 for c in m.real if c['model'] == x))
 
     def a(cs):
         o = sum(c['out'] for c in cs)
@@ -1725,7 +1840,7 @@ def cx8(m, g):
     tok = sum(r['c']['rewritten'] for r in rows)
     cw = sum(c['cw'] for c in m.real)
     m.facts.update(miss_n=len(rows), miss_tok=tok)
-    causes = sorted({r['cause'] for r in rows}, key=lambda k: -sum(r['c']['rewritten'] for r in rows if r['cause'] == k))
+    causes = sorted(uniq(r['cause'] for r in rows), key=lambda k: -sum(r['c']['rewritten'] for r in rows if r['cause'] == k))
     days = fill_days({day(r['c']['t0']) for r in rows})
     tab = [dict(t=local(r['c']['t0']).strftime('%m-%d %H:%M'), s=sess_label(m, r['c']['sid'], 40), th=thread_label(m, r['c']['thread']),
                 mo=model_name(r['c']['model']), w=r['c']['rewritten'], gap=idle_of(r['c']), cause=r['cause'], u=r2(r['usd']))
@@ -1759,7 +1874,7 @@ def ca_miss_cost(m, g):
     rows = _miss_rows(m)
     usd = sum(r['usd'] for r in rows)
     m.facts['miss_usd'] = usd
-    causes = sorted({r['cause'] for r in rows}, key=lambda k: -sum(r['usd'] for r in rows if r['cause'] == k))
+    causes = sorted(uniq(r['cause'] for r in rows), key=lambda k: -sum(r['usd'] for r in rows if r['cause'] == k))
     return card('_CA_COST', 'What did cache misses cost compared with a cache hit?', 'T P S', [
         K(kpi('Extra cost of misses', usd, 'usd', 'write price − read price, on re-written tokens'),
           kpi('Share of spend', share(usd, m.usd), 'pct'), kpi('Per miss', usd / len(rows) if rows else None, 'usd')),
@@ -2475,7 +2590,7 @@ def _sv_unused(m):
         return m.cache['sv_unused']
     e = _ext(m)
     tok, usd, n = e['per_sess'], 0.0, 0
-    sess = {a['sid'] for a in m.atts if a['type'] in ('skill_listing', 'mcp_instructions_delta', 'agent_listing_delta')}
+    sess = uniq(a['sid'] for a in m.atts if a['type'] in ('skill_listing', 'mcp_instructions_delta', 'agent_listing_delta'))
     for sid in sess:
         for c in (m.sessions.get(sid) or {}).get('main_calls', []):
             usd += tok * (w_rate(m, c) if c['idx'] == 0 or c['miss'] else r_rate(m, c))
@@ -3475,14 +3590,14 @@ def _read_seq(m):
             if fp:
                 seq[(t['thread'], fp)].append(t)
     rep = set()
-    stats = collections.defaultdict(lambda: dict(reads=0, rep=0, sess=set(), lines=None))
+    stats = collections.defaultdict(lambda: dict(reads=0, rep=0, sess={}, lines=None))    # sess: a dict, ordered (EX8 uses the first)
     for (th, fp), ts_ in seq.items():
         spans, pages = [], set()                        # what this thread has read of the file since its last edit
         for t in ts_:
             if t['name'] == 'Read':
                 st = stats[fp]
                 st['reads'] += 1
-                st['sess'].add(th[0])
+                st['sess'][th[0]] = True
                 f = ((t['res'] or {}).get('tur') or {}).get('file')
                 if isinstance(f, dict) and f.get('totalLines') is not None:
                     st['lines'] = f['totalLines']
@@ -3757,7 +3872,7 @@ def _ext(m):
     un_ag = [n for n in listed_ag if n not in used_ag]
     per_sess = (sum(listing_line.get(n, 60) for n in un_sk) + sum(sum(mcp_chars[n]) / max(1, listed_mcp[n]) for n in un_mcp)
                 + sum(mean(ag_chars[n]) or 0 for n in un_ag)) / 4
-    sess_with = {a['sid'] for a in m.atts if a['type'] in ('skill_listing', 'mcp_instructions_delta', 'agent_listing_delta')}
+    sess_with = uniq(a['sid'] for a in m.atts if a['type'] in ('skill_listing', 'mcp_instructions_delta', 'agent_listing_delta'))
     reread = sum(per_sess * max(0, sess_calls[s] - 1) for s in sess_with)
     avg_cr = (sum(c['cost'].get('cache_read', 0) for c in m.real) / sum(c['cr'] for c in m.real)) if sum(c['cr'] for c in m.real) else 0
     item_tok = ([('skill', n, listing_line.get(n, 60) / 4) for n in un_sk] +
@@ -3779,7 +3894,7 @@ def ex1(m, g):
             att[c['skill']][1] += c['usd']
     tool_runs = collections.Counter(t['input'].get('skill') for t in m.tools if t['name'] == 'Skill')
     slash = collections.Counter(c['name'] for c in m.commands)
-    names = sorted(set(att) | set(tool_runs), key=lambda k: -(att[k][1] if k in att else 0))
+    names = sorted(uniq(list(att) + list(tool_runs)), key=lambda k: -(att[k][1] if k in att else 0))
     rows = [dict(k=k, tr=tool_runs.get(k, 0), sl=slash.get(k, 0), c=att[k][0] if k in att else 0, u=r2(att[k][1]) if k in att else 0)
             for k in names]
     top = [r for r in rows if r['u']][:10]
@@ -4093,12 +4208,25 @@ def lang_of(path, known=False):
     return None if known or not re.fullmatch(r'[a-z0-9]{1,6}', ext) else '.' + ext
 
 
+FILE_OP_WORDS = re.compile(r'rm|mv|unlink|trash')        # every command bash_file_ops looks for (git rm and git mv too)
+UNQUOTE = str.maketrans('', '', '\'"\\')                  # all that shlex can take out of a word
+
+
 def bash_file_ops(cmd):
     """(op, path) for the files a shell command deletes or moves: rm, git rm, unlink, trash, mv, git mv. Flags, globs and
     variables are skipped (their files can't be known), and so are heredoc bodies (text being written, not run)."""
-    cmd = re.sub(r"<<-?\s*(['\"]?)(\w+)\1.*?\n\2\b", '', cmd or '', flags=re.S)
+    return _bash_file_ops(cmd if isinstance(cmd, str) else '')
+
+
+@functools.lru_cache(maxsize=None)
+def _bash_file_ops(cmd):
+    """bash_file_ops for a command string. Cached (so a tuple): every scope that holds a command parses it again, and
+    shlex is slow."""
+    cmd = re.sub(r"<<-?\s*(['\"]?)(\w+)\1.*?\n\2\b", '', cmd, flags=re.S)
     out = []
     for seg in re.split(r'&&|\|\||[;\n|]', cmd):
+        if not FILE_OP_WORDS.search(seg.translate(UNQUOTE)):
+            continue                # none of these commands in it: quotes and backslashes are all shlex could remove
         try:
             tok = shlex.split(seg, comments=True)
         except ValueError:
@@ -4116,7 +4244,7 @@ def bash_file_ops(cmd):
             out += [('moved', a) for a in args[:-1]] if len(args) >= 2 else []
         else:
             out += [('deleted', a) for a in args]
-    return out
+    return tuple(out)
 
 
 def _langs(m):
@@ -4346,7 +4474,7 @@ def me6(m, g):
     for t in m.turns:
         if t['kind'] == 'prompt':
             usd[t['mode'] or 'not logged'] += t['usd']
-    ks = sorted(set(modes) | set(usd), key=lambda k: (-modes[k], -usd[k]))
+    ks = sorted(uniq(list(modes) + list(usd)), key=lambda k: (-modes[k], -usd[k]))
     plan_sessions = len({a['sid'] for a in m.atts if a['type'] == 'plan_mode'})
     n, tot = sum(modes.values()), sum(usd.values())
     ser = [dict(S(f'Prompts ({n:,})', [r1(share(modes[k], n)) for k in ks], 1), raw=[modes[k] for k in ks], rawUnit='count', rawName='Prompts'),
@@ -4379,7 +4507,9 @@ def me7(m, g):
         empty=None if rows else 'No API errors in this scope.')
 
 
+@functools.lru_cache(maxsize=None)
 def _period(t, weekly):
+    """The local day or ISO week of t. Cached, like day()."""
     lt = local(t)
     if weekly:
         y, w, _ = lt.isocalendar()
@@ -4514,7 +4644,7 @@ def tr2(m, g):
                + (f", while start-up context went from {f_tok(mean(b0))} to {f_tok(mean(b1))}." if b0 and b1 else '.'))
     ver = collections.defaultdict(lambda: dict(first=None, last=None, sess=set(), base=[]))
     for s in m.sessions.values():
-        for v in s['versions']:
+        for v in sorted(s['versions'], key=str):          # sorted: set order changes from run to run
             a = ver[v]
             a['first'] = min(a['first'] or s['start'], s['start'])
             a['last'] = max(a['last'] or s['end'], s['end'])
@@ -4629,7 +4759,7 @@ def build(src, prices, log):
     TRACES.clear()
     all_m = Model(src, src.recs, prices)
     all_m.window = span_days(all_m)
-    order = sorted({c['model'] for c in all_m.real}, key=lambda x: -sum(c['usd'] for c in all_m.real if c['model'] == x))
+    order = sorted(uniq(c['model'] for c in all_m.real), key=lambda x: -sum(c['usd'] for c in all_m.real if c['model'] == x))
     slots = {mdl: i + 1 for i, mdl in enumerate(order[:8])}
     snaps = [dict(a, ver=all_m.sessions.get(a['sid'], {}).get('versions') or set()) for a in all_m.atts if a['type'] == 'prompt_snapshot']
     results, facts = {}, {}
@@ -4654,6 +4784,7 @@ def build(src, prices, log):
         results[sc['id']] = {'headline': headline(m, cards), 'cards': cards}
         facts[sc['id']] = m.facts
         log(f'  {sc["label"]}: {len(m.real):,} calls, {f_usd(m.usd)} ({time.time() - t0:.1f}s)')
+        del m                       # freed before the next scope's model is built, not while it is (peak memory)
     add_refs(results)
     return scopes, results, all_m
 
@@ -4816,6 +4947,10 @@ def md_config(config):
     """The current setup in a few lines: identical settings files grouped, hooks as event → command."""
     home = config.get('home') or os.path.expanduser('~')
     short = lambda p: p.replace(home, '~')
+    try:        # a hook apply.py installed in its fast form reads as the `python3 "<script>" args` it came from
+        from apply import plain_command
+    except Exception:
+        plain_command = str
     files = {}
     for group in ('user_settings', 'user_local_settings'):
         files.update(config.get(group) or {})
@@ -4835,7 +4970,7 @@ def md_config(config):
                 for ev, grps in v.items():
                     for g_ in grps or []:
                         for h_ in (g_ or {}).get('hooks') or []:
-                            hk.append(f"{ev}{'[' + g_['matcher'] + ']' if g_.get('matcher') not in (None, '', '*') else ''} → {clip(str(h_.get('command')), 160)}")
+                            hk.append(f"{ev}{'[' + g_['matcher'] + ']' if g_.get('matcher') not in (None, '', '*') else ''} → {clip(plain_command(str(h_.get('command'))), 160)}")
                 parts.append('hooks: ' + '; '.join(hk))
             elif isinstance(v, (dict, list)):
                 parts.append(f'{k}: {json.dumps(v, ensure_ascii=False)[:160]}')
@@ -4979,7 +5114,8 @@ def main(argv=None):
     ap.add_argument('--out', metavar='DIR', help='output folder (default $CLAUDE_USAGE_OUT, else <claude-dir>-usage, e.g. ~/.claude-usage)')
     ap.add_argument('--since', help='first day to include, YYYY-MM-DD (local time)')
     ap.add_argument('--until', help='last day to include, YYYY-MM-DD (local time)')
-    ap.add_argument('--days', type=int, help='only the last N days')
+    ap.add_argument('--days', type=int, help=f'only the last N days, counted back from --until when given (default {DEFAULT_DAYS})')
+    ap.add_argument('--all', action='store_true', help='every transcript on disk, however old (instead of the last days)')
     ap.add_argument('--prices', default=os.path.join(HERE, 'prices.json'), help='USD per million tokens, per model')
     ap.add_argument('--template', default=os.path.join(HERE, 'report_template.html'), help='HTML template to fill')
     ap.add_argument('--no-csv', action='store_true', help='skip the CSV exports')
@@ -5020,8 +5156,15 @@ def main(argv=None):
     def day_ts(s, end=False):
         d = dt.datetime.strptime(s, '%Y-%m-%d') + (dt.timedelta(days=1) if end else dt.timedelta())
         return d.timestamp()
-    since = day_ts(a.since) if a.since else (time.time() - a.days * 86400 if a.days else None)
+    if a.all and (a.since or a.days):
+        ap.error('--all reads every transcript: leave out --since and --days')
     until = day_ts(a.until, end=True) if a.until else None
+    if a.since:
+        since = day_ts(a.since)
+    elif a.all:
+        since = None
+    else:                 # the last N days (by default DEFAULT_DAYS), up to --until when given
+        since = (until or time.time()) - (a.days or DEFAULT_DAYS) * 86400
     if not os.path.isdir(a.projects):
         tried = f'{a.projects}' + ('' if a.claude_dir else ' (from $CLAUDE_CONFIG_DIR)' if os.environ.get('CLAUDE_CONFIG_DIR') else '')
         sys.exit(f'No Claude Code transcripts folder at {tried}.\n'
@@ -5042,6 +5185,8 @@ def main(argv=None):
     rng = (min(c['t0'] for c in all_m.real), max(c['t1'] for c in all_m.real)) if all_m.real else (None, None)
     notes = ['Every number comes from counting your local transcripts — no LLM was involved.',
              'Dollars are API list-price equivalents (tokens × prices.json). ' + (prices.source or '')]
+    if not (a.since or a.days or a.all):
+        notes.append(f"Covers {DEFAULT_DAYS} days{' up to ' + a.until if a.until else ''}, the default (--days N, --since or --all to change it).")
     if src.bad_lines:
         notes.append(f'{src.bad_lines} unreadable transcript lines were skipped.')
     if prices.missing:
@@ -5068,6 +5213,14 @@ def main(argv=None):
     with open(layout.data(a.out, 'config.json'), 'w', encoding='utf-8') as fh:
         json.dump(config, fh, indent=1, ensure_ascii=False)
     write_digest(report, config, a.out)
+    try:        # the catalog's drafts for the report and optimize skills; a failure there must not sink the report
+        sys.modules.setdefault('usage_report', sys.modules[__name__])      # candidates.py imports this module: reuse it
+        import candidates
+        candidates.write_candidates(a.out)
+    except Exception as e:
+        log(f'  ! candidates.json not written ({e}); the skills rebuild it with candidates.py')
+        with contextlib.suppress(OSError):
+            os.remove(layout.data(a.out, 'candidates.json'))              # never leave the previous run's drafts behind
     path, _ = render(a.out, a.template, log)
     if not a.no_csv:
         write_csvs(all_m, a.out)

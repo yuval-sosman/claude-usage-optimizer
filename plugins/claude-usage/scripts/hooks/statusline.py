@@ -9,8 +9,8 @@ import time
 
 try:
     import _session as S
-except Exception:       # a missing or broken helper must never break Claude Code: the hook then does nothing
-    S = None
+except Exception:       # a missing or broken helper must never break Claude Code: exit and do nothing
+    sys.exit(0)
 
 
 def main():

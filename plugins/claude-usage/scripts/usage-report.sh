@@ -3,11 +3,12 @@
 # (<claude dir>/projects) by plain counting, and writes a self-contained HTML report. In Claude Code, /claude-usage:report
 # also has Claude write the Insights tab; /claude-usage:optimize the Optimizations tab.
 #
-#   ./usage-report.sh                   # everything, report in ~/.claude-usage/report.html
+#   ./usage-report.sh                   # the last 60 days, report in ~/.claude-usage/report.html
 #   ./usage-report.sh --claude-dir /data/claude   # Claude Code keeps its data elsewhere (or set CLAUDE_CONFIG_DIR)
 #   ./usage-report.sh --where           # print the Claude folder and output folder it would use
 #   ./usage-report.sh --open            # ...and open it in your browser
 #   ./usage-report.sh --days 30         # only the last 30 days
+#   ./usage-report.sh --all             # every transcript on disk, however old
 #   ./usage-report.sh --since 2026-09-01 --until 2026-09-15
 #   ./usage-report.sh --out ~/reports/claude --no-csv
 #   ./usage-report.sh --render          # re-embed insights.json / optimizations.json without recomputing

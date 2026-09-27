@@ -3,11 +3,12 @@
   <out>/report.html            the report: open this
   <out>/insights.json          written by /claude-usage:report (Claude), yours to edit
   <out>/optimizations.json     written by /claude-usage:optimize (Claude)
-  <out>/data/                  rebuilt by usage_report.py on every run: metrics.json, digest.md, config.json, *.csv
+  <out>/data/                  rebuilt by usage_report.py on every run: metrics.json, digest.md, config.json, candidates.json, *.csv
   <out>/applied/               apply.py's record (applied.json) and backups/, once you apply an optimization
+  <out>/video/                 /claude-usage:video: storyboard.json (Claude), video.html and claude-usage-video.mp4 (video.py)
 
 Older versions wrote everything flat into <out>; migrate() moves those files into place (once, on the next run).
-Standard library only; shared by usage_report.py and apply.py.
+Standard library only; shared by usage_report.py, apply.py and video.py.
 """
 import json
 import os
@@ -15,6 +16,7 @@ import shutil
 
 DATA = 'data'
 APPLIED = 'applied'
+VIDEO = 'video'
 DATA_FILES = ('metrics.json', 'digest.md', 'config.json',
               'calls.csv', 'tool_calls.csv', 'sessions.csv', 'subagents.csv', 'cache_misses.csv')
 
@@ -29,6 +31,10 @@ def data(out, name):
 
 def applied_dir(out):
     return os.path.join(out, APPLIED)
+
+
+def video(out, name):
+    return os.path.join(out, VIDEO, name)
 
 
 def migrate(out, log=None):
