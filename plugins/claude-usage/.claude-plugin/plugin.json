@@ -2,7 +2,7 @@
   "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
   "name": "claude-usage",
   "displayName": "Claude Code usage",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Analyze your Claude Code usage from local transcripts: an HTML report answering 62 questions (cost, caching, context, sessions, tools, subagents, hooks), Claude-written insights with what each change would have saved so far, optimizations you can apply one by one, a short video of your highlights, the whole report as one file to send, and a company report combining many people's files.",
   "author": {"name": "yuvalsosman"},
   "homepage": "https://github.com/yuval-sosman/claude-usage-optimizer",
