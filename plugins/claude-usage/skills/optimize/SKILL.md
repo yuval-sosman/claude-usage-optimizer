@@ -3,7 +3,7 @@ name: optimize
 description: Turn the usage report's insights into concrete Claude Code optimizations (settings, hooks, status line, CLAUDE.md, agent and habit changes), each with its theoretical saving (all time and per 30 days), a one-command apply (preview, backup, undo) where possible and exact manual steps otherwise, shown in the report's Optimizations tab. Run after /claude-usage:report.
 disable-model-invocation: true
 argument-hint: "[focus: cost | cache | context | hooks | <anything>] | apply <id>"
-allowed-tools: Read, Write, Edit, Bash(python3 *), Bash(ls *), Bash(open *), Bash(xdg-open *), Bash(claude --version), WebFetch
+allowed-tools: Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/candidates.py" *), Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/assemble.py" *), Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/apply.py" check *), Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/apply.py" show *), Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/apply.py" list *), Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/usage_report.py" *), Bash(claude --version), WebFetch(domain:code.claude.com), Read(~/.claude-usage/**), Read(~/.claude/plugins/cache/claude-usage-optimizer/claude-usage/**), Edit(~/.claude-usage/data/notes-optimizations.json)
 ---
 
 # Optimizations: from insights to changes
@@ -21,19 +21,20 @@ If `$ARGUMENTS` starts with `apply`, skip to "Applying on request" below.
   [--claude-dir …]` prints it): `insights.json`, and in `<OUT>/data/`: `candidates.json`, `digest.md`, `config.json` (current
   setup, secrets removed), `metrics.json`, the CSVs. **Never read session transcripts** (`<claude dir>/projects/**/*.jsonl`).
   For a number the digest cuts short (it shows the first rows of a table),
-  `python3 "${CLAUDE_SKILL_DIR}/../../scripts/candidates.py" --out "<OUT>" --show card:EX1` prints every figure of one card.
+  `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/candidates.py" --out "<OUT>" --show card:EX1` prints every figure of one card.
 - Recommend only settings, hooks and features that exist in the user's Claude Code version. The verified reference is
   [reference/claude-code.md](reference/claude-code.md); if you need something it doesn't cover, check the official docs
   (`https://code.claude.com/docs/en/<page>.md`, e.g. settings, hooks, statusline, sub-agents, mcp, costs) and `claude --version`.
   Don't guess key names.
-- Never change anything yourself unless the user asks you to apply a specific optimization (see the end).
+- You never change the user's setup. apply.py writes only after the user types y at their own terminal (Claude Code's
+  tools have none, so from here it can only preview); your part is to prepare, preview and explain (see the end).
 - Never propose disabling Claude Code's bundled skills or anything enabled by managed policy; never `claude mcp remove` to
   disable a server (it deletes its config and tokens); keep every change reversible.
 - Never write `optimizations.json` yourself: `assemble.py` writes it from your notes (step 3).
 - Run every command exactly as shown: one `python3 …` command, without `cd`, pipes, redirection or variables, so it matches
-  the allowed tools and needs no permission prompt.
+  the allowed tools and needs no permission prompt. The skill is allowed nothing else without the user's say-so.
 
-Scripts live in `${CLAUDE_SKILL_DIR}/../../scripts` (or two levels up from this skill's base directory).
+Scripts: the plugin's scripts are in `${CLAUDE_PLUGIN_ROOT}/scripts`. Exactly those commands are pre-approved (each script by its full path); anything else, such as another program, `python3 -c`, a `cd` or a pipe, makes Claude Code ask the user first, so don't work around a refusal.
 
 ## 1. Load the inputs
 
@@ -42,7 +43,7 @@ The optimizations cover the report's period (the last 60 days unless the report 
 
 1. What the report and its insights hold, in one call:
    ```bash
-   python3 "${CLAUDE_SKILL_DIR}/../../scripts/candidates.py" --out "<OUT>" --show insights,optimizations,judgment,links,skipped,problems --brief
+   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/candidates.py" --out "<OUT>" --show insights,optimizations,judgment,links,skipped,problems --brief
    ```
    - `insights`: its first line says whether `insights.json` is current for this report. If it says stale or missing, run the
      report skill's steps first (`/claude-usage:report`), or tell the user to. Then one line per insight: id (what
@@ -100,7 +101,7 @@ Write your notes with the Write tool to `<OUT>/data/notes-optimizations.json` (i
 Read it first), then run:
 
 ```bash
-python3 "${CLAUDE_SKILL_DIR}/../../scripts/assemble.py" optimizations --out "<OUT>"
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/assemble.py" optimizations --out "<OUT>"
 ```
 
 It builds `optimizations.json` from the drafts and your notes: source stamps (`insights_generated` included), `generated`,
@@ -152,16 +153,24 @@ The notes, for example:
   `complements`, or `requires` = a needs b first, with `note_a` only; `none` removes a pair), and a one-sentence note from
   each side (`note_a`, `note_b`; for `alternative`: when to pick which, the tab shows it as "Why this one").
 
-Apply steps (for your own items) use these actions; apply.py executes them and everything must stay under the home directory:
-- `write_file` with `source` = a bundled file under scripts/ (e.g. `hooks/stale_cache_guard.py`) or literal `content`, plus
-  `mode` for scripts. Installing a bundled hook also installs its helper `_session.py` and `prices.json` next to it.
-- `merge_json` (deep-merge an object into a JSON file; arrays gain missing items, so hook groups are appended, never replaced),
-  `set_json` / `unset_json` with a JSON `pointer` (array indices allowed, e.g. `/hooks/UserPromptSubmit/0/hooks/0/command`).
-- `append_text` with a `marker` (idempotent; for CLAUDE.md snippets; keep them to 1–3 lines, they load in every session).
-- `run` for a shell command (shown and confirmed before running; prefer settings over commands).
-Install hooks as copies under `~/.claude/hooks/claude-usage/` and reference them as
-`python3 "$HOME/.claude/hooks/claude-usage/<name>.py" <args>`. Always write `~/.claude/…` paths: apply.py maps them to the
-Claude folder the report was built from.
+Apply steps (for your own items) use only these actions. apply.py refuses anything else, and so does assemble (both check
+`scripts/policy.py`, the one list of what this plugin may change), so a change outside it goes in `manual` instead:
+- `write_file` with `source` = a file bundled with the plugin (`hooks/<name>.py` or `.sh`), to
+  `~/.claude/hooks/claude-usage/<the same name>`, `mode` `"700"`. Installing a bundled hook also installs its helper
+  `_session.py` and `prices.json` next to it. No other file and no literal content.
+- `merge_json` (deep-merge an object; arrays gain missing items, so hook groups are appended, never replaced),
+  `set_json` / `unset_json` with a JSON `pointer`, on `~/.claude/settings.json` or a project's `.claude/settings.local.json`.
+  Only these keys: `model`, `effortLevel`, `modelSettings.<model>.effortLevel`, `alwaysThinkingEnabled`,
+  `promptCacheTtl`, `subagentPromptCacheTtl`, `autoCompactEnabled`, `autoCompactWindow`, `skillOverrides`,
+  `skillListingBudgetFraction`, `enabledPlugins` (only `false`), `disabledMcpjsonServers` (only adding),
+  `disableClaudeAiConnectors`, `bashOutputMaxChars`, `cleanupPeriodDays` (only raising), `env` for the model, cache,
+  compaction and output-limit variables in claude-code.md, a `statusLine` running the bundled `statusline.py`, and new
+  `hooks` groups whose commands run bundled hooks as `python3 "$HOME/.claude/hooks/claude-usage/<name>.py" <args>` (bash
+  for `.sh`). Never permissions, API keys or endpoints, MCP definitions, or a user's own hook.
+- `append_text` to `~/.claude/CLAUDE.md` with a `marker` (idempotent; at most 8 lines and 800 characters: it loads in every
+  session, so keep it to 1–3 lines).
+There is no action that runs a command: commands (`claude mcp …`, installing something) are manual steps for the user.
+Always write `~/.claude/…` paths: apply.py maps them to the Claude folder the report was built from.
 
 validate.py (which assemble runs) rejects one-sided links, and two optimizations that change the same setting or act on the
 same cost without a link. `note:` lines name judgment drafts you left out and applied changes no longer in the file.
@@ -171,8 +180,8 @@ same cost without a link. `note:` lines name judgment drafts you left out and ap
 Replace `<OUT>` with the real output folder.
 
 ```bash
-python3 "${CLAUDE_SKILL_DIR}/../../scripts/apply.py" check --dir "<OUT>"
-python3 "${CLAUDE_SKILL_DIR}/../../scripts/usage_report.py" --render --out "<OUT>" --open --tab optimizations
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/apply.py" check --dir "<OUT>"
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/usage_report.py" --render --out "<OUT>" --open --tab optimizations
 ```
 
 `check` previews every one-click optimization against the user's current files in one call, one line each. `ok` (with
@@ -185,21 +194,23 @@ because of them.
 
 ## 5. Reply
 
-List the optimizations by saving (title, saving all time and per 30 days, effort), say how to apply them (the tab's copy button runs apply.py:
-preview, confirm, backup, undo; or ask you "apply <id>"), and that settings and hooks take effect in new sessions. Give
+List the optimizations by saving (title, saving all time and per 30 days, effort), say how to apply them (the tab's copy
+button gives the apply.py command to run in a terminal: it previews, asks, backs up, and can be undone; or ask you to preview
+one with "apply <id>"), and that settings and hooks take effect in new sessions. Give
 alternatives and conflicts as one choice ("X or Y: I'd pick X because …"), not as two items, and say which savings overlap.
 
 ## Applying on request
 
-When the user asks to apply specific optimizations (by id or title), preview it:
+You can't apply anything: apply.py writes only after the user types y at their own terminal, and Claude Code's tools have
+none (from here `apply` stops with "Nothing was changed" and exit code 3; don't try to get around that). When the user asks
+to apply specific optimizations (by id or title), preview it:
 
 ```bash
-python3 "${CLAUDE_SKILL_DIR}/../../scripts/apply.py" show <id> --dir "<OUT>"
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/apply.py" show <id> --dir "<OUT>"
 ```
 
-Summarise what will change, and only after they confirm in the conversation apply it with
-`python3 "${CLAUDE_SKILL_DIR}/../../scripts/apply.py" apply <id> --yes --dir "<OUT>"`. Afterwards give the undo command
-(`python3 "${CLAUDE_SKILL_DIR}/../../scripts/apply.py" undo <id> --dir "<OUT>"`).
-One optimization at a time. `show` also lists how it relates to the others. It warns when an alternative or a conflicting
-one is already applied, or when one it needs isn't. Tell the user, and let them choose (undo the other first, apply the
-prerequisite, or skip) before applying.
+Summarise what will change (files, keys, hooks), then give the command it prints under "To apply it" for the user to run
+in their own terminal. It shows the same preview and asks them there; afterwards it prints the undo command
+(`apply.py undo <id>`, which also asks). One optimization at a time. `show` also lists how it relates to the others. It
+warns when an alternative or a conflicting one is already applied, or when one it needs isn't: tell the user, and let
+them choose (undo the other first, apply the prerequisite, or skip).

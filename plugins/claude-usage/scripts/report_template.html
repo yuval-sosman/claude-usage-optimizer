@@ -2,6 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<!-- The page is self-contained and never uses the network: no request can leave it, whatever the data holds. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Claude Code Usage</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23191918'/%3E%3Crect x='8' y='17' width='4' height='8' rx='1' fill='%233987e5'/%3E%3Crect x='14' y='12' width='4' height='13' rx='1' fill='%233987e5'/%3E%3Crect x='20' y='7' width='4' height='18' rx='1' fill='%235cb56a'/%3E%3C/svg%3E">
@@ -724,7 +726,7 @@ var SVGNS = 'http://www.w3.org/2000/svg';
 var FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif';
 var RAMP = ['#cde2fb', '#b7d3f6', '#9ec5f4', '#86b6ef', '#6da7ec', '#5598e7', '#3987e5',
             '#2a78d6', '#256abf', '#1c5cab', '#184f95', '#104281', '#0d366b'];
-var SCOPE_WORDS = { T: 'total', P: 'project', S: 'session', A: 'subagent', W: 'week' };
+var SCOPE_WORDS = { T: 'total', P: 'project', S: 'session', A: 'subagent', W: 'week', U: 'person' };
 var uid = 0;
 
 function h(tag, attrs) {
@@ -1147,7 +1149,7 @@ function renderBar(wrap, c) {
         var d1 = barPathH(sx(0), sx(val(series[0], i)), yb + (band - thick) / 2, thick);
         if (d1) {
           var m1 = sv('path', { d: d1, class: 'mark f' + slots[0] }, g);
-          if (c.pointColors && c.pointColors[i]) m1.style.fill = c.pointColors[i];     // e.g. the insights' saving scale
+          if (c.pointColors && /^(var\(--[\w-]+\)|#[0-9a-f]{3,8})$/i.test(c.pointColors[i] || '')) m1.style.fill = c.pointColors[i];     // e.g. the insights' saving scale
           marks.push(m1);
         }
       }
@@ -2505,9 +2507,13 @@ function writeHash(push) {
   var s = '#' + p.toString();
   try { if (push) history.pushState(null, '', s); else history.replaceState(null, '', s); } catch (e) { /* file:// may refuse */ }
 }
+function allowedViews() {   // the tabs this page has: meta.views, else all three (a company report shows only the report)
+  var v = (REPORT.meta || {}).views;
+  return Array.isArray(v) && v.length ? v : ['report', 'insights', 'optimizations'];
+}
 function readHash() {
   var p = hashParams(), tab = p.get('tab');
-  state.tab = tab === 'insights' || tab === 'optimizations' ? tab : 'report';
+  state.tab = (tab === 'insights' || tab === 'optimizations') && allowedViews().indexOf(tab) >= 0 ? tab : 'report';
   state.focus = p.get('focus') || null;
   var q = (p.get('q') || '').split(',').filter(Boolean), from = p.get('from');
   state.filter = null;
@@ -2527,7 +2533,9 @@ function findOpt(id) { return ((optsDoc() || {}).optimizations || []).filter(fun
 /* ---- tab bar ---- */
 function renderTabs() {
   var ni = ((insightsDoc() || {}).insights || []).length, no = ((optsDoc() || {}).optimizations || []).length;
-  var items = [['report', 'Report', null], ['insights', 'Insights', ni], ['optimizations', 'Optimizations', no]];
+  var items = [['report', 'Report', null], ['insights', 'Insights', ni], ['optimizations', 'Optimizations', no]]
+    .filter(function (t) { return allowedViews().indexOf(t[0]) >= 0; });
+  tabsEl.hidden = items.length < 2;
   tabsEl.replaceChildren.apply(tabsEl, items.map(function (t) {
     var b = h('button', { type: 'button', role: 'tab', 'aria-selected': state.tab === t[0] ? 'true' : 'false', 'data-tab': t[0] },
       t[1], t[2] ? h('span', { class: 'cnt', text: String(t[2]) }) : null);
@@ -2956,7 +2964,11 @@ function stepView(st) {
   if (body) li.append(h('pre', { class: 'code', text: body }));
   return li;
 }
-function doneKey(id) { return 'ccu-done:' + ((REPORT.meta || {}).out || '') + ':' + id; }
+function doneKey(id) {                                   // per report folder, without its path (other local pages share storage)
+  var s = String((REPORT.meta || {}).out || ''), x = 5381;
+  for (var i = 0; i < s.length; i++) x = ((x * 33) ^ s.charCodeAt(i)) >>> 0;
+  return 'ccu-done:' + x.toString(36) + ':' + id;
+}
 function isDone(id) { try { return localStorage.getItem(doneKey(id)) === '1'; } catch (e) { return false; } }
 function setDone(id, on) { try { if (on) localStorage.setItem(doneKey(id), '1'); else localStorage.removeItem(doneKey(id)); } catch (e) { /* storage unavailable */ } }
 function optRelations(o) {
@@ -3048,7 +3060,7 @@ function optCard(o, onDone, ctx) {
   var top = h('div', { class: 'nw-top' }, head);
   art.append(top);
   if (ctx.why) top.append(h('div', { class: 'why-pick' }, h('span', { class: 'lbl', text: 'Why this one' }), h('span', { text: ctx.why })));
-  var apply = (REPORT.meta || {}).apply;
+  var apply = !(REPORT.meta || {}).shared && (REPORT.meta || {}).apply;   // never for a report someone sent you
   if (o.apply && apply) {                              // the one thing to do, visible when collapsed
     top.append(h('div', { class: 'nw-act' }, termField(apply.replace(' --dir ', ' apply ' + o.id + ' --dir '), 'Copy the apply command')));
   } else if ((o.manual || []).length) {
@@ -3073,7 +3085,7 @@ function optCard(o, onDone, ctx) {
   if (o.apply && apply) {
     var box = h('div');
     box.append(h('div', { style: 'font-weight:500', text: o.apply.summary || 'Apply it' }));
-    box.append(h('p', { class: 'hint', text: 'The command shows every change, asks before writing, backs up each file, and can be undone. Settings and hooks take effect in new sessions.' }));
+    box.append(h('p', { class: 'hint', text: 'Run it yourself in a terminal: it shows every change and writes nothing until you type y there (Claude can preview it but never apply it). It backs up each file and can be undone. Settings and hooks take effect in new sessions.' }));
     var det = h('details', { class: 'more-d' }, h('summary', null, icon('chevron-right'), h('span', { text: 'What it changes (' + o.apply.steps.length + ' step' + (o.apply.steps.length > 1 ? 's' : '') + ')' })));
     var ol = h('ol', { class: 'steps', style: 'margin-top:8px' });
     o.apply.steps.forEach(function (st) { ol.append(stepView(st)); });
@@ -3104,7 +3116,9 @@ function optCard(o, onDone, ctx) {
   }
   if ((o.docs || []).length) {
     var foot = h('div', { class: 'ofoot' });
-    o.docs.forEach(function (d) { foot.append(h('a', { class: 'btn sm ghost', href: d.url, target: '_blank', rel: 'noopener' }, h('span', { text: d.title }), icon('external'))); });
+    o.docs.forEach(function (d) {
+      if (/^https:\/\//i.test(d.url || '')) foot.append(h('a', { class: 'btn sm ghost', href: d.url, target: '_blank', rel: 'noopener noreferrer' }, h('span', { text: d.title }), icon('external')));
+    });
     rowsEl.append(drow('Docs', foot));
   }
   body.append.apply(body, Array.prototype.slice.call(rowsEl.childNodes));
@@ -3539,6 +3553,8 @@ function setHashScope(id) {
 }
 function buildScopeSelect() {
   var sel = document.getElementById('scope');
+  var what = (REPORT.meta || {}).scope_label;          // "Person" on a company report
+  if (what) { sel.setAttribute('aria-label', what); sel.title = what; }
   sel.replaceChildren();
   (REPORT.scopes || []).forEach(function (s) {
     if (!(REPORT.data || {})[s.id]) return;

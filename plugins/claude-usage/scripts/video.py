@@ -544,7 +544,7 @@ def write_html(scenes, D, path):
                        'note': 'Dollars are API list-price equivalents: on a subscription they are a yardstick, not a bill.'}}
     with open(TEMPLATE, encoding='utf-8') as fh:
         tpl = fh.read()
-    blob = json.dumps(data, ensure_ascii=False, separators=(',', ':')).replace('<', '\\u003c')
+    blob = json.dumps(data, ensure_ascii=True, separators=(',', ':')).replace('<', '\\u003c')
     page = tpl.replace('__TITLE__', html.escape(data['title'])).replace('/*__FONTS__*/', font_css()).replace('/*__VIDEO_DATA__*/null', blob)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, 'w', encoding='utf-8') as fh:
@@ -611,9 +611,7 @@ def tools(browser=None, ffmpeg=None):
         h = CAP.install_hint(tool)
         print(f'{tool}: missing (it {CAP.ROLE[tool]})')
         if h['command']:
-            who = ('the user runs it: it needs a password or an admin shell' if h['user_runs']
-                   else 'Claude can run it once the user agrees: no password needed')
-            print(f'  install: {h["command"]}\n           ({who})')
+            print(f'  install: {h["command"]}\n           (for the user to run in their own terminal, if they want it; never run for them)')
         print(f'  by hand: {h["url"]}')
     ok = all(found.values())
     print('ready: ' + ('yes (render makes the MP4)' if ok else 'no (render makes only the HTML page until these are installed)'))
@@ -622,6 +620,7 @@ def tools(browser=None, ffmpeg=None):
 
 def main(argv=None):
     UR.safe_console()
+    os.umask(0o077)                                     # the report folder holds private data: yours only
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('command', choices=['tools', 'plan', 'check', 'render'])
     ap.add_argument('--out', metavar='DIR', help='the report folder (default: the one usage_report.py uses, e.g. ~/.claude-usage)')
@@ -639,6 +638,7 @@ def main(argv=None):
         tools(a.browser, a.ffmpeg)
         return 0
     out = os.path.abspath(os.path.expanduser(a.out)) if a.out else UR.default_out(UR.claude_dir(a.claude_dir))
+    layout.require_report(out)                             # it only ever adds to a report folder
     D = Data(out)
     sb_path = layout.video(out, 'storyboard.json')
 

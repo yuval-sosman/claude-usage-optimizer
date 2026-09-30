@@ -100,7 +100,7 @@ rules cover pairs the catalog doesn't list:
   sits at or below the next SV4 row, **(judgment)**, with no saving claimed: the notice fires just before a compaction that
   happens anyway.
 - **Saving**: SV4 (`theoretical`, if acted on).
-- **Apply**: `write_file` `~/.claude/hooks/claude-usage/context_guard.py` from `hooks/context_guard.py` (mode 755), then
+- **Apply**: `write_file` `~/.claude/hooks/claude-usage/context_guard.py` from `hooks/context_guard.py` (mode 700), then
   `merge_json` `~/.claude/settings.json` value
   `{"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command", "command": "python3 \"$HOME/.claude/hooks/claude-usage/context_guard.py\" --threshold <T> --step 50000", "timeout": 10}]}]}}`.
 - **Tradeoff**: none beyond a line of text; it never blocks.
@@ -110,7 +110,7 @@ rules cover pairs the catalog doesn't list:
 ### big-read-guard: steer Claude to targeted reads of large files
 - **When**: SV8 saving > $3 (large whole-file reads re-read for the rest of the session; CX3's costliest-item insight and EX8 show which files).
 - **Saving**: SV8 (`upper_bound`, assumes a range keeps half).
-- **Apply**: `write_file` `~/.claude/hooks/claude-usage/big_read_guard.py` from `hooks/big_read_guard.py` (mode 755);
+- **Apply**: `write_file` `~/.claude/hooks/claude-usage/big_read_guard.py` from `hooks/big_read_guard.py` (mode 700);
   `merge_json` `~/.claude/settings.json` value `{"hooks": {"PreToolUse": [{"matcher": "Read", "hooks": [{"type": "command", "command": "python3 \"$HOME/.claude/hooks/claude-usage/big_read_guard.py\" --max-kb <KB>", "timeout": 10}]}]}}`,
   KB = SV8's size threshold at ~4 bytes a token, rounded up to 10 KB (8K tokens → 40), so the guard catches the reads SV8 counts.
 - **Tradeoff**: one extra round-trip the first time a big file is needed whole (the retry goes through).
@@ -135,7 +135,7 @@ rules cover pairs the catalog doesn't list:
 ### stale-cache-guard: stop the first prompt into an expired, big session
 - **When**: SV7 saving > $2, or CX8's costliest misses are "came back after a break".
 - **Saving**: SV7 (`upper_bound`) or the "You came back after a break" row of SV3 (`measured` extra cost).
-- **Apply**: `write_file` `~/.claude/hooks/claude-usage/stale_cache_guard.py` from `hooks/stale_cache_guard.py` (mode 755);
+- **Apply**: `write_file` `~/.claude/hooks/claude-usage/stale_cache_guard.py` from `hooks/stale_cache_guard.py` (mode 700);
   `merge_json` `~/.claude/settings.json` value
   `{"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command", "command": "python3 \"$HOME/.claude/hooks/claude-usage/stale_cache_guard.py\" --min-context <N> --grace 180", "timeout": 10}]}]}}`.
   N = SV7's "A fresh session starts at" rounded up to 10K, at least 60000: a fresh start only saves once the context is past
@@ -157,7 +157,7 @@ rules cover pairs the catalog doesn't list:
 
 ### statusline-cache: see context size and cache warmth all the time
 - **When**: no `statusLine` in any settings file (config.json).
-- **Apply**: `write_file` `~/.claude/hooks/claude-usage/statusline.py` from `hooks/statusline.py` (mode 755); `merge_json`
+- **Apply**: `write_file` `~/.claude/hooks/claude-usage/statusline.py` from `hooks/statusline.py` (mode 700); `merge_json`
   `~/.claude/settings.json` value `{"statusLine": {"type": "command", "command": "python3 \"$HOME/.claude/hooks/claude-usage/statusline.py\""}}`.
 - **Saving**: none directly (awareness); omit `savings`.
 - **Related**: stale-cache-guard and context-guard `complements`.
@@ -180,7 +180,7 @@ rules cover pairs the catalog doesn't list:
 - **When**: SV3 has a "Computer went to sleep" row (ME7 shows the errors) and the user is on macOS (config.json's home is
   under `/Users/`).
 - **Saving**: that row's extra cost (`measured`), plus the cut-off work.
-- **Apply**: `write_file` `~/.claude/hooks/claude-usage/keep_awake.sh` from `hooks/keep_awake.sh` (mode 755); `merge_json`
+- **Apply**: `write_file` `~/.claude/hooks/claude-usage/keep_awake.sh` from `hooks/keep_awake.sh` (mode 700); `merge_json`
   `~/.claude/settings.json` value `{"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command", "command": "bash \"$HOME/.claude/hooks/claude-usage/keep_awake.sh\" 7200", "timeout": 10}]}]}}`.
 - **Tradeoff**: the Mac stays awake up to 2 h after each prompt (closing the lid on battery still sleeps).
 

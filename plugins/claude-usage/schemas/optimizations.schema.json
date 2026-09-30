@@ -61,7 +61,7 @@
           },
           "apply": {
             "type": "object", "required": ["summary", "steps"], "additionalProperties": false,
-            "description": "Present only when apply.py can make the change",
+            "description": "Present only when apply.py can make the change; scripts/policy.py fixes which files, settings keys and hook commands a step may touch",
             "properties": {
               "summary": {"type": "string", "maxLength": 300},
               "steps": {
@@ -69,15 +69,14 @@
                 "items": {
                   "type": "object", "required": ["action", "path"], "additionalProperties": false,
                   "properties": {
-                    "action": {"enum": ["write_file", "merge_json", "set_json", "unset_json", "append_text", "run"]},
-                    "path": {"type": "string", "description": "File under your home directory (~ allowed); for run: the working directory"},
-                    "source": {"type": "string", "description": "write_file: a file bundled with the plugin, relative to scripts/ (e.g. hooks/stale_cache_guard.py)"},
-                    "content": {"type": "string", "description": "write_file / append_text: literal content"},
-                    "mode": {"type": "string", "pattern": "^[0-7]{3}$"},
+                    "action": {"enum": ["write_file", "merge_json", "set_json", "unset_json", "append_text"]},
+                    "path": {"type": "string", "description": "write_file: ~/.claude/hooks/claude-usage/<the source's name>; append_text: ~/.claude/CLAUDE.md; the JSON actions: ~/.claude/settings.json or a project's .claude/settings.local.json"},
+                    "source": {"type": "string", "description": "write_file: a file bundled with the plugin, relative to scripts/ (hooks/*.py, hooks/*.sh, prices.json)"},
+                    "content": {"type": "string", "maxLength": 800, "description": "append_text: the lines to add (at most 8)"},
+                    "mode": {"enum": ["700", "755", "600", "644"]},
                     "value": {"description": "merge_json: object to deep-merge; set_json: value to set"},
                     "pointer": {"type": "string", "pattern": "^(/[^/]+)+$", "description": "set_json / unset_json: JSON pointer, e.g. /env/CLAUDE_CODE_SUBAGENT_MODEL"},
-                    "marker": {"type": "string", "description": "append_text: an id that makes the append idempotent"},
-                    "command": {"type": "string", "description": "run: shell command, shown and confirmed before it runs"}
+                    "marker": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,40}$", "description": "append_text: an id that makes the append idempotent"}
                   }
                 }
               }

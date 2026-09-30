@@ -8,12 +8,16 @@ and doesn't depend on the machine's speed. Frames are drawn at `scale` × the pa
   python3 video_capture.py page.html out.mp4 [--fps 30] [--scale 2]
   python3 video_capture.py page.html stills/ --stills 3,12.5,40
 
-Talks to the browser over the Chrome DevTools protocol with a minimal WebSocket client. Standard library only; works with
-Chrome, Edge, Chromium and Brave on macOS, Linux and Windows. Set CLAUDE_USAGE_BROWSER / FFMPEG to use a specific binary;
-install_hint() says how to install either on this machine.
+Talks to the browser over the Chrome DevTools protocol: through a private pipe on macOS and Linux (no port another
+program could connect to), and a WebSocket on 127.0.0.1 on Windows. The browser runs with a throwaway profile and no
+network at all (a dead proxy, no DNS, background services off); the page itself makes no requests either (its CSP).
+Standard library only; works with Chrome, Edge, Chromium and Brave on macOS, Linux and Windows. Set CLAUDE_USAGE_BROWSER /
+FFMPEG to use a specific binary (it must be a browser / ffmpeg by name). Nothing is ever installed: install_hint() only
+says how the user can install either on this machine.
 """
 import argparse
 import base64
+import errno
 import glob
 import json
 import os
@@ -54,31 +58,42 @@ def _manager(name):
 
 
 def install_hint(tool):
-    """How to install 'ffmpeg' or 'browser' on this machine: {'command', 'user_runs', 'url'}. command is None when no
-    package manager is found; user_runs is True when it needs a password or an admin shell (sudo, choco), so the user
-    should run it rather than Claude."""
+    """How the user can install 'ffmpeg' or 'browser' on this machine: {'command', 'url'}; command is None when no package
+    manager is found. Printed for the user to run themselves, never run by this plugin."""
     names = MANAGERS.get(sys.platform, ['apt-get', 'dnf', 'pacman', 'zypper', 'apk'])
     for name in names:
         cmd = INSTALL.get(name, {}).get(tool)
         if cmd and _manager(name):
             if cmd.startswith('brew ') and not shutil.which('brew'):
                 cmd = _manager('brew') + cmd[4:]          # Homebrew is installed but not on this shell's PATH
-            root = hasattr(os, 'geteuid') and os.geteuid() == 0
-            if root:
+            if hasattr(os, 'geteuid') and os.geteuid() == 0:
                 cmd = cmd.replace('sudo ', '')
-            return {'command': cmd, 'user_runs': not root and ('sudo ' in cmd or name == 'choco'), 'url': MANUAL[tool]}
-    return {'command': None, 'user_runs': True, 'url': MANUAL[tool]}
+            return {'command': cmd, 'url': MANUAL[tool]}
+    return {'command': None, 'url': MANUAL[tool]}
 
 
 def missing(tool):
     """One sentence for a missing tool: what it's for and how to get it."""
     h = install_hint(tool)
-    how = f'install it with `{h["command"]}`' if h['command'] else f'get it from {h["url"]}'
+    how = f'you can install it with `{h["command"]}`' if h['command'] else f'get it from {h["url"]}'
     return f'No {"Chromium-based browser" if tool == "browser" else "ffmpeg"} (it {ROLE[tool]}): {how}.'
 
 
+BROWSER_NAMES = {'google chrome', 'google chrome canary', 'google chrome beta', 'google-chrome', 'google-chrome-stable',
+                 'google-chrome-beta', 'google-chrome-unstable', 'chrome', 'chromium', 'chromium-browser', 'microsoft edge',
+                 'microsoft-edge', 'microsoft-edge-stable', 'microsoft-edge-beta', 'msedge', 'brave browser', 'brave-browser',
+                 'brave', 'chrome-headless-shell'}
+
+
+def _named(path, names):
+    """Whether a program is one of these by its file name (so --browser / --ffmpeg can't launch anything else)."""
+    base = os.path.basename(path or '').lower()
+    return (base[:-4] if base.endswith('.exe') else base) in names
+
+
 def find_browser(explicit=None):
-    """A Chromium-based browser that can run headless: the one given, $CLAUDE_USAGE_BROWSER / $CHROME_PATH, else the usual places."""
+    """A Chromium-based browser that can run headless: the one given, $CLAUDE_USAGE_BROWSER / $CHROME_PATH, else the usual
+    places. Only a program named like one of BROWSER_NAMES."""
     cands = [explicit, os.environ.get('CLAUDE_USAGE_BROWSER'), os.environ.get('CHROME_PATH')]
     if sys.platform == 'darwin':
         for app in ('Google Chrome', 'Chromium', 'Microsoft Edge', 'Brave Browser'):
@@ -95,7 +110,7 @@ def find_browser(explicit=None):
                  'microsoft-edge-stable', 'brave-browser', 'chrome', 'msedge'):
         cands.append(shutil.which(name))
     for c in cands:
-        if c and os.path.isfile(c) and os.access(c, os.X_OK):
+        if c and _named(c, BROWSER_NAMES) and os.path.isfile(c) and os.access(c, os.X_OK):
             return c
     return None
 
@@ -112,7 +127,7 @@ def find_ffmpeg(explicit=None):
     else:
         cands += ['/opt/homebrew/bin/ffmpeg', '/usr/local/bin/ffmpeg', '/usr/bin/ffmpeg', '/snap/bin/ffmpeg']
     for c in cands:
-        if c and os.path.isfile(c) and os.access(c, os.X_OK):
+        if c and _named(c, {'ffmpeg'}) and os.path.isfile(c) and os.access(c, os.X_OK):
             return c
     return None
 
@@ -202,9 +217,14 @@ class DevTools:
             if b1 & 0x80:
                 return b''.join(parts)
 
+    session = None                                        # a flat-mode target session (the pipe transport)
+
     def call(self, method, **params):
         self.seq += 1
-        self._send(json.dumps({'id': self.seq, 'method': method, 'params': params}).encode())
+        msg = {'id': self.seq, 'method': method, 'params': params}
+        if self.session and not method.startswith('Target.'):
+            msg['sessionId'] = self.session
+        self._send(json.dumps(msg).encode())
         while True:
             msg = json.loads(self._message())
             if msg.get('id') == self.seq:
@@ -226,17 +246,96 @@ class DevTools:
             pass
 
 
+class PipeDevTools(DevTools):
+    """The same session over --remote-debugging-pipe: the browser reads commands on its fd 3 and writes replies on fd 4,
+    each a JSON message ending in a NUL byte. No port is opened, so no other program can reach the browser."""
+
+    def __init__(self, wfd, rfd):
+        self.wfd, self.rfd, self.buf, self.seq = wfd, rfd, bytearray(), 0
+
+    def _send(self, payload, op=1):
+        data = payload + b'\0'
+        while data:
+            data = data[os.write(self.wfd, data):]
+
+    def _message(self):
+        while b'\0' not in self.buf:
+            try:
+                chunk = os.read(self.rfd, 1 << 20)
+            except OSError as e:
+                if e.errno == errno.EINTR:
+                    continue
+                raise
+            if not chunk:
+                raise ConnectionError('the browser closed the DevTools pipe')
+            self.buf += chunk
+        end = self.buf.index(b'\0')
+        msg = bytes(self.buf[:end])
+        del self.buf[:end + 1]
+        return msg
+
+    def close(self):
+        for fd in (self.wfd, self.rfd):
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+
+
+PRIVATE = ['--disable-background-networking', '--disable-component-update', '--disable-sync', '--disable-default-apps',
+           '--disable-domain-reliability', '--disable-client-side-phishing-detection', '--disable-breakpad', '--no-pings',
+           '--metrics-recording-only', '--disable-features=Translate,OptimizationHints,MediaRouter,AutofillServerCommunication',
+           '--proxy-server=http://127.0.0.1:9', '--proxy-bypass-list=<-loopback>', '--host-resolver-rules=MAP * ~NOTFOUND']
+# no network: every request goes to a proxy that isn't there, no name resolves, and the background services are off
+
+
 class Browser:
-    """A headless browser with one page, sized to the video frame."""
+    """A headless browser with one page, sized to the video frame, with a throwaway profile and no network."""
 
     def __init__(self, exe, width, height, scale, log=None):
         self.tmp = tempfile.mkdtemp(prefix='claude-usage-video-')
-        args = [exe, '--headless=new', '--remote-debugging-port=0', f'--user-data-dir={self.tmp}', '--hide-scrollbars',
-                '--no-first-run', '--no-default-browser-check', '--disable-extensions', '--mute-audio',
-                '--force-color-profile=srgb', '--font-render-hinting=none', f'--window-size={width},{height}']
+        pipe = os.name != 'nt'                          # Windows can't hand the browser fds 3 and 4
+        args = [exe, '--headless=new', '--remote-debugging-pipe' if pipe else '--remote-debugging-port=0',
+                f'--user-data-dir={self.tmp}', '--hide-scrollbars', '--no-first-run', '--no-default-browser-check',
+                '--disable-extensions', '--mute-audio', '--force-color-profile=srgb', '--font-render-hinting=none',
+                f'--window-size={width},{height}'] + PRIVATE
         if hasattr(os, 'geteuid') and os.geteuid() == 0:
             args.append('--no-sandbox')                 # Chrome refuses to run as root with its sandbox (containers)
-        self.proc = subprocess.Popen(args + ['about:blank'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if pipe:
+            self._start_pipe(args + ['about:blank'])
+        else:
+            self._start_port(args + ['about:blank'], exe)
+        self.dt.call('Emulation.setDeviceMetricsOverride', width=width, height=height, deviceScaleFactor=scale, mobile=False)
+
+    def _start_pipe(self, args):
+        import fcntl
+        cmd_r, cmd_w = os.pipe()                        # we write commands, the browser reads them on fd 3
+        out_r, out_w = os.pipe()                        # the browser writes replies on fd 4, we read them
+        hi = [fcntl.fcntl(fd, fcntl.F_DUPFD, 10) for fd in (cmd_r, out_w)]     # above 4, so the dup2s can't clash
+
+        def child():
+            os.dup2(hi[0], 3)
+            os.dup2(hi[1], 4)
+        try:
+            self.proc = subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                         pass_fds=(3, 4), preexec_fn=child)
+        finally:
+            for fd in [cmd_r, out_w] + hi:
+                os.close(fd)
+        self.dt = PipeDevTools(cmd_w, out_r)
+        page = None
+        for _ in range(100):
+            page = next((t for t in self.dt.call('Target.getTargets').get('targetInfos') or [] if t.get('type') == 'page'), None)
+            if page or self.proc.poll() is not None:
+                break
+            time.sleep(0.1)
+        if not page:
+            self.quit()
+            raise RuntimeError('the browser opened no page')
+        self.dt.session = self.dt.call('Target.attachToTarget', targetId=page['targetId'], flatten=True)['sessionId']
+
+    def _start_port(self, args, exe):
+        self.proc = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         port_file = os.path.join(self.tmp, 'DevToolsActivePort')
         for _ in range(300):
             if os.path.exists(port_file):
@@ -265,7 +364,6 @@ class Browser:
             self.quit()
             raise RuntimeError('the browser opened no page')
         self.dt = DevTools(page['webSocketDebuggerUrl'])
-        self.dt.call('Emulation.setDeviceMetricsOverride', width=width, height=height, deviceScaleFactor=scale, mobile=False)
 
     def load(self, html):
         self.dt.call('Page.navigate', url=pathlib.Path(os.path.abspath(html)).as_uri() + '?record')

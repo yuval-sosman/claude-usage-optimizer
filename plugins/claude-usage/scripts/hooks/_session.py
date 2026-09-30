@@ -200,7 +200,7 @@ def state_get(name):
 def state_put(name, value):
     """Whether the state was written. A guard blocks only when it was: otherwise the retry it promises could never pass."""
     try:
-        os.makedirs(STATE, exist_ok=True)
+        os.makedirs(STATE, mode=0o700, exist_ok=True)           # file paths and context sizes: yours only
         with open(os.path.join(STATE, name + '.json'), 'w', encoding='utf-8') as fh:
             json.dump(value, fh)
     except Exception:

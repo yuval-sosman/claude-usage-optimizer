@@ -77,18 +77,45 @@ def tilde(p):
 def slash(p):
     """Forward slashes, so path patterns work the same on Windows."""
     return p.replace('\\', '/') if isinstance(p, str) else p
-SECRET = re.compile(r'key|token(?!s)|secret|password|passwd|auth|credential|cookie|bearer', re.I)   # not MAX_…_TOKENS
-# secrets inside a value (a hook command, an env value, a URL), each replaced by <redacted>
+SECRET = re.compile(r'key|token(?!s)|secret|passw|passphrase|auth|credential|cookie|bearer|header|signature|webhook|'
+                    r'private|cert|dsn|(?:^|[_-])(?:pat|pw|pwd|sig)(?:$|[_-])', re.I)        # not MAX_…_TOKENS
+_LONG = r'(?:key|token(?!s)|secret|passw\w*|passphrase|credential|signature)'   # anywhere in a name: api_key, accessToken
+_SHORT = r'(?:pat|pwd?|sig|auth)'                                             # only as a whole part: GITHUB_PAT, --pw (not path)
+_NAME = r'(?:[\w.-]*' + _LONG + r'[\w.-]*|(?:[\w.-]*[_.-])?' + _SHORT + r'(?:[_.-][\w.-]*)?)'
+_FLAG = r'--?(?:[\w-]*' + _LONG + r'[\w-]*|(?:[\w-]*-)?' + _SHORT + r'(?:-[\w-]*)?)'
+# secrets inside a value (a hook command, an env value, a URL, a command or prompt from the transcripts), each replaced
+# by <redacted>
 SECRET_IN_TEXT = [
+    (re.compile(r'-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)', re.S), '<redacted>'),  # a PEM key
     (re.compile(r'(\b[a-z][a-z0-9+.-]*://)[^\s/@]+@', re.I), r'\1<redacted>@'),                  # user[:password]@ in a URL
     (re.compile(r'\b(bearer|basic)(\s+)[\w.~+/=-]{8,}', re.I), r'\1\2<redacted>'),               # Authorization: Bearer …
-    (re.compile(r'''(\b[\w.-]*(?:key|token(?!s)|secret|password|passwd|credential)[\w.-]*\s*[=:]\s*)(["']?)[^\s"'&;,]+''', re.I),
-     r'\1\2<redacted>'),                                                                           # FOO_TOKEN=…, api_key: …
-    (re.compile(r'''(--[\w-]*(?:key|token(?!s)|secret|password)[\w-]*\s+)(["']?)[^\s"']+''', re.I), r'\1\2<redacted>'),  # --api-key …
+    (re.compile(r'\b(x-[\w-]+|authorization|cookie|set-cookie)(\s*:\s*)[^\s"\']{8,}', re.I), r'\1\2<redacted>'),  # a secret header
+    (re.compile(r'''(\b''' + _NAME + r'''["']?\s*[=:]\s*)(["']?)[^\s"'&;,]+''', re.I),
+     r'\1\2<redacted>'),                                                                           # FOO_TOKEN=…, "api_key": …, ?sig=…
+    (re.compile(r'''((?:^|\s)''' + _FLAG + r'''\s+)(["']?)[^\s"']+''', re.I), r'\1\2<redacted>'),  # --api-key …, --pw …
     (re.compile(r'\b(?:sk-[\w-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_\w{20,}|glpat-[\w-]{20,}|xox[abprs]-[\w-]{10,}'
-                r'|AKIA[0-9A-Z]{16}|AIza[\w-]{35})'), '<redacted>'),                                 # well-known key formats
+                r'|AKIA[0-9A-Z]{16}|AIza[\w-]{35}|hooks\.slack\.com/services/\S+|discord(?:app)?\.com/api/webhooks/\S+)'), '<redacted>'),
+    (re.compile(r'(?<![\w+=/.-])(?![0-9a-f]{40}(?![\w+=]))(?=[A-Za-z0-9+=]*\d)(?=[A-Za-z0-9+=]*[A-Za-z])[A-Za-z0-9+=]{32,}(?![\w+=/-])'),
+     '<redacted>'),                                     # a long random-looking token (not a git id, a path, a slug or a UUID)
 ]
-TOKENISH = re.compile(r'^(?=.*\d)(?=.*[a-z])(?=.*[A-Z])[\w+/=.-]{24,}$')                          # a random-looking value on its own
+TOKENISH = re.compile(r'^(?=.*\d)(?=.*[a-z])(?=.*[A-Z])[\w+/=.-]{24,}$|^[0-9a-fA-F]{32,}$')        # a random-looking value on its own
+SECRET_FLAG = re.compile(r'^' + _FLAG + r'$', re.I)                                             # its next argument is a secret
+SECRET_HINT = re.compile(r'(?i)key|token|secret|passw|passphrase|credential|signature|auth|bearer|basic|cookie|'       # cheap test:
+                         r'(?:^|[\s_.-])(?:sig|pat|pwd?)(?:$|[\s_.=:-])|x-\w+\s*:|://[^\s/@]+@|-----BEGIN|sk-|gh[pousr]_|'
+                         r'glpat|xox[abprs]|AKIA|AIza|hooks\.slack|discord|[A-Za-z0-9+=]{32}')     # text without any of these has no secret
+ENV_KEEP = re.compile(r'^(?:CLAUDE_CODE_[A-Z0-9_]+|ANTHROPIC_(?:MODEL|SMALL_FAST_MODEL|DEFAULT_[A-Z]+_MODEL(?:_NAME)?)|'
+                      r'(?:DISABLE|ENABLE|FORCE|MAX|BASH)_[A-Z0-9_]+|MCP_TIMEOUT|MCP_TOOL_TIMEOUT)$')    # env values the skills may see
+
+
+@functools.lru_cache(maxsize=1 << 16)
+def scrub(s):
+    """Text with secrets replaced by <redacted> (SECRET_IN_TEXT): used on everything taken from the transcripts before
+    it reaches metrics.json, the digest, the CSVs, the report or a share file. Cached: every scope asks again."""
+    if not s or not isinstance(s, str) or not SECRET_HINT.search(s):
+        return s
+    for rx, sub in SECRET_IN_TEXT:
+        s = rx.sub(sub, s)
+    return s
 
 WAITING_TOOLS = {'AskUserQuestion', 'ExitPlanMode', 'EnterPlanMode'}
 EDIT_TOOLS = {'Edit', 'Write', 'MultiEdit', 'NotebookEdit'}
@@ -409,12 +436,13 @@ def short_path(p, cwd=None):
 
 
 def clip(s, n=90):
+    """s on one line, at most n characters, secrets removed (scrub): every piece of transcript text goes through here."""
     s = s or ''
     if len(s) > 4 * n:          # long text: when a prefix fills the clip, the rest can't change it (and is costly to collapse)
-        head = re.sub(r'\s+', ' ', s[:4 * n]).lstrip()
+        head = scrub(re.sub(r'\s+', ' ', s[:4 * n]).lstrip())
         if len(head) > n + 1:
             return head[:n - 1] + '…'
-    s = re.sub(r'\s+', ' ', s).strip()
+    s = scrub(re.sub(r'\s+', ' ', s).strip())
     return s if len(s) <= n else s[:n - 1] + '…'
 
 
@@ -871,17 +899,23 @@ class Source:
 
 def redact(x, key=''):
     """Settings with secrets removed: every value under a secret-looking key (lists included), secrets inside other
-    values (credentials in URLs, Bearer tokens, FOO_TOKEN=…, --api-key …, well-known key formats), and any value that
-    looks like a random token on its own."""
+    values (credentials in URLs, Bearer tokens, FOO_TOKEN=…, --api-key …, well-known key formats), any value that looks
+    like a random token on its own, the argument after a secret-looking flag, and the value of every environment variable
+    but the model, cache and feature ones Claude Code itself reads (the rest show as <set>)."""
     if isinstance(x, dict):
+        if key == 'env':
+            return {k: (redact(v, k) if ENV_KEEP.match(str(k)) and not SECRET.search(str(k)) else '<set>') for k, v in x.items()}
         return {k: redact(v, k) for k, v in x.items()}
     if isinstance(x, list):
-        return [redact(v, key) for v in x]
+        out = []
+        for i, v in enumerate(x):
+            prev = x[i - 1] if i else None
+            out.append('<redacted>' if isinstance(prev, str) and SECRET_FLAG.match(prev) and isinstance(v, str) else redact(v, key))
+        return out
     if isinstance(x, str):
         if (key and SECRET.search(key)) or TOKENISH.match(x):
             return '<redacted>'
-        for rx, sub in SECRET_IN_TEXT:
-            x = rx.sub(sub, x)
+        x = scrub(x)
         return x[:400] + '…' if len(x) > 400 else x
     if key and SECRET.search(key) and x is not None and not isinstance(x, bool):
         return '<redacted>'
@@ -1292,7 +1326,7 @@ class Model:
             if typ == 'system':
                 self.sys[d.get('subtype') or '?'].append(d)
             elif typ == 'ai-title' and d.get('sessionId'):
-                self.titles[d['sessionId']] = d.get('aiTitle')
+                self.titles[d['sessionId']] = scrub(d.get('aiTitle'))
             elif typ == 'agent-name' and d.get('sessionId'):
                 self.names[d['sessionId']] = d.get('agentName')
             elif typ == 'bridge-session' and d.get('sessionId'):
@@ -1443,7 +1477,7 @@ class Model:
                 returned = res.get('chars')
             models = collections.Counter(c['model'] for c in t)
             self.subs[aid] = dict(
-                aid=aid, sid=key[0], proj=t[0]['proj'], type=typ, desc=meta.get('description') or linp.get('description') or '',
+                aid=aid, sid=key[0], proj=t[0]['proj'], type=typ, desc=scrub(meta.get('description') or linp.get('description') or ''),
                 model=models.most_common(1)[0][0], calls=t, n_calls=len(t), start=t[0]['start'], end=t[-1]['t1'],
                 usd=sum(c['usd'] for c in t), peak=max(c['ctx'] for c in t), cold=t[0]['ctx'],
                 ctx_sum=sum(c['ctx'] for c in t), out=sum(c['out'] for c in t), is_async=is_async,
@@ -2956,7 +2990,7 @@ def sv1(m, g):
         BAR([x['label'] for x in lv], [S('All time', [r2(x['usd']) for x in lv], 1), S('Per 30 days (projected)', [r2(x['month']) for x in lv], 2)],
             'usd', title='Theoretical saving by lever: all time and per 30 days'),
         TABLE([('l', 'Lever', None), ('u', 'Saved, all time', 'usd'), ('mo', 'Per 30 days', 'usd'), ('s', 'Share of spend', 'pct'), ('c', 'Details', None)],
-              [dict(l=x['label'], u=r2(x['usd']), s=r1(x['share']), mo=r2(x['month']), c=x['card']) for x in lv])],
+              [dict(l=x['label'], u=r2(x['usd']), s=r1(x['share']), mo=r2(x['month']), c=x['card'], id=x['id']) for x in lv])],   # id: company.py
         why='The cost questions say where the money went; this says which change would have kept the most of it.',
         insight=f"The biggest lever is “{top['label']}”: about {f_save(m, top['usd'])} saved ({f_pct(top['share'])} of spend).",
         note='Each lever is priced on its own, as if applied from the first day with the same work done. Levers overlap '
@@ -5095,11 +5129,11 @@ def write_csvs(m, out):
             wr.writerow(header)
             wr.writerows(rows)
     w('calls.csv', ['time', 'session', 'project', 'thread', 'model', 'effort', 'skill', 'input', 'output', 'thinking', 'cache_read',
-                    'cache_write_5m', 'cache_write_1h', 'context', 'usd', 'gap_s', 'rewritten', 'miss_cause', 'tools'],
+                    'cache_write_5m', 'cache_write_1h', 'context', 'usd', 'gap_s', 'rewritten', 'miss_cause', 'tools', 'where', 'fast'],
       [[local(c['t0']).isoformat(timespec='seconds'), c['sid'], c['proj'], c['agent'] or 'main', c['model'], c['effort'], c['skill'],
         c['inp'], c['out'], c['think'], c['cr'], c['cw5'], c['cw1'], c['ctx'], round(c['usd'], 5),
         round(c['gap']) if c['gap'] is not None else '', c['rewritten'] if c['miss'] else 0, m.miss_cause(c) if c['miss'] else '',
-        ' '.join(b.get('name') or '' for b, _ in c['tools'])] for c in m.real])
+        ' '.join(b.get('name') or '' for b, _ in c['tools']), c['where'] or '', int(c['fast'])] for c in m.real])
     w('tool_calls.csv', ['time', 'session', 'thread', 'tool', 'phase', 'bash_type', 'detail', 'latency_s', 'is_error', 'result_chars'],
       [[local(t['t']).isoformat(timespec='seconds') if t['t'] else '', t['sid'], t['agent'] or 'main', t['name'], t['phase'], t['bash'] or '',
         tool_detail(t), round(t['latency'], 2) if t['latency'] is not None else '', int(bool(t['res'] and t['res']['is_error'])),
@@ -5112,11 +5146,12 @@ def write_csvs(m, out):
     iso = lambda t: local(t).isoformat(timespec='seconds')
     w('cache_misses.csv', ['request_start', 'session', 'project', 'thread', 'model', 'cause', 'cache_state', 'previous_reply_end', 'idle_s',
                            'cache_lifetime_s', 'cache_expired_at', 'first_token_after_s', 'trigger',
-                           'context_before', 'cache_read', 'rewritten', 'extra_usd'],
+                           'context_before', 'cache_read', 'rewritten', 'extra_usd', 'where', 'fast'],
       [[iso(c['start']), c['sid'], c['proj'], c['agent'] or 'main', c['model'], r['cause'], 'expired' if expired(r) else 'alive',
         iso(c['prev']['t1']), round(idle_of(c), 1), c['ttl'],
         iso(cache_expiry(c)), round(c['t0'] - c['start'], 1), (_trigger(m, c) or (0, ''))[1], c['prev']['ctx'], c['cr'],
-        c['rewritten'], round(r['usd'], 4)] for r in sorted(_miss_rows(m), key=lambda r: r['c']['start']) for c in [r['c']]])
+        c['rewritten'], round(r['usd'], 4), c['where'] or '', int(c['fast'])]
+       for r in sorted(_miss_rows(m), key=lambda r: r['c']['start']) for c in [r['c']]])
     w('subagents.csv', ['agent', 'session', 'type', 'description', 'model', 'calls', 'start', 'duration_s', 'peak_context', 'start_context',
                         'returned_chars', 'usd', 'misses'],
       [[s['aid'], s['sid'], s['type'], s['desc'], s['model'], s['n_calls'], local(s['start']).isoformat(timespec='seconds'),
@@ -5336,6 +5371,7 @@ def render(out, template, log=print):
     home = os.path.expanduser('~')
     tilde = lambda p_: '~' + p_[len(home):] if p_.startswith(home + os.sep) and re.fullmatch(r'[\w./~-]+', p_) else shlex.quote(p_)
     cd_ = report['meta'].get('claude_dir')
+    report['meta'].pop('apply', None)          # only ever this machine's own command, never one that came with the data
     if not report['meta'].get('shared'):       # someone else's report (share.py unpack): its optimizations are for their machine
         report['meta']['apply'] = (f"python3 {tilde(os.path.join(HERE, 'apply.py'))} --dir {tilde(out)}"
                                    + (f" --claude-dir {tilde(cd_)}" if cd_ and cd_ != os.path.join(home, '.claude') else ''))
@@ -5345,8 +5381,8 @@ def render(out, template, log=print):
     if marker not in tpl:
         sys.exit('Template is missing the /*__REPORT_DATA__*/null marker.')
     # every '<' escaped (only strings can hold one), so no data can end or re-open the <script> element: '</script>' and
-    # '<!-- <script' alike
-    blob = json.dumps(report, ensure_ascii=False, separators=(',', ':')).replace('<', '\\u003c')
+    # '<!-- <script' alike; ASCII only, so a lone surrogate or a line separator in a received file can't break the page
+    blob = json.dumps(report, ensure_ascii=True, separators=(',', ':')).replace('<', '\\u003c')
     path = os.path.join(out, 'report.html')
     with open(path, 'w', encoding='utf-8') as fh:
         fh.write(tpl.replace(marker, blob))
@@ -5393,13 +5429,15 @@ def main(argv=None):
         print(f'out={a.out}')
         print(f'data={layout.data_dir(a.out)}')
         return
+    layout.private()
     url = lambda p_: pathlib.Path(p_).as_uri() + (f'#tab={a.tab}' if a.tab else '')
     log = (lambda *x: None) if a.quiet else (lambda *x: print(*x, file=sys.stderr))
     old = legacy_out(cdir)
     if old and os.path.abspath(old) != a.out:
         log(f'Note: reports now go to {tilde(a.out)}; an older one is still in {tilde(old)} (safe to delete).')
-    layout.migrate(a.out, log)
     if a.render:
+        layout.prepare(a.out, cdir)
+        layout.migrate(a.out, log)
         if not os.path.exists(layout.data(a.out, 'metrics.json')):
             sys.exit(f'No metrics.json in {layout.data_dir(a.out)}: run the full report first.')
         path, rep_ = render(a.out, a.template, log)
@@ -5430,6 +5468,8 @@ def main(argv=None):
                  'or set CLAUDE_CONFIG_DIR=/path/to/.claude (Claude Code reads the same variable).')
     if not os.path.exists(a.template):
         sys.exit(f'Report template not found: {a.template}')
+    layout.prepare(a.out, cdir)
+    layout.migrate(a.out, log)
     t0 = time.time()
     log('Reading transcripts…')
     log(f'  Claude Code folder: {cdir}')

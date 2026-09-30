@@ -614,6 +614,7 @@ def build_and_write(kind, out, notes):
 
 def main(argv=None):
     VA.safe_console()
+    os.umask(0o077)                                     # the report folder holds private data: yours only
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('kind', choices=['insights', 'optimizations'])
     ap.add_argument('--out', metavar='DIR', help='the report folder (default: the one usage_report.py uses, e.g. ~/.claude-usage)')
@@ -625,6 +626,7 @@ def main(argv=None):
     except (AttributeError, ValueError):
         pass
     out = os.path.abspath(os.path.expanduser(a.out)) if a.out else UR.default_out(UR.claude_dir(a.claude_dir))
+    layout.require_report(out)                             # it only ever adds to a report folder
     if not os.path.exists(layout.data(out, 'metrics.json')):
         sys.exit(f'No report data in {UR.tilde(layout.data_dir(out))}: run usage_report.py first.')
     try:

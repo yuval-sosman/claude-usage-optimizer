@@ -3,8 +3,8 @@
 
   python3 apply.py list                 # what can be applied, and what already is
   python3 apply.py show  <id>           # preview the exact changes (nothing is written)
-  python3 apply.py apply <id> [--yes]   # preview, confirm, back up, apply
-  python3 apply.py undo  <id>           # revert just that change (later changes to the same files are kept)
+  python3 apply.py apply <id>           # preview, ask you at your terminal, back up, apply
+  python3 apply.py undo  <id>           # preview, ask you, revert just that change (later changes to the same files are kept)
   python3 apply.py check                # preview all of them at once: one line each (ok, or what is wrong)
 
 Options: --dir <report dir> (default $CLAUDE_USAGE_OUT, else <claude dir>-usage, e.g. ~/.claude-usage). It reads <dir>/optimizations.json and
@@ -12,7 +12,10 @@ records what it did in <dir>/applied/applied.json; backups go to <dir>/applied/b
 --claude-dir <dir>: the folder Claude Code keeps its data in (default: the one the report in --dir was built from, else
 $CLAUDE_CONFIG_DIR, else ~/.claude). When it isn't ~/.claude, every ~/.claude path in an optimization (files, and hook
 commands inside settings) is written there instead.
-Only files under your home directory or the Claude folder are touched.
+apply and undo change files only after you type y at your own terminal: a program without one (Claude Code's tools,
+a script, a pipe) gets a refusal and the command to run yourself, so nothing is ever changed on your behalf. What an
+optimization may change at all is fixed in policy.py: the bundled hooks under <claude dir>/hooks/claude-usage/, a marked
+block in <claude dir>/CLAUDE.md, and a short list of settings keys. It never runs a command.
 Standard library only.
 """
 import argparse
@@ -22,11 +25,12 @@ import difflib
 import json
 import os
 import re
+import shlex
 import shutil
-import subprocess
 import sys
 
 import layout
+import policy
 
 HERE = os.path.dirname(os.path.realpath(__file__))
 PLUGIN_ROOT = os.path.dirname(HERE)
@@ -121,9 +125,33 @@ def resolve(path, out):
 
 def target(path, out):
     p = resolve(path, out)
-    if not any(p == r or p.startswith(r + os.sep) for r in (HOME, CLAUDE_DIR)):
-        raise SystemExit(f'Refusing to touch {p}: it is outside your home directory and your Claude folder.')
+    if not policy.file_ok(p, CLAUDE_DIR, HOME):
+        raise SystemExit(f'Refusing to touch {p}: apply.py changes only the Claude folder\'s settings.json, CLAUDE.md and '
+                         f'hooks/claude-usage/, and a project\'s .claude/settings.local.json.')
     return p
+
+
+def hook_dirs():
+    """The ways a hook command may name the installed hooks folder (see policy.command_ok)."""
+    return [os.path.join(CLAUDE_DIR, 'hooks', 'claude-usage')] + (['$HOME/.claude/hooks/claude-usage'] if CLAUDE_DIR == DEFAULT_CLAUDE else [])
+
+
+def check_step(st, out, oid):
+    """Stop unless the step (as optimizations.json has it) is one policy.py allows."""
+    bad = policy.step_problems(st, lambda p: resolve(p, out), CLAUDE_DIR, HOME)
+    if bad:
+        raise SystemExit(f'{oid}: refusing a step outside what this plugin may change: ' + '; '.join(bad))
+
+
+def cmd_line(*args):
+    """A command to copy into a terminal, quoted for it."""
+    if os.name == 'nt':
+        return ' '.join(f'"{a}"' if re.search(r'[\s&|<>^()]', a) else a for a in args)
+    return ' '.join(shlex.quote(a) for a in args)
+
+
+def own_command(verb, oid, out):
+    return cmd_line('python3', os.path.join(HERE, 'apply.py'), verb, oid, '--dir', out)
 
 
 def read_json(p):
@@ -220,6 +248,7 @@ def plan(opt, out):
     steps, files = [], {}
     raw = []
     for st in (opt.get('apply') or {}).get('steps') or []:
+        check_step(st, out, opt.get('id'))
         raw.append(st)
         src = st.get('source') or ''
         if st.get('action') == 'write_file' and src.startswith('hooks/') and src != 'hooks/_session.py' and needs_helpers(src):
@@ -234,11 +263,9 @@ def plan(opt, out):
             if key in seen_extra:
                 continue
             seen_extra.add(key)
+        check_step(st, out, opt.get('id'))
         st = expand_all(st, out)
         act = st['action']
-        if act == 'run':
-            steps.append((st, target(st.get('path') or '~', out), None, None, f"run: {st['command']}"))
-            continue
         p = target(st['path'], out)
         try:
             before = files[p] if p in files else read_text(p, strict=True)
@@ -246,12 +273,9 @@ def plan(opt, out):
             raise SystemExit(f'{p} could not be read ({e.strerror}); fix it by hand first.')
         except ValueError as e:
             raise SystemExit(f'{p} is not UTF-8 text ({e}); fix it by hand first.')
-        if act == 'write_file':
-            if st.get('source'):
-                with open(os.path.join(HERE, st['source']), encoding='utf-8') as fh:
-                    after = fh.read()
-            else:
-                after = st['content']
+        if act == 'write_file':                      # only a file bundled with the plugin (policy.bundled_sources)
+            with open(os.path.join(HERE, st['source']), encoding='utf-8') as fh:
+                after = fh.read()
         elif act == 'append_text':
             tag = f"<!-- claude-usage:{st['marker']} -->"
             cur = before or ''
@@ -268,6 +292,9 @@ def plan(opt, out):
                 doc = set_pointer(doc, st['pointer'], fast_commands(st['value'], doc))
             elif act == 'unset_json':
                 doc = unset_pointer(doc, st['pointer'])
+            bad = policy.settings_problems(now, doc, hook_dirs(), commands(now), fast_command)
+            if bad:
+                raise SystemExit(f"{opt.get('id')}: refusing a settings change outside what this plugin may change: " + '; '.join(bad))
             after = before if before is not None and same_json(doc, now) else dump_json(doc)   # keep the user's layout
         files[p] = after
         steps.append((st, p, before, after, act))
@@ -280,10 +307,6 @@ def show(opt, out):
     print('  ' + ((opt.get('apply') or {}).get('summary') or opt.get('what_it_does') or ''))
     changed = 0
     for st, p, before, after, note in steps:
-        if st['action'] == 'run':
-            print(f"\n  will run in {p}:\n    $ {st['command']}")
-            changed += 1
-            continue
         short = p.replace(HOME, '~')
         if before == after:
             print(f'\n  {short}: already up to date')
@@ -314,9 +337,9 @@ def relation_warnings(opt, opts, state, out):
         on = oid in state
         if on and kind in ('alternative', 'conflicts'):
             warns.append(f"! {oid} is already applied and this is {'an alternative to it' if kind == 'alternative' else 'in conflict with it'}. "
-                         f"Keep one: undo it with  python3 {HERE}/apply.py undo {oid} --dir {out}  if you want this one instead.")
+                         f"Keep one: undo it with  {own_command('undo', oid, out)}  if you want this one instead.")
         elif not on and kind == 'requires':
-            warns.append(f'! This needs {oid} first:  python3 {HERE}/apply.py apply {oid} --dir {out}')
+            warns.append(f"! This needs {oid} first:  {own_command('apply', oid, out)}")
     return warns
 
 
@@ -361,12 +384,9 @@ def json_changes(b, a, path=''):
 
 
 def plan_summary(steps):
-    """What the planned steps would do, in one line: files created (by folder), changed (with the JSON keys), commands run."""
-    first, last, acts, ran = {}, {}, {}, []
+    """What the planned steps would do, in one line: files created (by folder) and changed (with the JSON keys)."""
+    first, last, acts = {}, {}, {}
     for st, p, before, after, note in steps:
-        if st['action'] == 'run':
-            ran.append(f"run `{st['command']}` in {p.replace(HOME, '~')}")
-            continue
         first.setdefault(p, before)
         last[p] = after
         acts.setdefault(p, set()).add(st['action'])
@@ -389,7 +409,7 @@ def plan_summary(steps):
         else:
             parts.append(f'replace {short}')
     made = [f'create {d}/' + (names[0] if len(names) == 1 else '{' + ','.join(names) + '}') for d, names in made.items()]
-    return '; '.join(made + parts + ran)
+    return '; '.join(made + parts)
 
 
 def plan_problems(steps):
@@ -397,10 +417,6 @@ def plan_problems(steps):
     out = []
     for st, p, before, after, note in steps:
         short = p.replace(HOME, '~')
-        if st['action'] == 'run':
-            if not os.path.isdir(p):
-                out.append(f"{short} (where it runs `{st['command']}`) is not a folder")
-            continue
         if st.get('mode'):
             try:
                 int(st['mode'], 8)
@@ -596,7 +612,13 @@ def read_origins(state):
     o.update(new)
 
 
-def release(state, p, oid, f=None):
+def backup_ok(x, out):
+    """Whether x is a copy apply.py made (under <out>/applied/backups/). applied.json is a plain file, so undo restores
+    from nowhere else and touches only the files policy.py allows."""
+    return x is None or policy.under(x, os.path.join(layout.applied_dir(out), 'backups'))
+
+
+def release(state, p, oid, out, f=None):
     """Undo one optimization's part in a whole file (f: its record of writing it; None if it only relied on the file).
     While others use the file it stays as it is. The last one puts back what was there before the first wrote it, or
     removes it, unless it was edited since. Returns the note to print, or None if there is none."""
@@ -604,6 +626,9 @@ def release(state, p, oid, f=None):
     short = p.replace(HOME, '~')
     others = users_of(state, p, oid)
     o = origins(state).get(p) if others else origins(state).pop(p, None)
+    if not (policy.file_ok(p, CLAUDE_DIR, HOME) and backup_ok(after, out)
+            and all(backup_ok((o or {}).get(k), out) for k in ('after', 'backup'))):
+        return f'skipped  {short}: not a file apply.py changes (or its record points outside backups/); left as it is'
     cur = read_text(p)
     if cur is None:
         return f'gone     {short} (already removed)' if after else None
@@ -663,13 +688,16 @@ def undo_record(oid, rec, out, state):
     for f in reversed(rec.get('files') or []):
         p, kind = f['path'], f.get('kind')
         short = p.replace(HOME, '~')
+        if not (policy.file_ok(p, CLAUDE_DIR, HOME) and backup_ok(f.get('backup'), out) and backup_ok(f.get('after'), out)):
+            notes.append(f'skipped  {short}: not a file apply.py changes (or its record points outside backups/); left as it is')
+            continue
         if os.path.exists(temp_of(p)):                     # left by a crash inside write_text()
             os.remove(temp_of(p))
         if not utf8(p):
             notes.append(f'skipped  {short}: not UTF-8 text; fix it by hand')
             continue
         if kind not in ('json', 'text') and f.get('after'):   # a whole file (a hook, a shared helper)
-            n = release(state, p, oid, f)
+            n = release(state, p, oid, out, f)
             if n:
                 notes.append(n)
             continue
@@ -740,16 +768,42 @@ def undo_record(oid, rec, out, state):
                 notes.append(f'kept     {short}: the added lines were changed since; remove them by hand')
     for p in rec.get('uses') or []:                        # a whole file others wrote, which this one relied on
         if p in origins(state):
-            n = release(state, p, oid) if utf8(p) else None if users_of(state, p, oid) else \
+            n = release(state, p, oid, out) if utf8(p) else None if users_of(state, p, oid) else \
                 f'skipped  {p.replace(HOME, "~")}: not UTF-8 text; fix it by hand'
             if n:
                 notes.append(n)
-    for r in rec.get('ran') or []:
-        notes.append(f"note: this ran `{r['command']}`, which can't be undone automatically")
+    for r in rec.get('ran') or []:                         # an older apply.py could run commands
+        notes.append(f"note: this ran `{r.get('command')}`, which can't be undone automatically")
     return notes
 
 
-def do_apply(opt, out, yes, opts=None):
+def confirm(question):
+    """True only when a person typed y at their own terminal. The question and the answer go through the terminal itself
+    (/dev/tty; on Windows, standard input only when it is a console), never through a pipe: a program running this
+    without a terminal, such as Claude Code's tools, a script or `yes |`, always gets False, and None when there is no
+    terminal to ask at all."""
+    try:
+        if os.name == 'nt':
+            if not (sys.stdin and sys.stdin.isatty() and sys.stdout.isatty()):
+                return None
+            return input(question).strip().lower() in ('y', 'yes')
+        with open('/dev/tty', 'r+', encoding='utf-8', errors='replace') as tty:
+            if not tty.isatty():
+                return None
+            tty.write(question)
+            tty.flush()
+            return tty.readline().strip().lower() in ('y', 'yes')
+    except (OSError, EOFError, KeyboardInterrupt):
+        return None
+
+
+def refuse_without_terminal(verb, oid, out):
+    print(f'\nNothing was changed. To {verb} it, run this yourself in a terminal (it shows the same preview and asks you):')
+    print(f'  {own_command(verb, oid, out)}')
+    raise SystemExit(3)
+
+
+def do_apply(opt, out, opts=None):
     state = load_state(out)
     if not opt.get('apply'):
         print(f"\n{opt['title']} has no automatic change. Do it by hand:")
@@ -768,14 +822,12 @@ def do_apply(opt, out, yes, opts=None):
     again = oid in state
     if again:
         print(f'\n{oid} was applied before with different content: the old version is undone first, then this one is applied.')
-    if not yes:
-        try:
-            ans = input(f'\nApply these changes? [y/N] ').strip().lower()
-        except EOFError:
-            ans = ''
-        if ans not in ('y', 'yes'):
-            print('Cancelled; nothing was changed.')
-            return
+    ok = confirm('\nApply these changes? [y/N] ')
+    if ok is None:
+        refuse_without_terminal('apply', oid, out)
+    if not ok:
+        print('Cancelled; nothing was changed.')
+        return
     if again:
         for n in undo_record(oid, state[oid], out, state):
             print(n)
@@ -789,20 +841,12 @@ def do_apply(opt, out, yes, opts=None):
         n += 1
         bdir = os.path.join(layout.applied_dir(out), 'backups', f"{stamp}-{oid}-{n}")
     record = {'version': 2, 'applied': dt.datetime.now().isoformat(timespec='seconds'), 'status': 'partial',
-              'files': [], 'uses': [], 'ran': []}
+              'files': [], 'uses': []}
     state[oid] = record
     save_state(out, state)                                  # recorded before the first write, so a failure can be undone
     try:
         first = {}
         for st, p, before, after, note in steps:
-            if st['action'] == 'run':
-                print(f"$ {st['command']}")
-                r = subprocess.run(st['command'], shell=True, cwd=p)
-                record['ran'].append({'command': st['command'], 'exit': r.returncode})
-                save_state(out, state)
-                if r.returncode:
-                    print(f'  (exit code {r.returncode})')
-                continue
             if before == after:
                 if p not in record['uses'] and p not in first:
                     record['uses'].append(p)               # already there (e.g. a shared helper): relied on, not written
@@ -836,14 +880,14 @@ def do_apply(opt, out, yes, opts=None):
     except (Exception, SystemExit) as e:
         save_state(out, state)
         print(f'\nStopped partway: {e}')
-        print(f"What was already changed is recorded. Revert it with: python3 {HERE}/apply.py undo {oid} --dir {out}")
+        print(f"What was already changed is recorded. Revert it with: {own_command('undo', oid, out)}")
         raise SystemExit(1)
     record['status'] = 'done'
     save_state(out, state)
     print(f"\nApplied “{opt['title']}”.")
     if opt.get('verify'):
         print(f"Check: {opt['verify']}")
-    print(f"Undo:  python3 {HERE}/apply.py undo {oid} --dir {out}")
+    print(f"Undo:  {own_command('undo', oid, out)}")
     if any(f['path'].endswith('settings.json') or f['path'].endswith('settings.local.json') for f in record['files']):
         print('Settings are read when a session starts: restart Claude Code (or open a new session) to use the change.')
 
@@ -853,6 +897,16 @@ def do_undo(oid, out):
     rec = state.get(oid) if oid != ORIGINS else None
     if not rec:
         raise SystemExit(f'{oid} was not applied with this tool (nothing recorded in {state_path(out)}).')
+    print(f'\nUndo {oid} (applied {rec.get("applied", "?")}): puts back what it changed in')
+    for f in rec.get('files') or []:
+        print(f"  {f.get('path', '?').replace(HOME, '~')}" + (' (created by it)' if f.get('created') else ''))
+    print('  and keeps every later change to those files.')
+    ok = confirm('\nUndo it? [y/N] ')
+    if ok is None:
+        refuse_without_terminal('undo', oid, out)
+    if not ok:
+        print('Cancelled; nothing was changed.')
+        return
     for n in undo_record(oid, rec, out, state):
         print(n)
     del state[oid]
@@ -860,12 +914,13 @@ def do_undo(oid, out):
     print(f'Undid {oid}.')
 
 
-def shared_report(out):
-    """Whether <out> holds a report someone shared with you (share.py unpack sets meta.shared): its optimizations, and the
-    Claude folder its config.json names, are the sender's."""
+def shared_report(out, key=None):
+    """Whether <out> holds a report someone shared with you (share.py unpack sets meta.shared), or with key, one whose
+    meta.shared has it (company.py sets {'company': True}): its optimizations and Claude folder aren't the user's."""
     try:
         with open(layout.data(out, 'metrics.json'), encoding='utf-8') as fh:
-            return bool(json.load(fh)['meta'].get('shared'))
+            sh = json.load(fh)['meta'].get('shared')
+        return bool(sh) and (key is None or bool(isinstance(sh, dict) and sh.get(key)))
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         return False
 
@@ -877,7 +932,8 @@ def report_claude_dir(out):
             d = json.load(fh).get('claude_dir')
     except (OSError, ValueError, AttributeError):
         return None
-    return os.path.abspath(os.path.expanduser(d)) if isinstance(d, str) and d else None
+    d = os.path.abspath(os.path.expanduser(d)) if isinstance(d, str) and d else None
+    return d if d and os.path.isdir(d) and os.path.normcase(d) not in (os.path.normcase(HOME), os.path.normcase(os.path.abspath(os.sep))) else None
 
 
 def safe_console():
@@ -891,13 +947,13 @@ def safe_console():
 
 def main(argv=None):
     safe_console()
+    os.umask(0o077)                                         # backups and records hold your settings: yours only
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('cmd', choices=['list', 'show', 'apply', 'undo', 'check'])
     ap.add_argument('id', nargs='?')
     ap.add_argument('--dir', help='report directory holding optimizations.json (default $CLAUDE_USAGE_OUT, else <claude-dir>-usage, e.g. ~/.claude-usage)')
     ap.add_argument('--claude-dir', help='the folder Claude Code keeps its data in (default: the one the report was built from, '
                                          'else $CLAUDE_CONFIG_DIR, else ~/.claude)')
-    ap.add_argument('--yes', action='store_true', help="don't ask before applying")
     a = ap.parse_args(argv)
     global CLAUDE_DIR
     if a.claude_dir:
@@ -905,8 +961,10 @@ def main(argv=None):
     out = os.path.abspath(os.path.expanduser(a.dir or os.environ.get('CLAUDE_USAGE_OUT') or CLAUDE_DIR.rstrip('/\\') + '-usage'))
     layout.migrate(out, log=print)
     if a.cmd == 'apply' and shared_report(out):
-        raise SystemExit(f'{out} holds a report someone shared with you: its optimizations were written for their machine. '
-                         'Run /claude-usage:report and /claude-usage:optimize for your own.')
+        raise SystemExit(f'{out} holds ' + ('a company report (many people combined): it has nothing to apply. '
+                                           if shared_report(out, 'company') else
+                                           'a report someone shared with you: its optimizations were written for their machine. ')
+                         + 'Run /claude-usage:report and /claude-usage:optimize for your own.')
     if not a.claude_dir:                                    # apply to the Claude folder the optimizations were computed for
         CLAUDE_DIR = report_claude_dir(out) or CLAUDE_DIR
     if a.cmd == 'undo':
@@ -935,8 +993,11 @@ def main(argv=None):
         show(opts[a.id], out)
         for ln in related_lines(opts[a.id], opts, state, out):
             print(ln)
+        if opts[a.id].get('apply') and not shared_report(out):
+            print(f"\n  To apply it, run this yourself in a terminal (it shows this preview again and asks you first):\n"
+                  f"    {own_command('apply', a.id, out)}")
     else:
-        do_apply(opts[a.id], out, a.yes, opts)
+        do_apply(opts[a.id], out, opts)
 
 
 if __name__ == '__main__':
