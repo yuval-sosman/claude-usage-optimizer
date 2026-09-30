@@ -3,7 +3,7 @@ name: brainstorm
 description: Think through your Claude Code usage with Claude — explore the report's numbers, challenge or extend the insights, test what-if ideas on the extracted data, and turn what you agree on into updated insights or optimizations.
 disable-model-invocation: true
 argument-hint: "[a question or topic, e.g. \"why are subagents so expensive?\"]"
-allowed-tools: Read, Write, Edit, Bash(python3 *), Bash(open *)
+allowed-tools: Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/usage_report.py" *), Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/candidates.py" *), Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/validate.py" *), Read(~/.claude-usage/**), Edit(~/.claude-usage/insights.json)
 ---
 
 # Brainstorm on the usage data
@@ -14,12 +14,13 @@ to try, and what is worth changing.
 ## Ground rules
 
 - Use only what the usage report extracted, in `<OUT>`, the output folder (`~/.claude-usage` by default;
-  `python3 "${CLAUDE_SKILL_DIR}/../../scripts/usage_report.py" --where [--claude-dir …]` prints it): `insights.json`,
+  `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/usage_report.py" --where [--claude-dir …]` prints it): `insights.json`,
   `optimizations.json`, and in `<OUT>/data/`: `digest.md`, `config.json`, `metrics.json` and the CSVs (`calls.csv`,
   `tool_calls.csv`, `sessions.csv`, `subagents.csv`, `cache_misses.csv`). **Never open session transcripts** (`<claude dir>/projects/**/*.jsonl`), even when a
   question seems to need one; say what the extracted data can and can't answer instead.
 - Show your working: when you compute something new, use a short `python3` snippet over the CSVs or metrics.json and state
-  the result with its assumptions. Keep measured facts, modelled estimates (the SV questions) and your own guesses clearly
+  the result with its assumptions. Snippets are not pre-approved: Claude Code shows each one to the user and asks, as it
+  should for any code. Keep them read-only and reading only `<OUT>` files, so the user can say yes at a glance. Keep measured facts, modelled estimates (the SV questions) and your own guesses clearly
   apart.
 - Dollars are API list-price equivalents.
 - Cite report question IDs (e.g. `CX8`) so the user can open them in the report.
@@ -38,7 +39,7 @@ to try, and what is worth changing.
 
 - **Drill down**: from a total to the sessions, days, threads or tools behind it (CSV filters and group-bys).
 - **Compare**: two projects (the digest's scopes), two periods (re-run the report into a separate directory:
-  `python3 "${CLAUDE_SKILL_DIR}/../../scripts/usage_report.py" --since … --until … --out /tmp/usage-a --no-csv`), main vs subagents,
+  `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/usage_report.py" --since … --until … --out /tmp/usage-a --no-csv`), main vs subagents,
   models.
 - **What-if**: re-price calls under another assumption (a model, a compaction threshold, a cache lifetime) the way the SV
   questions do, and say how it differs from theirs.
@@ -69,8 +70,8 @@ When the conversation lands on something new or changes a conclusion:
 
 - **An insight**: offer to add or edit it in `insights.json` (same schema and rules as the report skill: cite questions,
   savings with basis for cost insights). Then validate and re-render:
-  `python3 "${CLAUDE_SKILL_DIR}/../../scripts/validate.py" insights "<OUT>/insights.json" --metrics "<OUT>/data/metrics.json"`
-  and `python3 "${CLAUDE_SKILL_DIR}/../../scripts/usage_report.py" --render --out "<OUT>"`.
+  `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/validate.py" insights "<OUT>/insights.json" --metrics "<OUT>/data/metrics.json"`
+  and `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/usage_report.py" --render --out "<OUT>"`.
 - **A change to try**: point to `/claude-usage:optimize` (it prepares changes you can apply one by one), or, if the user
   wants it now, describe exactly what to change and where.
-- Only write files when the user agrees.
+- Only write files when the user agrees. The only file this skill may change without asking is `~/.claude-usage/insights.json`.

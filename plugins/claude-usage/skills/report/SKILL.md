@@ -2,7 +2,7 @@
 name: report
 description: Build and open the Claude Code usage report from the local transcripts (cost, caching, context, sessions, tools, hooks), with Claude-written insights on what each change would have saved. Use when the user asks to analyze, audit or explain their Claude Code usage, cost, cache hits or context size, or to run, refresh or open the usage report.
 argument-hint: "[--days N (default 60) | --since YYYY-MM-DD --until YYYY-MM-DD | --all] [--claude-dir DIR] [--no-insights] [--no-open]"
-allowed-tools: Read, Write, Edit, Bash(python3 *), Bash(open *), Bash(xdg-open *)
+allowed-tools: Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/usage_report.py" *), Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/candidates.py" *), Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/assemble.py" *), Read(~/.claude-usage/**), Read(~/.claude/plugins/cache/claude-usage-optimizer/claude-usage/**), Edit(~/.claude-usage/data/notes-insights.json)
 ---
 
 # Usage report + insights
@@ -16,7 +16,7 @@ every structure (savings, evidence, question ids, links); you bring the judgment
 - **Only use what the script extracted**: the files in `<OUT>/data/` (`digest.md`, `candidates.json`, `metrics.json`,
   `config.json`, the CSVs). **Never read session transcripts** (`<claude dir>/projects/**/*.jsonl`) or any other
   conversation content, not even to check a number. If a number you need isn't in the digest (it shows the first rows of a
-  table), `python3 "${CLAUDE_SKILL_DIR}/../../scripts/candidates.py" --out "<OUT>" --show card:CX3` prints every figure of one card
+  table), `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/candidates.py" --out "<OUT>" --show card:CX3` prints every figure of one card
   (all KPIs, every table row and column, every chart entry; `card:CX3@<scope id>` for one project's scope).
 - **Never invent numbers.** Every figure in an insight must appear in the digest or be a simple, stated derivation of figures
   that do (put the derivation in `savings.basis`).
@@ -24,12 +24,11 @@ every structure (savings, evidence, question ids, links); you bring the judgment
   once in the summary.
 - Never write `insights.json` yourself: `assemble.py` writes it from your notes (step 3).
 - Run every command exactly as shown: one `python3 …` command, without `cd`, pipes, redirection or variables, so it matches
-  the allowed tools and needs no permission prompt.
+  the allowed tools and needs no permission prompt. The skill is allowed nothing else without the user's say-so.
 
 Paths used below:
 
-- Scripts: `${CLAUDE_SKILL_DIR}/../../scripts` (if that variable isn't substituted, use the "Base directory for this skill" shown
-  above: scripts are two levels up, in `scripts/`).
+- Scripts: the plugin's scripts are in `${CLAUDE_PLUGIN_ROOT}/scripts`. Exactly those commands are pre-approved (each script by its full path); anything else, such as another program, `python3 -c`, a `cd` or a pipe, makes Claude Code ask the user first, so don't work around a refusal.
 - `<OUT>`: the output folder, `~/.claude-usage` by default. Step 1 prints it (so does `usage_report.py --where [--claude-dir …]`);
   substitute its real path. It holds `report.html`, the extracted data in `data/` and the files built from your notes:
   `insights.json`, `optimizations.json`.
@@ -37,7 +36,7 @@ Paths used below:
 ## 1. Build the report
 
 ```bash
-python3 "${CLAUDE_SKILL_DIR}/../../scripts/usage_report.py" $ARGUMENTS
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/usage_report.py" $ARGUMENTS
 ```
 
 The script ignores `--no-insights` and `--no-open` (they are for you). It takes ~5 seconds and prints the report path on its
@@ -54,7 +53,7 @@ message, ask the user for that folder (the one with `projects/` inside), and run
 
 1. The savings levers, ready to use:
    ```bash
-   python3 "${CLAUDE_SKILL_DIR}/../../scripts/candidates.py" --out "<OUT>" --show levers
+   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/candidates.py" --out "<OUT>" --show levers
    ```
    One line per lever (SV1's rows, largest first): the insight `id` to use, `category`, `questions`, a `savings` object
    (all time, per 30 days, share of spend, kind, basis, which other levers it overlaps), `evidence` with every number exactly
@@ -74,7 +73,7 @@ Decide the 12–20 insights (at least 4 in `cost`; every category that has somet
 the Write tool to `<OUT>/data/notes-insights.json` (if Write refuses because the file exists, Read it first), then run:
 
 ```bash
-python3 "${CLAUDE_SKILL_DIR}/../../scripts/assemble.py" insights --out "<OUT>"
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/assemble.py" insights --out "<OUT>"
 ```
 
 It builds `insights.json`: fills in each lever's numbers, evidence and overlaps, the source stamps, `generated` and
@@ -126,7 +125,7 @@ The notes, for example:
 ## 4. Render and open
 
 ```bash
-python3 "${CLAUDE_SKILL_DIR}/../../scripts/usage_report.py" --render --out "<OUT>" --open --tab insights
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/usage_report.py" --render --out "<OUT>" --open --tab insights
 ```
 
 With `--no-insights`, use `--tab report`; with `--no-open`, leave out `--open --tab …` (it opens the default browser on macOS,

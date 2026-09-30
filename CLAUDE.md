@@ -19,9 +19,10 @@ the user's Claude Code transcripts and renders an HTML report. Claude then write
 A third skill, `/claude-usage:brainstorm`, talks the data through with the user and can edit insights.json. A fourth,
 `/claude-usage:video`, turns the report into a 30–60 s video of the user's highlights to share (an MP4 and a self-playing
 HTML page, in the promo videos' style). A fifth, `/claude-usage:share`, packs the whole report folder into one JSON file
-to send to whoever collects and compares usage, and (`open FILE`) unpacks one someone sent back into a report folder.
-`optimize`, `brainstorm`, `video` and `share` are manual-only (`disable-model-invocation: true`); `report` can also be
-triggered by the model.
+to send to whoever collects and compares usage, and (`open FILE`) unpacks one someone sent back into a report folder. A
+sixth, `/claude-usage:company <folder>`, combines many people's share files into one company report and summarises it.
+`optimize`, `brainstorm`, `video`, `share` and `company` are manual-only (`disable-model-invocation: true`); `report` can
+also be triggered by the model.
 
 `docs/CATALOG.md` and `docs/lib.sh` hold the original jq extraction commands; QUESTIONS.md cites them by catalog id (e.g. `[B06]`).
 The engine doesn't use them. The gotchas table at the top of CATALOG.md (G1–G9) still applies to any new counting. The main one:
@@ -58,6 +59,9 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
                  equal in content (layout only) writes nothing. Re-applying a changed optimization undoes the old one first.
                  Hooks are installed as copies in <claude dir>/hooks/claude-usage/ (plus _session.py and prices.json).
                  `apply.py check` previews every optimization in one call, one line each (the optimize skill uses it).
+                 `apply` and `undo` write only after `confirm()` reads y from the user's own terminal (/dev/tty; on
+                 Windows a console stdin): without one (Claude Code's tools, a pipe) they change nothing and exit 3.
+                 Every step, and the settings change it makes, must pass scripts/policy.py (see Invariants).
 
   video.py plan     → <OUT>/video/storyboard.json (schema: schemas/video.schema.json): which scenes, tiles, trace, insight /
                       optimization ids and levers to show, never the figures; skills/video edits the words and the choice
@@ -74,10 +78,47 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
   share.py unpack   → <OUT>/received/<file name>/: the same files back (CSVs byte-identical), a digest, and report.html
                       rendered with meta.shared set, so render() leaves out the apply commands. Refuses a folder
                       holding the user's own report.
+
+  company.py build <folder>  → <OUT>/company/ (or --to): report.html (report_template.html with company cards: CO company,
+                      PE people, LV levers; scopes = Company + one per person; meta.views ['report'], scope_label, and
+                      shared.company, so no apply commands and apply.py refuses it), data/metrics.json, data/digest.md
+                      (skills/company reads it), data/people.csv. It reads share files one at a time (share.load), re-prices
+                      every calls.csv row at this prices.json (Prices.mult from its where/fast columns), takes levers from
+                      each report's SV1 (lever_row, by id) and SV2, and dedupes people by session ids. docs/COMPANY.md
+                      documents every card.
 ```
 
 ## Invariants (don't break these)
 
+- **Nothing changes the user's setup without them, enforced in code, not in prompts.**
+  - `apply.py apply|undo` ask through `confirm()` (the controlling terminal), so only a person can say yes. Never add a
+    `--yes`, an environment switch or any other bypass, and never make a skill run `apply`/`undo` (they aren't in any
+    skill's `allowed-tools`; the optimize skill previews with `show` and gives the user the command).
+  - `scripts/policy.py` is the one list of what an optimization may change: bundled files copied to
+    `<claude dir>/hooks/claude-usage/<same name>`, a marked block (≤ 8 lines) appended to `<claude dir>/CLAUDE.md`, and the
+    settings keys in `SETTINGS`/`MAPS`/`ENV` in `<claude dir>/settings.json` or a project's `.claude/settings.local.json`,
+    with hooks and the status line only running bundled scripts. No step runs a command. apply.py checks each step
+    (`check_step`) and the resulting settings diff (`settings_problems`) before previewing or writing; undo touches only
+    policy files and restores only from `<OUT>/applied/backups/` (applied.json is a plain file). validate.py applies the
+    same checks at assemble time. A new catalog entry that needs another key or file: widen policy.py deliberately, never
+    around it.
+- **Least privilege for skills.** `allowed-tools` pre-approves each script by its full path
+  (`Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/x.py" *)`; `${CLAUDE_PLUGIN_ROOT}` expands only in Bash rules), reads only
+  `~/.claude-usage/**` (and the plugin's installed reference files), and edits only the one file the skill owns. Never add
+  bare `Read`, `Write`, `Edit`, `Bash(python3 *)`, `open`, `ls`, an install command or an unrestricted `WebFetch`:
+  anything outside the list must reach the user as a permission prompt. Only `report` is model-invocable.
+- **Nothing is installed.** The plugin ships no hooks, MCP servers or background processes of its own, and no skill runs
+  a package manager: `video.py tools` prints install commands for the user to run.
+- **Private and local.** No network in the scripts; report.html and video.html carry a CSP (`default-src 'none'`); the
+  video's browser runs with `PRIVATE` flags (no network) over `--remote-debugging-pipe` (a 127.0.0.1 port on Windows only).
+  Every script calls `layout.private()`/`os.umask(0o077)`; `layout.prepare()` makes `<OUT>` 0700 and refuses home, the
+  filesystem root, the Claude folder and non-report folders; scripts that add to a report call `layout.require_report()`;
+  `migrate()` only touches report folders. Transcript text goes through `clip()`, which `scrub()`s secrets
+  (`SECRET_IN_TEXT`); config.json goes through `redact()` (env values outside `ENV_KEEP` become `<set>`).
+- **Received files are untrusted.** `share.load()` caps size and nesting and rejects unwritable text; `plain()` strips
+  control and bidi characters from anything printed or shown; `render()` drops any `meta.apply` that came with the data
+  (the template also hides apply commands when `meta.shared`); unpack and `company.py --to` write only into a new folder
+  or one they made; `company.py` skips a file it can't summarise.
 - **Skills never read transcripts.** They use only `<OUT>` files. If a skill needs a number, add it to the script's output.
 - **The scripts stay stdlib-only and portable** (the video's MP4 also needs a Chromium-based browser and ffmpeg; without
   them `video.py render` still writes the HTML page and says what to install):
@@ -91,13 +132,16 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
   - the schema;
   - cited question ids exist and are shown;
   - no saving exceeds spend;
-  - apply paths stay under home or the Claude folder;
+  - apply steps pass scripts/policy.py (the same check apply.py makes);
   - optimizations' `related` links are two-sided (except `requires`). Two optimizations that change the same settings key,
     or act on the same cost (`SAME_LEVER`: the main-thread cache lifetime vs the stale-cache guard, auto-compact vs the
     context guard), must be linked.
 - **A share file round-trips.** `share.py unpack` of a `pack` gives back metrics.json, insights, optimizations,
   candidates and config equal, and the CSVs byte-identical. It never reads transcripts, and a received report never shows
   apply commands (`meta.shared`; `apply.py apply` refuses one too).
+- **The company report reads share files only** (never transcripts), aggregates from their rows rather than card labels,
+  and writes no project names, session titles or prompt text: only numbers and each person's name or account. A company
+  of one person equals that person's report (spend, sessions, hit rate, levers).
 - **The video quotes only the data.** Its storyboard names what to show; `video.py` takes every figure from metrics.json,
   insights.json and optimizations.json, and `check` rejects a number in a headline or title that none of them has (`facts()`),
   and project names, session titles and paths unless `allow_names` is set. The video never shows prompt text.
@@ -200,7 +244,7 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
 - The renderers in the template (`insightCard`, `optCard`, `renderInsights`, `renderOpts`).
 - The instructions in the matching `SKILL.md` and the insights guide.
 - `assemble.py` (the notes format and how it merges them) and `candidates.py` (the drafts it produces).
-- `apply.py` if you add or change a step action.
+- `apply.py` and `policy.py` if you add or change a step action, a target file or a settings key (see Invariants).
 - A catalog entry lives in two places that change together: its description in `skills/optimize/reference/catalog.md`
   and its rule, figures, apply template and links in `scripts/candidates.py`. Entries marked (judgment) there are left to
   Claude with their facts.
@@ -230,8 +274,9 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
   animations or timers, or frames stop being exact. Look at a change with `video.py render --stills 3,12,20`.
 - The fonts are OFL (licenses beside them), Latin subsets, embedded into each video.html, so the page makes no network requests.
 - The prerequisites: `video.py tools` reports the browser and ffmpeg and, for a missing one, the install command from `INSTALL`
-  in video_capture.py (per package manager; `user_runs` when it needs sudo or an admin shell). `find_ffmpeg()` also looks
-  where installers put ffmpeg, since a fresh install isn't on the shell's PATH yet. The skill asks before installing.
+  in video_capture.py (per package manager), for the user to run: the skill never installs anything. `find_ffmpeg()` also
+  looks where installers put ffmpeg, since a fresh install isn't on the shell's PATH yet. `find_browser()`/`find_ffmpeg()`
+  accept only programs named like a browser / ffmpeg (`_named()`), so `--browser`/`--ffmpeg` can't launch anything else.
 
 **The share file (`skills/share`, `scripts/share.py`, `schemas/share.schema.json`):**
 - It embeds the report folder's files as they are, so a new card, field or CSV column needs nothing here. A new file in
@@ -241,6 +286,17 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
   (`VERSION` in share.py and the schema's `const`); `unpack` must keep reading older versions and refuses newer ones.
 - Check a change with the round trip: `share.py pack --out <copy of OUT>`, then `unpack` it, compare the files, and
   render the received report.html (all three tabs).
+
+**The company report (`skills/company`, `scripts/company.py`, `docs/COMPANY.md`):**
+- It reads calls.csv, sessions.csv and cache_misses.csv by column name (`NEED` lists the calls columns it requires), SV1
+  rows by lever `id` (`candidates.lever_row`) and SV2's "Of which you can switch off". Renaming any of those, or a lever
+  id, needs company.py (and `candidates.LEVER_TITLES`, one model-free title per lever) to follow. A new lever: add it to
+  `LEVER_ROWS` and `LEVER_TITLES`; company.py picks it up.
+- Cards are built with the engine's block builders and rendered by `usage_report.render()`; the template needs only the
+  metrics shape. `meta.views` (the tabs shown) and `meta.scope_label` (the selector's name) are generic template options.
+- Check a change: a company of one (your own share file) must equal your report; the synthetic set (copies with new
+  session ids, names, scaled tokens, shifted dates, plus duplicates and bad files) must give Σ people = company, the right
+  merges and skips; render every scope with `#render=all`; two `PYTHONHASHSEED` values give identical output.
 
 **Hooks (`scripts/hooks/`):**
 - Hooks must fail open: never block on an error. That includes `import _session` (wrapped in try; a missing helper makes the hook a no-op).
@@ -266,7 +322,8 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
 - The optimize skill always writes `~/.claude/…` paths; apply.py maps them to a custom Claude folder.
 
 **Skills:**
-- Reference scripts as `${CLAUDE_SKILL_DIR}/../../scripts/…`.
+- Reference scripts as `"${CLAUDE_PLUGIN_ROOT}/scripts/…"`, exactly as in the skill's `allowed-tools` rule (the rule
+  matches the command text, quotes included).
 - Refer to the output folder as `<OUT>`: the script prints report.html's path, and `--where` prints the resolved folders.
 - `report` passes `$ARGUMENTS` (`--days`, `--since/--until`, `--all`, `--claude-dir`) to the script. Without `--days`,
   `--since` or `--all` the script covers the last `DEFAULT_DAYS` (60) days, counted back from `--until` when given, and
@@ -280,7 +337,12 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
 - Skill Bash commands must start with `python3` and have no `cd`, `&&`, variable assignments, pipes, redirection or
   heredocs: Claude Code's permission checks refuse those (a JSON heredoc trips "brace with quote character"), which in a
   headless run fails the step and interactively asks every time. Test a skill change with a real headless run (a
-  scratch `CLAUDE_USAGE_OUT`, `--setting-sources project --no-session-persistence`, `--output-format stream-json --verbose`).
+  scratch `CLAUDE_USAGE_OUT`, `--setting-sources project --no-session-persistence`, `--output-format stream-json --verbose`,
+  run from a folder outside the repo so reads outside `<OUT>` are really refused). The Edit/Read rules name `~/.claude-usage`,
+  so with a scratch `<OUT>` add the same rules for it, and for the working copy the rule an installed plugin gets for its
+  own reference files (`~/.claude/plugins/cache/claude-usage-optimizer/claude-usage/**`):
+  `--allowedTools "Edit(//<scratch>/data/notes-insights.json)" "Read(//<scratch>/**)" "Read(//<repo>/plugins/claude-usage/**)"`.
+  Check `permission_denials` in the result: only what the skill shouldn't do on its own may be there.
 
 ## Staleness rules
 
@@ -306,6 +368,7 @@ python3 $S/video.py plan --out /tmp/usage-check && python3 $S/video.py check --o
 python3 $S/video.py render --out /tmp/usage-check --stills 3,12,20   # PNG frames in video/stills/; without --stills, the MP4
 python3 $S/share.py pack --out /tmp/usage-check                   # the share file; then unpack it:
 python3 $S/share.py unpack /tmp/usage-check/share/<file>.json --out /tmp/usage-check   # → received/<file>/report.html
+python3 $S/company.py build /tmp/usage-check/share --to /tmp/usage-company   # a company of one: must equal your report
 ```
 
 - A full run on `<OUT>` itself changes the `generated` stamp. After that, both `validate.py` commands fail on

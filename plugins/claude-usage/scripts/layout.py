@@ -8,9 +8,12 @@
   <out>/video/                 /claude-usage:video: storyboard.json (Claude), video.html and claude-usage-video.mp4 (video.py)
   <out>/share/                 /claude-usage:share: the one-file copies of the report you made to send (share.py pack)
   <out>/received/<name>/       share files others sent you, unpacked into report folders (share.py unpack)
+  <out>/company/               /claude-usage:company: many people's share files combined (company.py build): report.html, data/
 
 Older versions wrote everything flat into <out>; migrate() moves those files into place (once, on the next run).
-Standard library only; shared by usage_report.py, apply.py, video.py and share.py.
+The folder holds private data (prompt snippets, paths, your setup): prepare() refuses one that isn't this plugin's (home,
+the Claude folder, a folder holding other things) and keeps it readable by you alone.
+Standard library only; shared by usage_report.py, apply.py, video.py, share.py and company.py.
 """
 import json
 import os
@@ -21,8 +24,72 @@ APPLIED = 'applied'
 VIDEO = 'video'
 SHARE = 'share'
 RECEIVED = 'received'
+COMPANY = 'company'
 DATA_FILES = ('metrics.json', 'digest.md', 'config.json',
               'calls.csv', 'tool_calls.csv', 'sessions.csv', 'subagents.csv', 'cache_misses.csv')
+MARKER = '.claude-usage'         # in every folder this plugin writes a report into: it is safe to write and tidy there
+
+
+def private():
+    """Every file and folder the scripts create from here on is readable by the user alone (they hold prompt snippets,
+    paths and the setup)."""
+    os.umask(0o077)
+
+
+def _norm(p):
+    return os.path.normcase(os.path.realpath(os.path.abspath(p)))
+
+
+def _meta_ok(p):
+    try:
+        with open(p, encoding='utf-8') as fh:
+            meta = json.load(fh).get('meta')
+        return isinstance(meta, dict) and 'generated' in meta
+    except (OSError, ValueError, AttributeError):
+        return False
+
+
+def is_report_dir(out):
+    """Whether out already holds this plugin's output: its marker, or a report an older version wrote (a metrics.json with
+    its meta, in data/ or flat)."""
+    return os.path.isfile(os.path.join(out, MARKER)) or _meta_ok(data(out, 'metrics.json')) or _meta_ok(os.path.join(out, 'metrics.json'))
+
+
+def unsafe_out(out, claude_dir=None):
+    """Why out must not be written into, or None: home, the filesystem root, the Claude folder (or a folder holding it,
+    or inside it), or a folder that already holds other things."""
+    o = _norm(out)
+    home = _norm(os.path.expanduser('~'))
+    if o in (home, _norm(os.path.abspath(os.sep))):
+        return f'{out} is your home folder or the filesystem root'
+    if home.startswith(o.rstrip(os.sep) + os.sep):
+        return f'{out} holds your home folder'
+    if claude_dir:
+        c = _norm(claude_dir)
+        if o == c or c.startswith(o.rstrip(os.sep) + os.sep) or o.startswith(c.rstrip(os.sep) + os.sep):
+            return f'{out} is, holds or is inside your Claude folder ({claude_dir})'
+    if os.path.isfile(out):
+        return f'{out} is a file'
+    if os.path.isdir(out) and os.listdir(out) and not is_report_dir(out):
+        return f'{out} already holds other files (it is not a claude-usage report folder)'
+    return None
+
+
+def prepare(out, claude_dir=None):
+    """Make out ready for this plugin's files, or stop: see unsafe_out(). Creates it readable by you alone, marks it as a
+    report folder, and makes an existing one private too."""
+    why = unsafe_out(out, claude_dir)
+    if why:
+        raise SystemExit(f'Refusing to write the report there: {why}. Choose a new or empty folder (--out), or the default.')
+    os.makedirs(out, mode=0o700, exist_ok=True)
+    try:
+        os.chmod(out, 0o700)
+    except OSError:
+        pass
+    mark = os.path.join(out, MARKER)
+    if not os.path.exists(mark):
+        with open(mark, 'w', encoding='utf-8') as fh:
+            fh.write('This folder holds claude-usage reports (private data: prompt snippets, paths, your setup).\n')
 
 
 def data_dir(out):
@@ -49,9 +116,21 @@ def received(out, name):
     return os.path.join(out, RECEIVED, name)
 
 
+def company(out):
+    return os.path.join(out, COMPANY)
+
+
+def require_report(out):
+    """Stop unless out is a report folder (see is_report_dir): the scripts that only add to a report never write elsewhere."""
+    if not is_report_dir(out):
+        raise SystemExit(f'No claude-usage report in {out}: run /claude-usage:report first (or usage_report.py), or pass --out '
+                         'with the report folder.')
+
+
 def migrate(out, log=None):
-    """Move files an older version left flat in <out> into data/ and applied/. Never overwrites a newer file."""
-    if not os.path.isdir(out):
+    """Move files an older version left flat in <out> into data/ and applied/. Never overwrites a newer file, and does
+    nothing in a folder that isn't a report folder (generic names like config.json may belong to something else)."""
+    if not os.path.isdir(out) or not is_report_dir(out):
         return
     moved = []
     for name in DATA_FILES:

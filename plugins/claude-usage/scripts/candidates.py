@@ -286,7 +286,7 @@ def hook_steps(script, event, args='', matcher=None, runner='python3'):
     group = {'hooks': [{'type': 'command', 'command': cmd, 'timeout': 10}]}
     if matcher:
         group = {'matcher': matcher, 'hooks': group['hooks']}
-    return [{'action': 'write_file', 'path': f'{HOOKS}/{script}', 'source': f'hooks/{script}', 'mode': '755'},
+    return [{'action': 'write_file', 'path': f'{HOOKS}/{script}', 'source': f'hooks/{script}', 'mode': '700'},
             {'action': 'merge_json', 'path': SETTINGS, 'value': {'hooks': {event: [group]}}}], cmd
 
 
@@ -361,9 +361,13 @@ def stop_hooks(R):
 
 
 def lever_row(R, key):
-    """SV1's row for a lever: SV1 shows each lever's card and a label; the model levers share SV6 and differ in wording."""
+    """SV1's row for a lever: by its id when the report wrote one, else by its card and label (reports from before the ids;
+    the model levers share SV6 and differ in wording)."""
+    rows = R.rows('SV1', 'c')
+    if any('id' in r for r in rows):
+        return next((r for r in rows if r.get('id') == key), None)
     card, prefix = LEVER_ROWS[key]
-    return next((r for r in R.rows('SV1', 'c') if r.get('c') == card and (r.get('l') or '').startswith(prefix)), None)
+    return next((r for r in rows if r.get('c') == card and (r.get('l') or '').startswith(prefix)), None)
 
 
 def sv3_row(R, cause):
@@ -924,7 +928,7 @@ def statusline_cache(R, S, v):
              f'In {SETTINGS} add "statusLine": {{"type": "command", "command": "python3 \\"$HOME/.claude/hooks/claude-usage/statusline.py\\""}}.'],
             f'apply.py undo statusline-cache, or remove statusLine from {SETTINGS}.', docs('statusline'),
             tradeoffs='None beyond a line at the bottom of the terminal.',
-            steps=[{'action': 'write_file', 'path': f'{HOOKS}/statusline.py', 'source': 'hooks/statusline.py', 'mode': '755'},
+            steps=[{'action': 'write_file', 'path': f'{HOOKS}/statusline.py', 'source': 'hooks/statusline.py', 'mode': '700'},
                    {'action': 'merge_json', 'path': SETTINGS, 'value': {'statusLine': {
                        'type': 'command', 'command': 'python3 "$HOME/.claude/hooks/claude-usage/statusline.py"'}}}],
             apply_summary=f'Copy statusline.py to {HOOKS}/ and set it as statusLine in {SETTINGS}.',
@@ -1334,6 +1338,11 @@ LEVER_ROWS = {   # SV1 row: (its Details card, label prefix)
     'main_model': ('SV6', 'Main threads on '), 'sub_model': ('SV6', 'Run subagents on'), 'compact': ('SV4', ''), 'misses': ('SV3', ''),
     'ttl': ('SV5', ''), 'fresh': ('SV7', ''), 'reads': ('SV8', ''), 'unused': ('SV2', ''), 'stop_hook': ('EX5', ''),
 }
+LEVER_TITLES = {   # one title per lever, free of model names and thresholds, for pages that show many people (company.py)
+    'main_model': 'Main threads on a cheaper model', 'sub_model': 'Subagents on a cheaper model', 'compact': '/compact earlier',
+    'misses': 'Avoid the avoidable cache misses', 'ttl': 'A cache lifetime that fits each thread', 'fresh': 'Start fresh after long breaks',
+    'reads': 'Read large files in ranges', 'unused': 'Switch off unused skills and servers', 'stop_hook': 'Stop-hook follow-up work',
+}
 LEVER_OVERLAPS = [   # levers whose savings count some of the same cost
     ('main_model', 'compact'), ('main_model', 'misses'), ('main_model', 'fresh'), ('main_model', 'reads'), ('main_model', 'stop_hook'),
     ('sub_model', 'misses'), ('sub_model', 'ttl'), ('compact', 'fresh'), ('compact', 'reads'), ('compact', 'misses'),
@@ -1736,6 +1745,7 @@ def load_fresh(out):
 
 def main(argv=None):
     VA.safe_console()
+    os.umask(0o077)                                     # the report folder holds private data: yours only
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--out', metavar='DIR', help='the report folder (default: the one usage_report.py uses, e.g. ~/.claude-usage)')
     ap.add_argument('--claude-dir', help='the Claude folder the report was built from (only to find the default --out)')
@@ -1747,6 +1757,7 @@ def main(argv=None):
                     'verify, undo, docs, the apply steps, related: links lists the pairs)')
     a = ap.parse_args(argv)
     out = os.path.abspath(os.path.expanduser(a.out)) if a.out else UR.default_out(UR.claude_dir(a.claude_dir))
+    layout.require_report(out)                             # it only ever adds to a report folder
     if not os.path.exists(layout.data(out, 'metrics.json')):
         sys.exit(f'No report data in {UR.tilde(layout.data_dir(out))}: run usage_report.py first.')
     if a.show:

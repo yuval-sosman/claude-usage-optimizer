@@ -22,7 +22,7 @@ saved so far. Nothing leaves your machine.
 - **Insights:** Claude reads the numbers and writes the bottom lines, cost first. Each one links to the charts behind it
   and says what it would have saved, all time and per 30 days.
 - **Optimizations:** concrete changes: settings, hooks, a status line, CLAUDE.md notes, habits. The ones a script can make
-  apply with one command, with a diff preview, a backup and an undo.
+  apply with one command you run yourself, with a diff preview, a backup and an undo. Claude never changes your setup.
 
 ## Install
 
@@ -45,6 +45,7 @@ library only); runs on macOS, Linux and Windows.
 /claude-usage:brainstorm    dig into the numbers with Claude and test what-ifs
 /claude-usage:video         a 30–60 second video of your own highlights, to share
 /claude-usage:share         the whole report as one file, to send to whoever compares usage
+/claude-usage:company       many people's share files combined: totals, people compared, levers company-wide
 ```
 
 Or just ask *"why did Claude Code cost so much last week?"*
@@ -61,7 +62,8 @@ Going well: a 93% cache hit rate, and Explore agents already run on Haiku.
 Next: /claude-usage:optimize turns these into changes you can apply one by one.
 ```
 
-Every change shows exactly what it will do before it does it:
+Every change shows exactly what it will do before it does it, and happens only when you type `y` at your own terminal
+(Claude can preview a change, but never apply it):
 
 ```text
 $ python3 …/claude-usage/scripts/apply.py apply subagents-on-sonnet
@@ -148,10 +150,11 @@ Each question, how it's counted and how to check it: [docs/QUESTIONS.md](plugins
 | Command | Options |
 |---|---|
 | `/claude-usage:report` | `--days N` (default 60) · `--since YYYY-MM-DD --until YYYY-MM-DD` · `--all` (every transcript on disk) · `--claude-dir DIR` · `--no-insights` (numbers only) · `--no-open` |
-| `/claude-usage:optimize` | a focus: `cost`, `cache`, `context`, `hooks` or anything else · `apply <id>`: apply one optimization, after a preview |
+| `/claude-usage:optimize` | a focus: `cost`, `cache`, `context`, `hooks` or anything else · `apply <id>`: preview one optimization and get the command to apply it yourself |
 | `/claude-usage:brainstorm` | a question or topic, e.g. `why are subagents so expensive?` |
 | `/claude-usage:video` | what to highlight, e.g. `cache misses and savings` · `--seconds 30-60` · `--no-mp4` |
 | `/claude-usage:share` | `--name NAME` · `--team TEAM` · `--no-open` · `open FILE`: open a share file someone sent you |
+| `/claude-usage:company` | `<folder of share files>` · `--since YYYY-MM-DD` · `--until YYYY-MM-DD` · `--no-open` |
 
 ```text
 /claude-usage:report --days 30
@@ -180,15 +183,15 @@ Each question, how it's counted and how to check it: [docs/QUESTIONS.md](plugins
 | `--quiet` | no progress output |
 | `--prices FILE`, `--template FILE` | another price table or HTML template |
 
-**Applying optimizations**: `python3 $S/apply.py <command> [id] [--dir DIR] [--claude-dir DIR] [--yes]`
+**Applying optimizations**: `python3 $S/apply.py <command> [id] [--dir DIR] [--claude-dir DIR]`
 
 | Command | What it does |
 |---|---|
 | `list` | what can be applied, and what already is |
 | `check` | preview every optimization in one call, one line each (nothing is written) |
 | `show <id>` | the exact changes for one, as a diff (nothing is written) |
-| `apply <id>` | preview, confirm (or `--yes`), back up, apply |
-| `undo <id>` | revert just that change; later changes to the same files are kept |
+| `apply <id>` | preview, ask you at your terminal, back up, apply (without a terminal, e.g. from Claude, it changes nothing) |
+| `undo <id>` | preview, ask you, revert just that change; later changes to the same files are kept |
 
 `--dir` is the report folder (default as for `--out`); `--claude-dir` is the Claude folder to change (default: the one
 the report was built from).
@@ -208,6 +211,9 @@ the report was built from).
 |---|---|
 | `pack` | `--name NAME` · `--team TEAM` · `--reveal`: write the whole report as one file to `<out>/share/` |
 | `unpack FILE` | `--to DIR` · `--open`: turn a share file back into a report folder (default `<out>/received/<file name>/`) |
+
+**The company report**: `python3 $S/company.py build FOLDER [--to DIR] [--since D] [--until D] [--open] [--quiet]`
+combines every share file in FOLDER into `<out>/company/` (report.html, data/digest.md, data/people.csv).
 
 **What the skills run for you** (rarely needed by hand):
 - `candidates.py --out DIR [--show SECTIONS] [--brief]`: the optimization drafts and savings bundles;
@@ -231,8 +237,9 @@ the report was built from).
 <details>
 <summary><b>Applying and undoing an optimization</b></summary>
 
-Each one-command card in the Optimizations tab has a **Copy** button for its `apply.py apply <id>` command. It shows a
-diff per file and asks before writing, backs up every file it touches, and only touches files under your home directory.
+Each one-command card in the Optimizations tab has a **Copy** button for its `apply.py apply <id>` command, to run in
+your terminal. It shows a diff per file and writes nothing until you type `y` there, backs up every file it touches, and
+can only change what [`scripts/policy.py`](plugins/claude-usage/scripts/policy.py) allows (see Privacy and safety).
 `apply.py undo <id>` removes just that change and keeps other optimizations and your own later edits. `apply.py list`
 shows what's applied, and `apply.py check` previews them all in one go. Settings and hooks take effect in new sessions.
 
@@ -267,8 +274,8 @@ on and it picks and words the scenes; it runs 30 to 60 seconds.
 - It leaves out project names, session titles, file paths and prompts unless you ask for them.
 - It writes `~/.claude-usage/video/claude-usage-video.mp4` (1080 × 1080, H.264) and `video.html`, which plays the same
   video in a browser, offline. The MP4 needs Chrome (or Edge, Chromium, Brave) and ffmpeg. The skill checks for both
-  first and, if one is missing, offers to install it with your system's package manager (it asks before installing
-  anything); without them you still get the page, ready to screen-record.
+  first and, if one is missing, gives you the command to install it yourself; it never installs anything. Without them
+  you still get the page, ready to screen-record.
 </details>
 
 <details>
@@ -278,16 +285,37 @@ on and it picks and words the scenes; it runs 30 to 60 seconds.
 compares usage across people (a team lead, a platform team):
 
 - It holds everything report.html holds, and more: every number, chart, table and miss trace of every project scope, the
-  insights and optimizations, the optimization drafts, your setup (secrets removed), the optimizations you applied, and
+  insights and optimizations, the optimization drafts, your setup (secrets redacted), the optimizations you applied, and
   every row of the CSV exports, with numbers as numbers. The format is `plugins/claude-usage/schemas/share.schema.json`.
 - It writes `~/.claude-usage/share/claude-usage-share-<name>-<date>.json` and shows it in your file manager. Add
   `--name` and `--team` to say who it is from. It tells you when the report is days old or the insights are out of
   date, so you can refresh them first.
-- It includes project names, session titles, file paths, prompt snippets and commands, like report.html. Send it only
-  to someone you would show your report to.
+- It includes project names, session titles, file paths, prompt snippets and commands, like report.html (keys, tokens
+  and passwords in them are replaced by `<redacted>`, as far as they can be recognised). Send it only to someone you
+  would show your report to.
 - Whoever gets it runs `/claude-usage:share open <file>`: it becomes a report folder in `~/.claude-usage/received/`
   with its own report.html, showing who shared it and without the apply commands (those optimizations are for the
   sender's machine).
+</details>
+
+<details>
+<summary><b>A company report from many people's files</b></summary>
+
+Collect people's share files in one folder and run `/claude-usage:company <folder>`. It builds one page for everyone
+(`~/.claude-usage/company/report.html`) and Claude sums it up:
+
+- **Company**: spend per 30 days and the weekly trend, by model and platform (Claude API or Bedrock, global or regional),
+  cache hit rate and what misses cost, context sizes.
+- **People**: one row each, compared per 30 days of their own period (people send files covering different days); who
+  stands out and why.
+- **Savings levers**: which change (model mix, compacting earlier, cache misses, Stop hooks, unused skills and servers…)
+  would save the most across everyone, and for how many people.
+- Every call is re-priced at this plugin's prices, so everyone is priced the same way. Savings come from each person's
+  own report. The same person's files from two machines are merged, and an older copy of the same history is dropped; the
+  page lists every file it left out, and why.
+- It shows each person's name (or computer account) but no project names, session titles or prompts. The person selector
+  shows one person's figures against the company median. Every card is explained in
+  [docs/COMPANY.md](plugins/claude-usage/docs/COMPANY.md).
 </details>
 
 <details>
@@ -309,6 +337,7 @@ where Claude Code guards every write. To change it, pass `--out DIR`, or set `CL
 ├── video/               /claude-usage:video: storyboard.json, video.html and claude-usage-video.mp4
 ├── share/               /claude-usage:share: the one-file copies of your report you made to send
 ├── received/            share files others sent you, each unpacked into its own report folder
+├── company/             /claude-usage:company: many people's share files combined (report.html, data/)
 └── applied/             once you apply something: applied.json and backups/
 ```
 </details>
@@ -351,13 +380,36 @@ where Claude Code guards every write. To change it, pass `--out DIR`, or set `CL
 </details>
 
 <details>
-<summary><b>Privacy</b></summary>
+<summary><b>Privacy and safety</b></summary>
 
-Everything stays local, and the report makes no network requests. It contains prompt snippets, file paths and session
-titles, so treat it like your transcripts. `config.json` and the digest drop anything that looks like a key, token or
-secret, and list MCP servers by name only. The video, meant for sharing, shows numbers only: no prompts, and no project
-names, session titles or paths unless you ask. The share file (`/claude-usage:share`) is the opposite: it holds all of
-the report, names and prompt snippets included, and leaves your machine only when you send it.
+- **Local only.** The scripts use no network and send no telemetry. report.html and video.html carry a Content Security
+  Policy that blocks every network request, whatever the data holds. The browser that draws the video runs with a
+  throwaway profile and no network, driven over a private pipe rather than a port.
+- **Yours only.** The output folder is created readable by you alone (and made so on every run), and the scripts refuse
+  to write into your home folder, the Claude folder or any folder that isn't a report folder. The report contains prompt
+  snippets, file paths and session titles, so treat it like your transcripts. Keys, tokens and passwords in settings,
+  commands, prompts and titles are replaced by `<redacted>` (by pattern: it catches the common forms, not every secret),
+  environment variables other than Claude Code's own show as `<set>`, and MCP servers are listed by name only.
+- **Least privilege for Claude.** Each skill pre-approves only its own scripts, by their full path in the plugin, reads
+  only the report folder (and the plugin's own reference files), and writes only the one notes file it owns. Anything
+  else (another command, `python3 -c`, a transcript, a file elsewhere) goes through Claude Code's normal permission
+  prompt. Only `/claude-usage:report` can start without you typing it; the others run only when you do.
+- **Nothing changes without you.** `apply.py apply` and `undo` write only after you type `y` at your own terminal;
+  Claude Code's tools have no terminal, so Claude can preview a change but never make it. What an optimization can change
+  at all is fixed in [`scripts/policy.py`](plugins/claude-usage/scripts/policy.py): copies of the bundled hooks in
+  `~/.claude/hooks/claude-usage/`, a marked block in `~/.claude/CLAUDE.md`, and a short list of settings keys (model,
+  effort, cache lifetimes, compaction, skill listing, switching plugins or MCP servers off, output limits, a few model and
+  cache environment variables, and hooks or a status line that run the bundled scripts). It never runs a command, never
+  touches permissions, API keys or endpoints, MCP definitions or your own hooks, never shortens transcript retention, and
+  undo restores only from its own backups.
+- **Nothing installed.** The plugin adds no hooks, MCP servers or background processes of its own; hooks exist only if
+  you apply an optimization that installs one, and they fail open. The video skill never installs a browser or ffmpeg:
+  it tells you the command.
+- **Files from others.** A share file someone sends you is treated as untrusted: its size and nesting are capped, its
+  text is shown without control characters, it can't bring a command to the page, and it is unpacked only into a new
+  folder. The video, meant for sharing, shows numbers only: no prompts, and no project names, session titles or paths
+  unless you ask. The share file (`/claude-usage:share`) is the opposite: it holds all of the report, names and prompt
+  snippets included, and leaves your machine only when you send it.
 </details>
 
 <details>
@@ -368,16 +420,18 @@ the report, names and prompt snippets included, and leaves your machine only whe
 CLAUDE.md                            for working on the plugin
 plugins/claude-usage/
   .claude-plugin/plugin.json         the plugin manifest
-  skills/report|optimize|brainstorm|video|share/  the five skills and their reference guides
+  skills/report|optimize|brainstorm|video|share|company/  the six skills and their reference guides
   scripts/usage_report.py            the engine (stdlib Python 3.8+); report_template.html is the offline UI
   scripts/apply.py, validate.py      apply/undo optimizations; check Claude's output
   scripts/candidates.py, assemble.py the optimization drafts and savings bundles; merge Claude's notes into the final JSON
   scripts/video*.py, fonts/          the highlights video: storyboard, checks, template, recorder (headless browser + ffmpeg)
   scripts/share.py                   the whole report as one file to send, and back into a report folder
+  scripts/company.py                 many people's share files combined into one company report
   scripts/prices.json                USD per million tokens per model
   scripts/hooks/                     hooks and status line the optimizations install
   schemas/                           the insights, optimizations, video storyboard and share file contracts
   docs/QUESTIONS.md                  every question: why, how, what it found
+  docs/COMPANY.md                    the company report's cards: why, how, how to check
   docs/screenshots/                  the made-up data and script behind docs/images/
 promo/                               the launch videos (HTML), their MP4s and GIFs, and render.mjs
 ```

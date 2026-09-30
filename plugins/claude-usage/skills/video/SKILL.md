@@ -3,7 +3,7 @@ name: video
 description: Make a 30–60 second video of your own Claude Code usage highlights (cost, a costly cache miss, insights, optimizations and what they would save) to share, as an MP4 and a self-playing HTML page in the report's style. Run after /claude-usage:report.
 disable-model-invocation: true
 argument-hint: "[what to highlight, e.g. \"cache misses and savings\"] [--seconds 30-60] [--no-mp4]"
-allowed-tools: Read, Edit, Bash(python3 *), Bash(open *), Bash(xdg-open *), Bash(brew install ffmpeg), Bash(brew install --cask google-chrome), Bash(winget install --id Gyan.FFmpeg *), Bash(winget install --id Google.Chrome *), Bash(scoop install ffmpeg)
+allowed-tools: Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/video.py" *), Read(~/.claude-usage/**), Read(~/.claude/plugins/cache/claude-usage-optimizer/claude-usage/**), Edit(~/.claude-usage/video/storyboard.json)
 ---
 
 # A video of the user's usage highlights
@@ -25,8 +25,7 @@ the data files.
   text. `check` refuses them. Include them only if the user asks, and then set `"allow_names": true`.
 - Dollars are API list-price equivalents; the video says so in its last frame.
 
-Paths: scripts are in `${CLAUDE_SKILL_DIR}/../../scripts` (if that variable isn't substituted, use the "Base directory
-for this skill" shown above: scripts are two levels up). `<OUT>` is the report folder, `~/.claude-usage` by default;
+Paths: the plugin's scripts are in `${CLAUDE_PLUGIN_ROOT}/scripts`. Exactly those commands are pre-approved (each script by its full path); anything else, such as another program, `python3 -c`, a `cd` or a pipe, makes Claude Code ask the user first, so don't work around a refusal. `<OUT>` is the report folder, `~/.claude-usage` by default;
 `plan` prints the storyboard's path inside it.
 
 ## 1. Prerequisites
@@ -34,34 +33,27 @@ for this skill" shown above: scripts are two levels up). `<OUT>` is the report f
 Skip this step if the user asked for the page only (`--no-mp4`): that needs nothing but Python.
 
 ```bash
-python3 "${CLAUDE_SKILL_DIR}/../../scripts/video.py" tools
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/video.py" tools
 ```
 
 The MP4 needs two programs besides Python: a Chromium-based browser (Chrome, Edge, Chromium or Brave), which draws each
 frame, and ffmpeg, which encodes the frames into the video. `tools` finds them, or prints for each missing one the
-`install:` command for this machine (with who should run it) and a `by hand:` link, and ends with `ready: yes` or
-`ready: no`.
+`install:` command for this machine and a `by hand:` link, and ends with `ready: yes` or `ready: no`.
 
-When something is missing:
+**Never install anything.** This skill can't (no install command is allowed to it) and must not try another way. When
+something is missing:
 
-1. Tell the user, in a sentence or two, what is missing and what it's for, show the install command, and ask whether to
-   install it now. Installing software is their decision: never install without a clear yes.
-2. On a yes:
-   - If the line says **Claude can run it** (Homebrew, winget, scoop): run the `install:` command exactly as printed,
-     with a long timeout (Homebrew can take several minutes). If it fails, show the error and go to step 4.
-   - If it says **the user runs it** (it needs `sudo` or an admin shell): ask the user to run it in this session by typing
-     it with a `!` in front, e.g. `! sudo apt-get install -y ffmpeg` (they enter their password there), and wait for them.
-   - With no `install:` command (no package manager found), give the `by hand:` link. Don't install a package manager
-     (such as Homebrew) for them.
-3. Run `video.py tools` again. It also looks where installers put these programs, so a fresh install counts even before
-   the shell's PATH knows about it.
-4. On `ready: yes`, go on. If the user declines, or the install doesn't work, go on anyway: `render` then writes the HTML
-   page, which plays the same video and can be screen-recorded (H hides the controls). Say so.
+1. Tell the user, in a sentence or two, what is missing and what it's for, and give them the `install:` command (or the
+   `by hand:` link) to run themselves if they want the MP4, in their own terminal or here with a `!` in front
+   (e.g. `! brew install ffmpeg`). It is their decision and their command.
+2. Go on without waiting: `render` writes the HTML page, which plays the same video and can be screen-recorded (H hides
+   the controls). Say so. Once they have installed it, `video.py tools` finds it (it also looks where installers put
+   these programs, before the shell's PATH knows about them) and `render` makes the MP4.
 
 ## 2. Plan
 
 ```bash
-python3 "${CLAUDE_SKILL_DIR}/../../scripts/video.py" plan [--seconds N]
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/video.py" plan [--seconds N]
 ```
 
 Pass `--seconds` only if the user asked for a length (30–60). If it stops with "No report data", tell the user to run
@@ -75,7 +67,7 @@ their figures), and notes (for example: no optimizations yet, or insights writte
 Read `<OUT>/video/storyboard.json` (the Read is required before editing it). The draft already works; change it only to
 serve what the user asked for in `$ARGUMENTS`, or to make the headlines better:
 
-- **Scenes** (the contract is `${CLAUDE_SKILL_DIR}/../../schemas/video.schema.json`): `intro` (total cost and daily
+- **Scenes** (the contract is `${CLAUDE_PLUGIN_ROOT}/schemas/video.schema.json`): `intro` (total cost and daily
   spend), `numbers` (`tiles`), `models` (cost by model and token type), `miss` (`trace`: one costly cache miss, step by
   step), `insights` (`items`: 1–3 insight ids), `levers` (`items`: 2–5 SV1 lever names; use when there are no
   insights), `optimizations` (`items`: 1–4 ids; applied ones show a check), `savings` (the changes together, overlaps
@@ -93,13 +85,13 @@ serve what the user asked for in `$ARGUMENTS`, or to make the headlines better:
 Then check it, fix what it lists, and repeat until it prints `OK`:
 
 ```bash
-python3 "${CLAUDE_SKILL_DIR}/../../scripts/video.py" check
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/video.py" check
 ```
 
 ## 4. Render
 
 ```bash
-python3 "${CLAUDE_SKILL_DIR}/../../scripts/video.py" render --open
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/video.py" render --open
 ```
 
 Run it with a long timeout (up to 10 minutes): recording draws every frame, about a minute or two for a 45 s video.

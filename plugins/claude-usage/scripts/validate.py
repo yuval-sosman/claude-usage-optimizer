@@ -16,6 +16,7 @@ HERE = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, HERE)
 import apply as AP  # noqa: E402  (the exact path rules apply.py uses)
 import layout  # noqa: E402
+import policy  # noqa: E402  (what an optimization may change at all)
 ROOT = os.path.dirname(HERE)
 TYPES = {'object': dict, 'array': list, 'string': str, 'boolean': bool, 'null': type(None)}
 
@@ -148,8 +149,22 @@ def home_path(p, out):
     return AP.resolve(p, out)
 
 
-def allowed_path(p):
-    return any(p == r or p.startswith(r + os.sep) for r in (AP.HOME, AP.CLAUDE_DIR))
+def step_errs(st, out):
+    """What policy.py says about one apply step: its shape and target, then the settings change it makes, tried on an
+    empty settings file (apply.py checks it again against the user's real file before it previews or writes)."""
+    errs = policy.step_problems(st, lambda p: home_path(p, out), AP.CLAUDE_DIR, AP.HOME)
+    if errs or st.get('action') not in policy.JSON_ACTIONS:
+        return errs
+    st = AP.expand_all(st, out)
+    try:
+        if st['action'] == 'merge_json':
+            before, after = {}, AP.deep_merge({}, st['value'])
+        else:
+            before = AP.set_pointer({}, st['pointer'], None)      # something there to set over or to remove
+            after = AP.set_pointer(before, st['pointer'], st['value']) if st['action'] == 'set_json' else AP.unset_pointer(before, st['pointer'])
+    except (Exception, SystemExit) as e:
+        return [f'the JSON change can\'t be made ({e})']
+    return policy.settings_problems(before, after, AP.hook_dirs(), (), AP.fast_command)
 
 
 SYMMETRIC = ('alternative', 'conflicts', 'overlaps', 'complements')      # listed by both sides; "requires" by one
@@ -255,26 +270,7 @@ def validate_optimizations(doc, metrics, insights, out=None):
             if not isinstance(st, dict):
                 continue
             w = f'{where}.apply.steps[{k}]'
-            act, path = st.get('action'), st.get('path') or ''
-            if not allowed_path(home_path(path, out or os.getcwd())):
-                errs.append(f'{w}: path {path!r} is outside your home directory and your Claude folder')
-            if act == 'write_file':
-                if bool(st.get('source')) == bool(st.get('content')):
-                    errs.append(f'{w}: write_file needs exactly one of "source" or "content"')
-                if st.get('source') and not os.path.isfile(os.path.join(HERE, st['source'])):
-                    errs.append(f'{w}: bundled source {st["source"]!r} not found under scripts/')
-            elif act == 'merge_json' and not isinstance(st.get('value'), dict):
-                errs.append(f'{w}: merge_json needs an object "value"')
-            elif act in ('set_json', 'unset_json') and not st.get('pointer'):
-                errs.append(f'{w}: {act} needs a "pointer"')
-            elif act == 'set_json' and 'value' not in st:
-                errs.append(f'{w}: set_json needs a "value"')
-            elif act == 'append_text' and not (st.get('content') and st.get('marker')):
-                errs.append(f'{w}: append_text needs "content" and "marker"')
-            elif act == 'run' and not st.get('command'):
-                errs.append(f'{w}: run needs a "command"')
-            if act in ('merge_json', 'set_json', 'unset_json') and not path.endswith('.json'):
-                errs.append(f'{w}: {act} only edits .json files')
+            errs += [f'{w}: {e}' for e in step_errs(st, out or os.getcwd())]
     errs += relation_errs([o for o in doc.get('optimizations') or [] if isinstance(o, dict)], out or os.getcwd())
     return errs
 
