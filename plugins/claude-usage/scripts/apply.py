@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Apply the optimizations the claude-usage:optimize skill wrote, one at a time, with a preview, a backup and an undo.
+"""Apply the optimizations the claude-usage skills wrote (/claude-usage:report, or /claude-usage:optimize), one at a
+time, with a preview, a backup and an undo.
 
   python3 apply.py list                 # what can be applied, and what already is
   python3 apply.py show  <id>           # preview the exact changes (nothing is written)
@@ -977,7 +978,7 @@ def main(argv=None):
         raise SystemExit(f'{out} holds ' + ('a company report (many people combined): it has nothing to apply. '
                                            if shared_report(out, 'company') else
                                            'a report someone shared with you: its optimizations were written for their machine. ')
-                         + 'Run /claude-usage:report and /claude-usage:optimize for your own.')
+                         + 'Run /claude-usage:report for your own (it writes both tabs).')
     if not a.claude_dir:                                    # apply to the Claude folder the optimizations were computed for
         CLAUDE_DIR = report_claude_dir(out) or CLAUDE_DIR
     if a.cmd == 'undo':
@@ -987,7 +988,7 @@ def main(argv=None):
     doc = read_json(os.path.join(out, 'optimizations.json'))
     opts = {o['id']: o for o in doc.get('optimizations') or []}
     if not opts:
-        raise SystemExit(f'No optimizations in {out}/optimizations.json. Run /claude-usage:optimize in Claude Code first.')
+        raise SystemExit(f'No optimizations in {out}/optimizations.json. Run /claude-usage:report in Claude Code first (it writes both tabs).')
     state = load_state(out)
     if a.cmd == 'check':
         raise SystemExit(1 if do_check(opts, out) else 0)

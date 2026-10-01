@@ -101,7 +101,8 @@ class Data:
         self.spend, self.days = self.hero.get('value') or 0, self.head.get('days') or 0
         self.notes = []
         self.insights = self._fresh('insights.json', 'Insights', '/claude-usage:report')
-        self.opts = self._fresh('optimizations.json', 'Optimizations', '/claude-usage:optimize')
+        self.opts = self._fresh('optimizations.json', 'Optimizations',            # /claude-usage:report writes both tabs
+                                '/claude-usage:optimize' if self.insights else '/claude-usage:report')
         state = os.path.join(layout.applied_dir(out), 'applied.json')
         try:
             self.applied = set(read_json(state)) if os.path.exists(state) else set()
@@ -404,7 +405,7 @@ def resolve(s, D):
         r['items'] = [{'title': x.get('title') or a['id'], 'usd': a['usd'], 'month': a['month']} for x, a in pick(avail, 'lever', default_n=4)]
     elif t == 'optimizations':
         if not D.opts:
-            raise ValueError('no current optimizations.json: run /claude-usage:optimize first')
+            raise ValueError('no current optimizations.json: run /claude-usage:report first (it writes both tabs)')
         r['items'] = []
         for x, o in pick(D.opt_items(), 'optimization', default_n=4):
             sv = o.get('savings') or {}

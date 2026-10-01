@@ -129,11 +129,12 @@ def older_than(page, folder):
     return [what for p, what in srcs if os.path.exists(p) and os.path.getmtime(p) > t]
 
 
-def item_status(folder, name, meta, own):
-    """'insights: 18, current', or why they are out of date, with what brings them up to date (your own report only)."""
+def item_status(folder, name, meta, own, insights_ok=True):
+    """'insights: 18, current', or why they are out of date, with what brings them up to date (your own report only):
+    /claude-usage:report rewrites both tabs; /claude-usage:optimize is enough when the insights are current."""
     p = os.path.join(folder, name + '.json')
     js = read(p)
-    skill = '/claude-usage:report' if name == 'insights' else '/claude-usage:optimize'
+    skill = '/claude-usage:optimize' if name == 'optimizations' and insights_ok else '/claude-usage:report'
     if not js:
         if os.path.exists(p):
             return f'{name}: {name}.json can\'t be read' + (f' ({skill} writes it again)' if own else '')
@@ -251,7 +252,8 @@ def main(argv=None):
         print(f"  numbers counted {plain(meta.get('generated'), 30) or 'at an unknown time'}, covering {span}"
               + (f" ({plain(meta.get('subtitle'), 160)})" if meta.get('subtitle') else ''))
         if kind != 'company':
-            print('  ' + ' · '.join(item_status(folder, n, meta, kind == 'own') for n in ('insights', 'optimizations')))
+            ins = item_status(folder, 'insights', meta, kind == 'own')
+            print('  ' + ins + ' · ' + item_status(folder, 'optimizations', meta, kind == 'own', ins.endswith('current')))
     for n in notes:
         print('  ' + n)
     if kind == 'received':

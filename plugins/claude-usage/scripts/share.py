@@ -191,10 +191,11 @@ def pack(out, name=None, team=None):
     elif status['insights'] == 'out of date':
         notes.append(f'The insights were written from an older report ({made_from(ins)}; the report is from {gen}): run '
                      '/claude-usage:report, then share again, to send current ones.')
+    redo = '/claude-usage:optimize' if status['insights'] == 'current' else '/claude-usage:report'    # report rewrites both tabs
     if status['optimizations'] == 'missing':
-        notes.append('No optimizations yet: /claude-usage:optimize writes them; share again afterwards to include them.')
+        notes.append(f'No optimizations yet: {redo} writes them; share again afterwards to include them.')
     elif status['optimizations'] == 'out of date':
-        notes.append('The optimizations were written from an older report or older insights: run /claude-usage:optimize, then '
+        notes.append(f'The optimizations were written from an older report or older insights: run {redo}, then '
                      'share again, to send current ones.')
     if status['candidates'] != 'current':
         notes.append('The optimization drafts (candidates.json) are missing or older than the report: the next report run '

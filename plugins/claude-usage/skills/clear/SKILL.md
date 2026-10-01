@@ -61,4 +61,4 @@ nothing else is left in it, and names anything it couldn't remove.
 ## 4. Reply
 
 Short: what was removed (items and size), what was kept and why, and the way back: `/claude-usage:report` builds a new
-report (and writes new insights), then `/claude-usage:optimize` new optimizations.
+report and writes both tabs, the insights and the optimizations.

@@ -2,7 +2,7 @@
 
   <out>/report.html            the report: open this
   <out>/insights.json          written by /claude-usage:report (Claude), yours to edit
-  <out>/optimizations.json     written by /claude-usage:optimize (Claude)
+  <out>/optimizations.json     written by /claude-usage:report, or redone by /claude-usage:optimize (Claude)
   <out>/data/                  rebuilt by usage_report.py on every run: metrics.json, digest.md, config.json, candidates.json, *.csv
   <out>/applied/               apply.py's record (applied.json) and backups/, once you apply an optimization
   <out>/video/                 /claude-usage:video: storyboard.json (Claude), video.html and claude-usage-video.mp4 (video.py)
