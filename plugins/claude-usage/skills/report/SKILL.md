@@ -1,15 +1,16 @@
 ---
 name: report
-description: Build and open the Claude Code usage report from the local transcripts (cost, caching, context, sessions, tools, hooks), with Claude-written insights on what each change would have saved. Use when the user asks to analyze, audit or explain their Claude Code usage, cost, cache hits or context size, or to run, refresh or open the usage report.
+description: Build and open the Claude Code usage report from the local transcripts (cost, caching, context, sessions, tools, hooks), with Claude-written insights on what each change would have saved and the optimizations to apply. Use when the user asks to analyze, audit or explain their Claude Code usage, cost, cache hits or context size, or to run, refresh or open the usage report.
 argument-hint: "[--days N (default 60) | --since YYYY-MM-DD --until YYYY-MM-DD | --all] [--claude-dir DIR] [--no-insights] [--no-open]"
-allowed-tools: Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/usage_report.py" *), Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/candidates.py" *), Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/assemble.py" *), Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/open.py" *), Read(~/.claude-usage/**), Read(~/.claude/plugins/cache/claude-usage-optimizer/claude-usage/**), Edit(~/.claude-usage/data/notes-insights.json)
+allowed-tools: Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/usage_report.py" *), Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/candidates.py" *), Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/assemble.py" *), Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/open.py" *), Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/apply.py" check *), Bash(claude --version), WebFetch(domain:code.claude.com), Read(~/.claude-usage/**), Read(~/.claude/plugins/cache/claude-usage-optimizer/claude-usage/**), Edit(~/.claude-usage/data/notes-insights.json), Edit(~/.claude-usage/data/notes-optimizations.json)
 ---
 
-# Usage report + insights
+# Usage report, insights and optimizations
 
 You run a deterministic script that counts everything in the user's Claude Code transcripts and renders an HTML report,
-then you write the **Insights** tab: the bottom lines, grouped by category, cost first. The scripts produce every figure and
-every structure (savings, evidence, question ids, links); you bring the judgment and the prose.
+then you write the **Insights** tab (the bottom lines, grouped by category, cost first) and the **Optimizations** tab (the
+changes to make, each with its saving and how to apply it), so the report opens complete. The scripts produce every figure
+and every structure (savings, evidence, question ids, links); you bring the judgment and the prose.
 
 ## Ground rules (read first)
 
@@ -27,7 +28,7 @@ every structure (savings, evidence, question ids, links); you bring the judgment
   data favours something the guidance advises against, say what the guidance recommends instead, with the numbers.
 - Dollars are **API list-price equivalents** (tokens × prices.json). On a subscription they are a yardstick, not a bill. Say so
   once in the summary.
-- Never write `insights.json` yourself: `assemble.py` writes it from your notes (step 3).
+- Never write `insights.json` or `optimizations.json` yourself: `assemble.py` writes them from your notes (steps 3 and 4).
 - Run every command exactly as shown: one `python3 …` command, without `cd`, pipes, redirection or variables, so it matches
   the allowed tools and needs no permission prompt. The skill is allowed nothing else without the user's say-so.
 
@@ -59,7 +60,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/usage_report.py" $ARGUMENTS
 ```
 
 The script ignores `--no-insights` and `--no-open` (they are for you). It takes ~5 seconds and prints the report path on its
-last line: `<OUT>` is that file's folder. With `--no-insights`, skip to step 4.
+last line: `<OUT>` is that file's folder. With `--no-insights` (numbers only), skip to step 5.
 
 Without `--days`, `--since` or `--all` it covers the last 60 days. When the user asks for another period in words ("the
 last 3 months", "since September", "everything"), add `--days 90`, `--since 2026-09-01` or `--all` to the command.
@@ -143,9 +144,22 @@ The notes, for example:
     `pct_of_spend` and `usd_per_month` to have them computed from `usd_so_far`.
 - Cite questions the report shows (the digest marks hidden ones "not shown"): a hidden id in `questions` or `questions_add`
   is left out with a `note:`, and evidence must come from a shown question. Quote a hidden card's numbers in the text instead.
-- Don't write `optimizations` links: `/claude-usage:optimize` adds them.
+- Don't write `optimizations` links: step 4's assemble adds them.
 
-## 4. Render and open
+## 4. Write the optimizations
+
+Now the **Optimizations** tab, exactly as `/claude-usage:optimize` writes it (the user can run that later to redo them, for
+example with a focus, but doesn't have to). Read [../optimize/SKILL.md](../optimize/SKILL.md) and follow its ground rules,
+its steps 1 to 3, and the `check` command of its step 4. Its commands name the scripts as `${CLAUDE_PLUGIN_ROOT}/scripts/…`:
+run them with the same full path as this skill's commands. The differences:
+
+- You have read `digest.md` and best-practices.md already: don't read them again. Do read its
+  [catalog.md](../optimize/reference/catalog.md) and [claude-code.md](../optimize/reference/claude-code.md) as its step 1 says.
+- The drafts marked `first` lead the tab, in Start here (the cache-lifetime pin, whenever SV5 supports it): keep them unless
+  something specific to this user argues against one, and lead the optimizations summary with them.
+- Skip its render command and its reply: step 5 renders once, and step 6 replies for both tabs.
+
+## 5. Render and open
 
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/usage_report.py" --render --out "<OUT>" --open --tab insights
@@ -153,11 +167,13 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/usage_report.py" --render --out "<OUT>" -
 
 With `--no-insights`, use `--tab report`; with `--no-open`, leave out `--open --tab …` (it opens the default browser on macOS,
 Linux and Windows). The render step only embeds the JSON files into report.html (no recomputing), so re-run it whenever
-insights.json changes.
+insights.json or optimizations.json changes.
 
-## 5. Reply
+## 6. Reply
 
-Keep it short: the report path, the 3 biggest cost levers (one line each, with the saving all time and per 30 days), one thing
-that is going well, and the next steps: `/claude-usage:optimize` turns these into changes you can apply one by one,
-`/claude-usage:brainstorm` to dig into the data together. Don't paste the whole insights file. With `--no-insights`, give just
-the report path.
+Keep it short: the report path; the efficiency score; the 3 biggest cost levers (one line each, with the saving all time and
+per 30 days); the Start here optimizations and how to apply one (the tab's copy button gives the `apply.py` command to run in
+a terminal: it previews, asks, backs up, and can be undone; settings and hooks take effect in new sessions); one thing that is
+going well; and the next steps: `/claude-usage:optimize` redoes the optimizations (for example `/claude-usage:optimize cache`),
+`/claude-usage:brainstorm` digs into the data together. Don't paste the whole files. With `--no-insights`, give just the report
+path.

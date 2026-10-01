@@ -24,10 +24,12 @@ dollars each change would have saved so far. Nothing leaves your machine.
   practices would have saved, overlaps removed, so the grades show where to start; All projects compares your projects.
 - **Insights:** Claude reads the numbers and writes the bottom lines, cost first. Each one links to the charts behind it
   and says what it would have saved, all time and per 30 days.
-- **Optimizations:** concrete changes: settings, hooks, a status line, CLAUDE.md notes, habits. Each is a way of working
-  Claude Code's own documentation recommends, aimed and sized with your numbers, so a replay's saving never talks it into
-  something the docs advise against (such as compacting every few turns). The ones a script can make apply with one command
-  you run yourself, with a diff preview, a backup and an undo. Claude never changes your setup.
+- **Optimizations:** concrete changes: settings, hooks, a status line, CLAUDE.md notes, habits, written with the insights,
+  so the report opens complete; the quick wins lead, in Start here (whenever your numbers support it, 1-hour caching for the
+  main thread and 5 minutes for subagents). Each is a way of working Claude Code's own documentation recommends, aimed and
+  sized with your numbers, so a replay's saving never talks it into something the docs advise against (such as compacting
+  every few turns: a 1M-context cap stays at 400K). The ones a script can make apply with one command you run yourself, with
+  a diff preview, a backup and an undo. Claude never changes your setup.
 
 ## Install
 
@@ -45,9 +47,9 @@ library only); runs on macOS, Linux and Windows.
 ## Use
 
 ```text
-/claude-usage:report        build the report, write the Insights tab, open it
+/claude-usage:report        build the report, write the Insights and Optimizations tabs, open it
 /claude-usage:open          open the report you already have, without building it again
-/claude-usage:optimize      turn the insights into changes you can apply one by one
+/claude-usage:optimize      redo the optimizations (e.g. with a focus), or preview one to apply
 /claude-usage:brainstorm    dig into the numbers with Claude and test what-ifs
 /claude-usage:video         a 30–60 second video of your own highlights, to share
 /claude-usage:share         the whole report as one file, to send to whoever compares usage
@@ -66,7 +68,7 @@ Report: ~/.claude-usage/report.html
   2. General-purpose subagents on Sonnet 5: $41.92 (≈ $20.16 per 30 days)
   3. Avoidable cache misses, mostly prompts into a session after a long break: $38.76 (≈ $18.64 per 30 days)
 Going well: a 93% cache hit rate, and Explore agents already run on Haiku.
-Next: /claude-usage:optimize turns these into changes you can apply one by one.
+Start here: pin the cache lifetimes (1 hour main, 5 minutes subagents), one command; 11 optimizations in the tab.
 ```
 
 Every change shows exactly what it will do before it does it, and happens only when you type `y` at your own terminal
@@ -356,7 +358,7 @@ where Claude Code guards every write. To change it, pass `--out DIR`, or set `CL
 ~/.claude-usage/
 ├── report.html          open this: Report · Insights · Optimizations, a project selector, light and dark themes
 ├── insights.json        written by /claude-usage:report; yours to edit
-├── optimizations.json   written by /claude-usage:optimize
+├── optimizations.json   written by /claude-usage:report (and /claude-usage:optimize)
 ├── data/                rebuilt on every run: metrics.json, digest.md and candidates.json (what Claude reads), config.json, *.csv
 ├── video/               /claude-usage:video: storyboard.json, video.html and claude-usage-video.mp4
 ├── share/               /claude-usage:share: the one-file copies of your report you made to send

@@ -235,7 +235,7 @@ def relation_errs(opts, out):
     return errs
 
 
-WINDOW_FLOOR = 200_000     # the smallest auto-compact window an optimization may set (candidates.WINDOW_FLOOR)
+WINDOW_FLOOR = 300_000     # the smallest auto-compact window an optimization may set (candidates.WINDOW_FLOOR)
 NOTICE_FLOOR = 100_000     # the smallest context_guard.py threshold: Claude Code's own smallest auto-compact window
 GUIDE = 'skills/optimize/reference/best-practices.md'
 
@@ -259,7 +259,7 @@ def set_values(st):
 
 def practice_errs(o, where):
     """Changes the plugin never recommends, whatever a replay says they would have saved, because Claude Code's documented
-    best practice argues against them (GUIDE says why): compacting below 200K, a low default effort, thinking off, and a
+    best practice argues against them (GUIDE says why): compacting below 300K, a low default effort, thinking off, and a
     context notice below 100K."""
     errs = []
     for st in ((o.get('apply') or {}).get('steps')) or []:
@@ -267,8 +267,8 @@ def practice_errs(o, where):
             n = x if isinstance(x, int) and not isinstance(x, bool) else int(x) if isinstance(x, str) and x.isdigit() else None
             if k in ('autoCompactWindow', 'env/CLAUDE_CODE_AUTO_COMPACT_WINDOW') and n is not None and n < WINDOW_FLOOR:
                 errs.append(f'{where}: {k} {x} would compact earlier than {WINDOW_FLOOR:,} tokens, mid-task in most sessions; Claude Code '
-                            f'strongly recommends its auto window and the docs advise compacting at natural breaks: recommend /compact at '
-                            f'natural breaks or the context notice instead ({GUIDE})')
+                            f'strongly recommends its auto window and the docs advise compacting at natural breaks: cap a 1M model at '
+                            f'400,000 (never under {WINDOW_FLOOR:,}), next to /compact at natural breaks or the context notice ({GUIDE})')
             elif (k == 'effortLevel' or (k.startswith('modelSettings/') and k.endswith('/effortLevel'))) and x == 'low':
                 errs.append(f'{where}: a saved "low" effort makes every session think least; the docs keep low for quick exchanges you '
                             f'review, so suggest /effort low for those tasks instead ({GUIDE})')
@@ -294,6 +294,9 @@ def validate_optimizations(doc, metrics, insights, out=None):
     dup = {x for x in ids if ids.count(x) > 1}
     if dup:
         errs.append(f'duplicate optimization ids: {sorted(dup)}')
+    first = [o.get('id') for o in doc.get('optimizations') or [] if isinstance(o, dict) and o.get('first')]
+    if len(first) > 3:
+        errs.append(f'{len(first)} optimizations are marked first ({", ".join(map(str, first))}): Start here holds at most 3')
     src = doc.get('source') or {}
     if metrics:
         gen = (metrics.get('meta') or {}).get('generated')

@@ -7,9 +7,12 @@ entries. Paths use `~`; apply.py expands them and refuses anything outside the h
 
 Every entry follows Claude Code's documented best practice ([best-practices.md](best-practices.md)): the report's numbers
 decide whether an entry applies and how big it is, the guidance decides what the change is. That is why compaction is capped
-at 200K and offered beside a notice, why effort goes back to the model's default rather than below it, and why a skill used
-rarely is listed by name rather than switched off. validate.py (which assemble runs) refuses the changes that guidance rules
-out: an auto-compact window under 200K, a saved `low` effort, thinking off, a context notice under 100K.
+at 400K (never under 300K) beside a notice, why effort goes back to the model's default rather than below it, and why a skill
+used rarely is listed by name rather than switched off. validate.py (which assemble runs) refuses the changes that guidance
+rules out: an auto-compact window under 300K, a saved `low` effort, thinking off, a context notice under 100K.
+
+A draft with `first` (the cache-lifetime pin, whenever SV5 supports it) leads the Optimizations tab in **Start here**, ahead
+of the categories. At most 3 optimizations carry it: keep it for quick, low-risk changes worth making before the rest.
 
 `scripts/candidates.py` evaluates every entry below, in this order (one function per entry, its rule in the docstring;
 mcp-connect-first is part of mcp-off-where-unused), against metrics.json and config.json, and writes
@@ -101,24 +104,22 @@ rules cover pairs the catalog doesn't list:
 ## Context
 
 ### auto-compact-window: cap auto-compact on a 1M-context model
-- **When**: the model's window (CX5) is over 200K: a native 1M model compacts at about 967K by default. SV4 best threshold net
-  saving > $5, and an SV4 row of at least 200K above the best threshold still saves money; `autoCompactWindow` (or its env
-  variable) isn't set at or below it, and auto-compact isn't off. **Never on a 200K model**: auto already compacts near 200K,
-  the window Claude Code tunes and "strongly recommended for the best cost and performance"; there SV4 is acted on with
-  /compact at natural breaks and context-guard.
+- **When**: the model's window (CX5) is over 300K: a native 1M model compacts at about 967K by default. SV4 best threshold net
+  saving > $5, and SV4's 400K row still saves money (else its 300K row); `autoCompactWindow` (or its env variable) isn't set
+  at or below it, and auto-compact isn't off. **Never on a 200K model**: auto already compacts near 200K, the window Claude
+  Code tunes and "strongly recommended for the best cost and performance"; there SV4 is acted on with /compact at natural
+  breaks and context-guard.
 - **Saving**: the net saving of SV4's row at that window (`theoretical`).
-- **Apply**: `merge_json` `~/.claude/settings.json` value `{"autoCompactWindow": <W>}`, W = the first SV4 threshold of at least
-  200K above the best one that still saves money (e.g. best 150K → 200000): compaction triggers as usage *approaches* the
-  window. W is an integer from 100000 to 1000000 (Claude Code drops anything else; validate.py refuses under 200000). Id
-  `auto-compact-<W>k`.
-- **Manual**: `/autocompact 200k` (saves the setting and applies to the current session; `/autocompact auto` resets), and keep
+- **Apply**: `merge_json` `~/.claude/settings.json` value `{"autoCompactWindow": 400000}` (300000 when SV4's 400K row saves
+  nothing): a cap high enough that a long task keeps its room, whatever SV4's best threshold is (compaction triggers as usage
+  *approaches* the window). Never under 300K: validate.py refuses less. Id `auto-compact-<W>k`.
+- **Manual**: `/autocompact 400k` (saves the setting and applies to the current session; `/autocompact auto` resets), and keep
   compacting yourself at natural breaks with what to keep.
 - **Tradeoff**: Claude Code recommends its auto window and warns "Overriding auto may result in high token usage, especially
-  when resuming long sessions"; a compaction drops detail and can land mid-task. Risk `medium`. Always offer
-  **context-guard** as the gentle alternative.
-- **Related**: context-guard `alternative` (the same SV4 saving, forced vs a notice: with both, the notice fires just before
-  a compaction that happens anyway; pick context-guard when the user wants to decide). stale-cache-guard and big-read-guard
-  `overlaps` (see them).
+  when resuming long sessions"; a compaction drops detail and can land mid-task. Risk `medium`.
+- **Related**: context-guard `overlaps` (the notice asks for a /compact at a natural break from SV4's threshold; the cap is
+  the backstop for runs no one watches, such as a /goal: both cut big-context re-reads, so never add their savings).
+  stale-cache-guard and big-read-guard `overlaps` (see them).
 
 ### context-guard: a notice when the context passes the break-even size
 - **When**: SV4 best threshold net saving > $5 (the threshold below the model's window; SV4 starts at 100K, so the notice
@@ -132,8 +133,8 @@ rules cover pairs the catalog doesn't list:
   `{"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command", "command": "python3 \"$HOME/.claude/hooks/claude-usage/context_guard.py\" --threshold <T> --step 50000", "timeout": 10}]}]}}`.
 - **Tradeoff**: none beyond a line of text; it never blocks. The notice says what the docs advise: at the next natural break,
   /clear before unrelated work, /compact with what to keep otherwise.
-- **Related**: auto-compact-window `alternative`. statusline-cache `complements` (the status line shows the context size all
-  the time; the guard speaks up at the threshold). stale-cache-guard and big-read-guard `overlaps` (see them).
+- **Related**: auto-compact-window `overlaps` (see it). statusline-cache `complements` (the status line shows the context size
+  all the time; the guard speaks up at the threshold). stale-cache-guard and big-read-guard `overlaps` (see them).
 
 ### big-read-guard: steer Claude to targeted reads of large files
 - **When**: SV8 saving > $3 (large whole-file reads re-read for the rest of the session; CX3's costliest-item insight and EX8 show which files).
@@ -198,6 +199,8 @@ rules cover pairs the catalog doesn't list:
     would rather restart small → the guard. Propose one; mention the other in the note.
   - cache-ttl-fit, when it moves the main thread to 5m: `complements` (5m lets more returns expire; the guard stops the
     costly ones, which softens the switch's downside).
+  - cache-ttl-fit, when it only pins the 1h the main thread already ran on: `complements` (the pin keeps pauses under an
+    hour warm; the guard stops the costly first prompt after longer ones).
   - statusline-cache `complements` (the countdown warns before you type; the guard catches it when you don't look).
   - auto-compact-window / context-guard `overlaps` (SV7 is priced at the context sizes you had; compacting shrinks them).
 
@@ -209,19 +212,23 @@ rules cover pairs the catalog doesn't list:
 - **Saving**: none directly (awareness); omit `savings`.
 - **Related**: stale-cache-guard and context-guard `complements`.
 
-### cache-ttl-fit: choose the cache lifetime per thread kind
-- **When**: SV5's "Cheapest mix" differs from the actual mix and saves > $3 (current: main 1h on a subscription, else 5m;
-  subagents 5m unless configured). SV5 replays the whole history under each of the 4 main × subagent combinations and prints
-  the total bill for each. Cite its break-even line as the evidence: pauses of 5–60 min per 100 calls against the user's rate.
-  When the margin is under 5% ("a close call"), or the last 7 days favour the other lifetime, it is **(judgment)**: say so
-  and don't push a change.
-- **Saving**: actual total − the cheapest mix's total (`theoretical`).
-- **Apply**: `merge_json` `~/.claude/settings.json` value `{"promptCacheTtl": "5m"}` or `{"subagentPromptCacheTtl": "1h"}`, plus
-  (as in unused-listings-off) the other lifetime key when an applied earlier version set it; a single subagent type
-  can differ with `experimental.cacheTtl` in its agent file (SV5 lists each type).
-- If SV5 agrees with the current defaults, don't propose a change: write an insight that the lifetimes already fit.
-- **Related**: stale-cache-guard: `alternative` when the main thread goes to 1h, `complements` when it goes to 5m (see
-  stale-cache-guard). subagent-model `overlaps` when the subagent lifetime changes.
+### cache-ttl-fit: 1 hour for the main thread, 5 minutes for subagents
+- **When SV5 favours main 1 hour and subagents 5 minutes** (its per-kind cheaper lifetime; the usual result for interactive
+  work): pin that mix, `promptCacheTtl` `"1h"` and `subagentPromptCacheTtl` `"5m"`, whichever isn't already set (in settings,
+  or by `CLAUDE_CODE_PROMPT_CACHE_TTL` / `CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL`, which win over them). A standard early
+  recommendation, marked `first`: unset, the main lifetime is automatic, 1 hour only on a subscription within its usage
+  limits and 5 minutes on an API key, Bedrock, Vertex or Foundry, and `ENABLE_PROMPT_CACHING_1H` would move subagents to 1
+  hour. A close margin is fine: SV5 still favours it. An env variable that overrides a setting, or
+  `FORCE_PROMPT_CACHING_5M`, goes into the notes and a manual step to remove it.
+- **When SV5 favours another mix**: its cheapest mix differs from the actual one and saves > $3. When the margin is under 5%
+  ("a close call"), or the last 7 days favour the other lifetime, it is **(judgment)**: say so and don't push a change.
+- **Saving**: actual total − SV5's cheapest mix (`theoretical`) when the actual mix differs; none when the history already
+  ran on the pinned mix (the problem gives SV5's per-kind margins instead).
+- **Apply**: `merge_json` `~/.claude/settings.json` with the keys to set, plus (as in unused-listings-off) the other lifetime
+  key when an applied earlier version set it; a single subagent type can differ with `experimental.cacheTtl` in its agent
+  file (SV5 lists each type).
+- **Related**: stale-cache-guard: `alternative` when the main thread moves to 1h, `complements` when it moves to 5m or is only
+  pinned at the 1h it already had (see stale-cache-guard). subagent-model `overlaps` when the subagent lifetime changes.
 
 ### keep-awake: don't let the Mac sleep mid-run
 - **When**: SV3 has a "Computer went to sleep" row (ME7 shows the errors) and the user is on macOS (config.json's home is

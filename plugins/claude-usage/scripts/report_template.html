@@ -3191,8 +3191,16 @@ function renderOpts() {
       return b;
     }));
     var secs = [];
+    var lead = function (u) { return u.items.some(function (o) { return o.first === true; }); };
+    var firsts = units.filter(function (u) { return lead(u) && unitMatch(u, cur); }).sort(function (a, b) { return b.save - a.save; });
+    if (firsts.length) {          // the few changes worth making first (the cache-lifetime pin, for one), ahead of the categories
+      var top = h('section', { class: 'vcat', id: 'ocat-first', 'data-toc': 'Start here' }, h('h3', { text: 'Start here' }),
+        h('p', { class: 'catsub', text: 'Quick, low-risk changes worth making before the rest.' }));
+      firsts.forEach(function (u) { top.append(u.items.length > 1 ? choiceEl(u) : optCard(u.items[0])); });
+      secs.push(top);
+    }
     CATS.forEach(function (c) {
-      var these = units.filter(function (u) { return u.cat === c.id && unitMatch(u, cur); }).sort(function (a, b) { return b.save - a.save; });
+      var these = units.filter(function (u) { return u.cat === c.id && !lead(u) && unitMatch(u, cur); }).sort(function (a, b) { return b.save - a.save; });
       if (!these.length) return;
       var sec = h('section', { class: 'vcat', id: 'ocat-' + c.id, 'data-toc': c.title }, h('h3', { text: c.title }));
       these.forEach(function (u) { sec.append(u.items.length > 1 ? choiceEl(u) : optCard(u.items[0])); });

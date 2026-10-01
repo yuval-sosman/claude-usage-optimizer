@@ -367,7 +367,7 @@ Per item: tokens per session, its share of the saving, where it comes from (buil
 - Check: ✓ $34 of the $37.85 miss cost was avoidable (90%).
 
 **SV4. At what context size should I /compact, and what would it have saved?** `T P`
-- How: replay every main thread. Whenever its context would pass a threshold, drop it to the start-up size + 20K summary + 10K re-read detail, and charge the compaction (a full read, 5K output, the new write). Net saving at thresholds from 100K to 500K: 100K is the smallest auto-compact window Claude Code accepts, and below it you would compact every few turns, which the replay can't price (lost detail, re-reads, mid-task summaries). The best threshold is a guide for compacting at natural breaks; the catalog turns it into a forced window only on a 1M model, and never below 200K.
+- How: replay every main thread. Whenever its context would pass a threshold, drop it to the start-up size + 20K summary + 10K re-read detail, and charge the compaction (a full read, 5K output, the new write). Net saving at thresholds from 100K to 500K: 100K is the smallest auto-compact window Claude Code accepts, and below it you would compact every few turns, which the replay can't price (lost detail, re-reads, mid-task summaries). The best threshold is a guide for compacting at natural breaks; the catalog turns it into a forced window only on a 1M model, as a 400K cap (300K when nothing is saved past 400K, never lower).
 - Check: ✓ best at 150K: 70 compactions, $74.60 net. Below 100K, compaction costs more than it saves. ✓ 2026-09-30: best at 150K either way, 148 compactions, $163 net; the dropped 60K and 80K rows lost $1,911 and $1,310 on these sessions (a 44–55K start-up).
 
 **SV5. 5-minute or 1-hour cache: which fits my sessions?** `T P A`
@@ -380,6 +380,9 @@ Per item: tokens per session, its share of the saving, where it comes from (buil
   - Tried and rejected:
     - Start-to-start gaps: +6.5% on subagents replaying the actual policy.
     - An event-driven replay with a shared prefix across threads: +9.5% on subagents, and the prefix is worth < $1.
+- Whenever it favours main 1 hour · subagents 5 minutes, the catalog's first recommendation pins that mix in settings
+  (`promptCacheTtl`, `subagentPromptCacheTtl`), even when it already is the actual mix: unset, the main lifetime is 1 hour
+  only on a subscription within its usage limits.
 - Check: ✓ replaying the actual lifetimes reproduces the cache cost exactly.
   - All 5 min: $677; all 1 hour: $697; actual (main 1 hour, subagents 5 min): $666, which is also the cheapest mix.
   - Main threads favour 1 hour by $11, a close call: 52 pauses of 5–60 min cost $63 against a $52 premium. Break-even is 1.2 pauses per 100 calls; yours is 1.4.

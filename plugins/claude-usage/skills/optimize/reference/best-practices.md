@@ -15,9 +15,9 @@ When you need something not covered here, fetch the page (`https://code.claude.c
   either half.
 - **The data favours what the guidance warns against**: recommend what the guidance recommends instead, and say why in one
   sentence with the numbers. Example: SV4 finds compacting at 150K pays; the fix is /compact at natural breaks once past about
-  150K (and, on a 1M model only, an auto-compact window of at least 200K), never a low forced threshold.
+  150K (and, on a 1M model only, an auto-compact cap at 400K, never under 300K), never a low forced threshold.
 - **The guidance has a default the user overrode**: going back to the tuned default is a recommendation even without a
-  measured saving (a persisted effort above the model's default; an auto-compact window below 200K).
+  measured saving (a persisted effort above the model's default; an auto-compact window below 300K).
 - **The guidance applies but the data is silent**: don't recommend it. Generic advice that would be true of anyone is not an
   insight ("write specific prompts") unless a card points at it (EX9's exploring share, EX8's re-reads).
 - **Personal**: name the project, file, hook, agent type or model, and quote the user's figures. A recommendation that would
@@ -52,9 +52,10 @@ auto may result in high token usage, especially when resuming long sessions."
 How the plugin applies it:
 - SV4's threshold is where compacting at a natural break pays off, not a switch to flip. Its replay starts at 100K; below that
   you would compact every few turns.
-- A forced window (`autoCompactWindow`) only caps a model whose window is over 200K, never below 200K (validate.py refuses
-  less), always with the context notice as the alternative and Claude Code's own recommendation in the tradeoffs. On a 200K
-  model the plugin never overrides auto.
+- A forced window (`autoCompactWindow`) only caps a model whose window is over 300K (a 1M model), at 400K: high enough that
+  a long task keeps its room, low enough to stop re-reading huge contexts. 300K at the lowest, when SV4 finds nothing to save
+  past 400K; never less (validate.py refuses it). It comes next to the context notice (the natural-break habit) and with
+  Claude Code's own recommendation in the tradeoffs. On a 200K model the plugin never overrides auto.
 - After a break past the cache lifetime, cheapest first: `/clear` (free), `/compact` (reads the whole context once, uncached,
   then carries only the summary), continuing (re-writes it all, then re-reads it on every call). Before a long break, a
   `/compact` while the cache is warm is cheap. On Pro and Max, resuming a session idle over about an hour and over 100K offers
@@ -121,7 +122,12 @@ How the plugin applies it:
 
 - Main conversation: 1 hour on a subscription within its usage, else 5 minutes; subagents and helpers: 5 minutes unless set.
   "The longer TTL helps when you leave a session idle and come back to it … It costs more on short bursts of work that never
-  idle past five minutes." SV5 prices both on the user's own pauses: follow it, and call a margin under 5% too close.
+  idle past five minutes." SV5 prices both on the user's own pauses: follow it.
+- The plugin's standing advice, whenever SV5 favours it (the usual result: people pause between prompts, subagents don't):
+  1 hour for the main thread and 5 minutes for subagents, pinned in settings (`promptCacheTtl` `"1h"`,
+  `subagentPromptCacheTtl` `"5m"`), even when the history already ran that way, since the automatic main lifetime is 1 hour
+  only on a subscription within its usage limits. It leads the Optimizations tab (Start here). Moving to any other mix needs
+  a margin over 5%.
 - Invalidates: switching model, effort (on most models), fast mode on, MCP servers connecting or removed when their tools load
   upfront (with tool search, the default, a late connection doesn't), enabling a plugin with MCP servers, compaction, many
   images, a Claude Code upgrade. Keeps: editing files or CLAUDE.md, permission mode, output style, skills, `/recap`, `/rewind`.
@@ -146,7 +152,7 @@ How the plugin applies it:
 ## Never recommend
 
 validate.py refuses the first four in optimizations.json; the rest are rules for you.
-1. An auto-compact window below 200K (setting or `CLAUDE_CODE_AUTO_COMPACT_WINDOW`), or any override on a 200K model.
+1. An auto-compact window below 300K (setting or `CLAUDE_CODE_AUTO_COMPACT_WINDOW`), or any override on a 200K model.
 2. A saved `low` effort (global or per model).
 3. Thinking off (`alwaysThinkingEnabled: false`, `MAX_THINKING_TOKENS=0`).
 4. A context notice (context_guard.py) below 100K.

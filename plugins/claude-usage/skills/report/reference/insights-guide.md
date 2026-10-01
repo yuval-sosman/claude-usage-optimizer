@@ -85,8 +85,10 @@ Non-cost insights may carry `savings` too when a number exists.
    reasoning, switching at the start of a session.
 2. **Context size** (SV4, CX1–CX4, CX6): where compaction pays off; how big contexts get before /clear. The docs' habits come
    first: /clear between unrelated tasks, /compact with what to keep at natural breaks; SV4's threshold says when, it isn't a
-   window to force (on a 1M model a cap of 200K or more is the setting-level option).
+   window to force (on a 1M model a 400K cap, never under 300K, is the setting-level option).
 3. **Cache misses** (SV3, CX8): avoidable vs not; the top causes; the costliest single misses and their story (CX8 traces them step by step).
+   Cache lifetimes (SV5): when SV5 favours main 1 hour · subagents 5 minutes and they aren't pinned in settings, the `ttl`
+   bundle says to pin them; keep that action (its optimization leads the tab).
 4. **Breaks** (SV7, CX8, ME3): returns to expired sessions; fresh start vs resume.
 5. **Automation** (EX5, SV1): hook failures, Stop-hook follow-up work (SV1's lever; EX5's "What Stop hooks set off" says
    which hook and how often Claude went on working after it. A hook that sends nothing back sets off nothing: no insight).
