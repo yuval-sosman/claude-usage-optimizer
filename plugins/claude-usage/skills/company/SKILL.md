@@ -56,9 +56,13 @@ Short, in this order:
 2. The company: spend per 30 days (everyone at their own pace) and how the weekly trend moves (CO1: read the "per active
    person" line, not the edges, where periods end), and where the money goes (CO2: models, platforms).
 3. The 2–3 biggest levers (LV1): what each would save per 30 days, how many people it applies to, and for how many it is
-   the biggest. Say that levers overlap within a person, so they don't add up.
+   the biggest. Say that levers overlap within a person, so they don't add up. Describe each as the habit or setting Claude
+   Code's docs recommend for it: "/compact earlier" is compacting at natural breaks (and /clear between unrelated tasks),
+   not a forced low window; "subagents on a cheaper model" is the default model for subagents that name none (Explore and
+   Plan follow the main model).
 4. Who stands out and why (PE4), neutrally: the numbers, not a verdict about the person.
 5. Caveats worth saying for this data: short periods (flagged in the notes), files priced at their own prices, people
    whose misses are unknown.
 
-Offer next steps: `/claude-usage:share open <file>` shows one person's full report; re-run this after more files arrive.
+Offer next steps: `/claude-usage:share open <file>` shows one person's full report; `/claude-usage:open company` opens
+this report again later; re-run this after more files arrive.

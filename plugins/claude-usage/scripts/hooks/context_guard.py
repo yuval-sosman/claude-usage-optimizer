@@ -40,7 +40,8 @@ def main():
     r = S.price(last['model'], 'cr', last)
     per = f" (≈{S.usd(last['ctx'] * r)} of cache reads per request)" if r else ''
     S.emit({'systemMessage': f"Context is {S.tok(last['ctx'])} tokens{per}. Your usage history says compacting past "
-                             f"{S.tok(threshold)} pays off: /compact (optionally with what to keep) when this task allows."})
+                             f"{S.tok(threshold)} pays off. At the next natural break: /clear if the next task is unrelated (free), "
+                             f"or /compact with what to keep."})
 
 
 if __name__ == '__main__':

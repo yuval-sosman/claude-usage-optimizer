@@ -22,14 +22,21 @@ If `$ARGUMENTS` starts with `apply`, skip to "Applying on request" below.
   setup, secrets removed), `metrics.json`, the CSVs. **Never read session transcripts** (`<claude dir>/projects/**/*.jsonl`).
   For a number the digest cuts short (it shows the first rows of a table),
   `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/candidates.py" --out "<OUT>" --show card:EX1` prints every figure of one card.
+- **Best practice decides the fix; the data decides whether, where and how much.** Every optimization must be a way of working
+  Claude Code's own guidance recommends, aimed with this user's numbers ([reference/best-practices.md](reference/best-practices.md)).
+  When a replay favours something the guidance advises against (a low compaction window, effort below the model's default,
+  thinking off, switching off what costs cents), don't propose it: propose what the guidance recommends instead, with the
+  numbers, and say why in one sentence. A setting that only restores a tuned default (e.g. a persisted effort above the
+  model's default) is worth proposing even without a measured saving.
 - Recommend only settings, hooks and features that exist in the user's Claude Code version. The verified reference is
   [reference/claude-code.md](reference/claude-code.md); if you need something it doesn't cover, check the official docs
   (`https://code.claude.com/docs/en/<page>.md`, e.g. settings, hooks, statusline, sub-agents, mcp, costs) and `claude --version`.
-  Don't guess key names.
+  Don't guess key names or values: Claude Code silently drops a value outside a key's schema.
 - You never change the user's setup. apply.py writes only after the user types y at their own terminal (Claude Code's
   tools have none, so from here it can only preview); your part is to prepare, preview and explain (see the end).
-- Never propose disabling Claude Code's bundled skills or anything enabled by managed policy; never `claude mcp remove` to
-  disable a server (it deletes its config and tokens); keep every change reversible.
+- Never propose disabling Claude Code's bundled skills or anything enabled by managed policy. `claude mcp remove` deletes a
+  server's config and tokens: propose it only for a server used nowhere, after `claude mcp get` keeps its definition, never
+  as a way to switch one off for a while. Keep every change reversible.
 - Never write `optimizations.json` yourself: `assemble.py` writes it from your notes (step 3).
 - Run every command exactly as shown: one `python3 …` command, without `cd`, pipes, redirection or variables, so it matches
   the allowed tools and needs no permission prompt. The skill is allowed nothing else without the user's say-so.
@@ -51,8 +58,8 @@ The optimizations cover the report's period (the last 60 days unless the report 
      you need an insight's detail.
    - `optimizations`: one draft per catalog entry whose rule holds and isn't in place yet, with the `rule` (why, with the
      numbers) and `notes` (what the script left for you to decide, e.g. project skills it left out).
-   - `judgment`: entries whose call is yours (a habit or a setting, effort, a Stop hook's real source, a close call, a path to
-     check), with the facts and, where one can be written, a `draft` you can adopt.
+   - `judgment`: entries whose call is yours (a habit or a setting, effort below a model's default, a Stop hook's real source,
+     a CLAUDE.md to trim, a close call, a path to check), with the facts and, where one can be written, a `draft` you can adopt.
    - `links`: how the drafts relate (the catalog's pairs, with a note from each side).
    - `skipped`: entries whose rule doesn't hold, or that are already in place, and why.
    - `problems`: what validate.py says about the drafts taken together; normally empty. A problem there follows the draft
@@ -60,24 +67,28 @@ The optimizations cover the report's period (the last 60 days unless the report 
    Without `--brief` the drafts are shown whole (manual, verify, undo, docs, apply steps).
 2. `digest.md`, for the research pass (if you already read it in this conversation, don't read it again), and `config.json`
    when you need the setup's details.
-3. [reference/catalog.md](reference/catalog.md): its "How optimizations interact" rules, and the entries named in `judgment`.
-   [reference/claude-code.md](reference/claude-code.md) before proposing anything the drafts don't already cover.
+3. [reference/best-practices.md](reference/best-practices.md), completely: how the data and the guidance combine, what never
+   to recommend, and which digest signals point to which documented practice. Then
+   [reference/catalog.md](reference/catalog.md): its "How optimizations interact" rules, and the entries named in `judgment`;
+   and [reference/claude-code.md](reference/claude-code.md) before proposing anything the drafts don't already cover.
 
 ## 2. Decide
 
 **Review the drafts.** Their numbers come straight from the cards, and the script already checked the current setup (no
-duplicate hook, no setting already at that value, no existing status line). Read each one as the user will: keep it as is,
-drop it when something the rule can't see argues against it, or edit the prose where it should be specific to this user
-(name the project, the file, the real cause). Don't rewrite a draft that already reads right.
+duplicate hook, no setting already at that value, no existing status line) and the catalog's best-practice limits. Read each
+one as the user will: keep it as is, drop it when something the rule can't see argues against it (the digest shows the user
+relies on what it removes, or best-practices.md says it doesn't fit how they work), or edit the prose where it should be
+specific to this user (name the project, the file, the real cause). Don't rewrite a draft that already reads right.
 
 **Make the judgment calls.** For each `judgment` entry: adopt its draft (with edits), write your own version, or leave it out
 (an insight can say it instead). Say why in the summary when you leave out something with a real saving.
 
-**Research pass.** Then look for what the catalog doesn't cover, specific to this user: a failing hook and its cause, a
-project whose settings differ, a slash command or prompt repeated often enough to become a skill, a subagent type that
-could run on a cheaper model through its own agent file, a noisy tool output a PostToolUse hook could trim, a Claude Code
-feature the data shows they'd benefit from (plan mode, /rewind, /context, output styles, background tasks). Check anything
-new against the docs before proposing it. Prefer fewer, stronger changes. For each, decide `kind` (hook, setting,
+**Research pass.** Then look for what the catalog doesn't cover, specific to this user: go through best-practices.md's
+"Signals worth a recommendation" table against the digest (a documented practice counts only when a card points at it), and
+look for a failing hook and its cause, a project whose settings differ, a slash command or prompt repeated often enough to
+become a skill, a subagent type that could run on a cheaper model through its own agent file, a noisy command whose output a
+hook could filter. Check anything new against the docs before proposing it. Prefer fewer, stronger changes; a habit the docs
+recommend is a full optimization (`kind` habit, exact steps), not a lesser one. For each, decide `kind` (hook, setting,
 statusline, claude_md, agent, command, habit), `effort` (`one-click` only when apply.py can make the whole change;
 `minutes` when the user must act, `habit` for behaviour), `risk`, `tradeoffs`, and `savings` (from the SV questions or a
 measured cost: `usd_so_far` all time, `usd_per_month` per 30 days, `basis`, `kind`). Habits and manual changes still get
@@ -117,25 +128,28 @@ The notes, for example:
 
 ```json
 {
-  "summary": "Start with … For context size, pick one: auto-compact at 200K ($119 all time, ≈ $173 per 30 days) or a notice at 150K. …",
-  "claude_code_version": "2.1.283",
+  "summary": "Start with … For context size, /clear between unrelated tasks and pick one: auto-compact at 200K ($119 all time, ≈ $173 per 30 days) or a notice at 150K. …",
+  "claude_code_version": "2.1.285",
   "drop": {"keep-awake": "the user works on a desktop that never sleeps"},
   "edit": {
-    "effort-opus55-high": {},
+    "claude-md-length": {},
     "stop-hook-followup": {"id": "memory-hook-turn-scope", "title": "…", "problem": "…", "manual": ["…"]},
     "mcp-off-where-unused": {"insights": ["tooling-unused-listings", "cache-tool-list-changes"]}
   },
-  "add": [{"id": "claudepit-phase-inputs", "title": "…", "category": "workflow", "kind": "command", "problem": "…",
-           "what_it_does": "…", "questions": ["EX1", "CX11"], "effort": "minutes", "risk": "low", "manual": ["…"],
-           "undo": "…", "docs": [{"title": "Skills", "url": "https://code.claude.com/docs/en/skills"}]}],
-  "relate": [{"a": "claudepit-phase-inputs", "b": "big-read-guard", "relation": "overlaps",
-              "note_a": "…from this one's side", "note_b": "…from big-read-guard's side"}]
+  "add": [{"id": "compact-keep-list", "title": "Tell compaction what to keep", "category": "context", "kind": "claude_md",
+           "problem": "…", "what_it_does": "…", "questions": ["SV4", "CX4"], "effort": "one-click", "risk": "low",
+           "apply": {"summary": "…", "steps": [{"action": "append_text", "path": "~/.claude/CLAUDE.md", "marker": "compact-keep",
+                     "content": "- When compacting, keep the files changed, the test commands and the open decisions.\n"}]},
+           "manual": ["…"], "undo": "…", "docs": [{"title": "Best practices", "url": "https://code.claude.com/docs/en/best-practices"}]}],
+  "relate": [{"a": "compact-keep-list", "b": "auto-compact-200k", "relation": "complements",
+              "note_a": "…from this one's side", "note_b": "…from auto-compact-200k's side"}]
 }
 ```
 
 - `summary` (required): name the choices ("pick one: auto-compact at 200K or a notice at 150K"), give overlapping savings as a
-  range or the larger one, never a sum, and say which savings are upper bounds. The tab shows the first sentence larger, as
-  the lead: make it short and the one to remember. At most 900 characters (the schema's limit; aim for ~600).
+  range or the larger one, never a sum, and say which savings are upper bounds. Where a documented habit does the same job as
+  a setting (/clear between unrelated tasks, /compact at natural breaks), say it next to the setting. The tab shows the first
+  sentence larger, as the lead: make it short and the one to remember. At most 900 characters (the schema's limit; aim for ~600).
 - Length limits the schema enforces (characters): `title` 90, `problem` 500, `what_it_does` 700, `tradeoffs` 500, a
   `related` note 300, a `manual` step 400, `verify` and `undo` 300; at most 6 `questions` and 6 `related`.
 - `claude_code_version`: from `claude --version`.
@@ -160,11 +174,12 @@ Apply steps (for your own items) use only these actions. apply.py refuses anythi
   `_session.py` and `prices.json` next to it. No other file and no literal content.
 - `merge_json` (deep-merge an object; arrays gain missing items, so hook groups are appended, never replaced),
   `set_json` / `unset_json` with a JSON `pointer`, on `~/.claude/settings.json` or a project's `.claude/settings.local.json`.
-  Only these keys: `model`, `effortLevel`, `modelSettings.<model>.effortLevel`, `alwaysThinkingEnabled`,
-  `promptCacheTtl`, `subagentPromptCacheTtl`, `autoCompactEnabled`, `autoCompactWindow`, `skillOverrides`,
-  `skillListingBudgetFraction`, `enabledPlugins` (only `false`), `disabledMcpjsonServers` (only adding),
-  `disableClaudeAiConnectors`, `bashOutputMaxChars`, `cleanupPeriodDays` (only raising), `env` for the model, cache,
-  compaction and output-limit variables in claude-code.md, a `statusLine` running the bundled `statusline.py`, and new
+  Only these keys: `model`, `effortLevel` and `modelSettings.<model>.effortLevel` (`low` to `xhigh`; never a saved `low`),
+  `alwaysThinkingEnabled` (never `false`), `promptCacheTtl`, `subagentPromptCacheTtl`, `autoCompactEnabled`,
+  `autoCompactWindow` (an integer, 200000 to 1000000), `skillOverrides`, `skillListingBudgetFraction`, `enabledPlugins` (only
+  `false`), `disabledMcpjsonServers` (only adding), `disableClaudeAiConnectors`, `bashOutputMaxChars` (4000–128000),
+  `cleanupPeriodDays` (only raising), `env` for the model, cache, compaction and output-limit variables in claude-code.md, a
+  `statusLine` running the bundled `statusline.py`, and new
   `hooks` groups whose commands run bundled hooks as `python3 "$HOME/.claude/hooks/claude-usage/<name>.py" <args>` (bash
   for `.sh`). Never permissions, API keys or endpoints, MCP definitions, or a user's own hook.
 - `append_text` to `~/.claude/CLAUDE.md` with a `marker` (idempotent; at most 8 lines and 800 characters: it loads in every
@@ -172,8 +187,9 @@ Apply steps (for your own items) use only these actions. apply.py refuses anythi
 There is no action that runs a command: commands (`claude mcp …`, installing something) are manual steps for the user.
 Always write `~/.claude/…` paths: apply.py maps them to the Claude folder the report was built from.
 
-validate.py (which assemble runs) rejects one-sided links, and two optimizations that change the same setting or act on the
-same cost without a link. `note:` lines name judgment drafts you left out and applied changes no longer in the file.
+validate.py (which assemble runs) rejects one-sided links, two optimizations that change the same setting or act on the
+same cost without a link, and the changes best practice rules out (best-practices.md, "Never recommend" 1–4). `note:` lines
+name judgment drafts you left out and applied changes no longer in the file.
 
 ## 4. Check, render, open
 
@@ -198,6 +214,8 @@ List the optimizations by saving (title, saving all time and per 30 days, effort
 button gives the apply.py command to run in a terminal: it previews, asks, backs up, and can be undone; or ask you to preview
 one with "apply <id>"), and that settings and hooks take effect in new sessions. Give
 alternatives and conflicts as one choice ("X or Y: I'd pick X because …"), not as two items, and say which savings overlap.
+When the docs back a change, say so in a few words ("Opus 5.5's documented default"), and name the habit that goes with a
+setting.
 
 ## Applying on request
 

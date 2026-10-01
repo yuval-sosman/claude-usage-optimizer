@@ -3,7 +3,8 @@
 
 When the session's last API call is older than its cache lifetime and the context is big, sending the next prompt
 writes the whole context to the cache again. This hook blocks that first prompt with the numbers and the options
-(/clear and start from a summary, /compact, or simply send again). Sending again within --grace seconds goes through.
+(/clear, which costs nothing; /compact, which reads the context once more but leaves only a summary; or simply send again).
+Sending again within --grace seconds goes through.
 
   python3 stale_cache_guard.py [--min-context 60000] [--grace 180] [--ttl 3600]
 
@@ -47,7 +48,8 @@ def main():
     cost = f" (≈{S.usd(last['ctx'] * w)} at list prices, vs {S.usd(last['ctx'] * r)} for a cache hit)" if w and r else ''
     reason = (f"Paused by the claude-usage cache guard. This session has been idle for {S.span(idle)}, longer than its "
               f"{S.span(ttl)} prompt cache, so this message would re-write all {S.tok(last['ctx'])} tokens of context{cost}.\n"
-              f"Options: /clear and start fresh with a short summary · /compact first · or press ↑ and send the same "
+              f"Options: /clear (free; /resume brings this session back) and start from a short note · /compact with what to "
+              f"keep (reads the context once more, then later messages carry only the summary) · or press ↑ and send the same "
               f"message again within {S.span(grace)} to continue as is.")
     S.emit({'decision': 'block', 'reason': reason})
 

@@ -235,6 +235,56 @@ def relation_errs(opts, out):
     return errs
 
 
+WINDOW_FLOOR = 200_000     # the smallest auto-compact window an optimization may set (candidates.WINDOW_FLOOR)
+NOTICE_FLOOR = 100_000     # the smallest context_guard.py threshold: Claude Code's own smallest auto-compact window
+GUIDE = 'skills/optimize/reference/best-practices.md'
+
+
+def set_values(st):
+    """(key path, value) pairs an apply step sets: merge_json {"env": {"X": "1"}} -> [("env/X", "1")]; hooks stay whole."""
+    if st.get('action') == 'set_json' and isinstance(st.get('pointer'), str):
+        return [(st['pointer'].strip('/'), st.get('value'))]
+    out = []
+
+    def walk(v, pre):
+        if isinstance(v, dict) and v and pre != 'hooks':
+            for k, x in v.items():
+                walk(x, f'{pre}/{k}' if pre else k)
+        elif pre:
+            out.append((pre, v))
+    if st.get('action') == 'merge_json':
+        walk(st.get('value'), '')
+    return out
+
+
+def practice_errs(o, where):
+    """Changes the plugin never recommends, whatever a replay says they would have saved, because Claude Code's documented
+    best practice argues against them (GUIDE says why): compacting below 200K, a low default effort, thinking off, and a
+    context notice below 100K."""
+    errs = []
+    for st in ((o.get('apply') or {}).get('steps')) or []:
+        for k, x in set_values(st) if isinstance(st, dict) else []:
+            n = x if isinstance(x, int) and not isinstance(x, bool) else int(x) if isinstance(x, str) and x.isdigit() else None
+            if k in ('autoCompactWindow', 'env/CLAUDE_CODE_AUTO_COMPACT_WINDOW') and n is not None and n < WINDOW_FLOOR:
+                errs.append(f'{where}: {k} {x} would compact earlier than {WINDOW_FLOOR:,} tokens, mid-task in most sessions; Claude Code '
+                            f'strongly recommends its auto window and the docs advise compacting at natural breaks: recommend /compact at '
+                            f'natural breaks or the context notice instead ({GUIDE})')
+            elif (k == 'effortLevel' or (k.startswith('modelSettings/') and k.endswith('/effortLevel'))) and x == 'low':
+                errs.append(f'{where}: a saved "low" effort makes every session think least; the docs keep low for quick exchanges you '
+                            f'review, so suggest /effort low for those tasks instead ({GUIDE})')
+            elif (k == 'alwaysThinkingEnabled' and x is False) or (k == 'env/MAX_THINKING_TOKENS' and n == 0):
+                errs.append(f'{where}: turning thinking off has no effect on Opus 5.5, Sonnet 5.5 or Fable and hurts complex work '
+                            f'elsewhere; suggest a lower /effort for simple tasks instead ({GUIDE})')
+            elif k == 'hooks' and isinstance(x, dict):
+                for grp in (g for gs in x.values() if isinstance(gs, list) for g in gs if isinstance(g, dict)):
+                    for h in grp.get('hooks') or []:
+                        m = re.search(r'context_guard\.py"?.*?--threshold (\d+)', (h or {}).get('command') or '') if isinstance(h, dict) else None
+                        if m and int(m.group(1)) < NOTICE_FLOOR:
+                            errs.append(f'{where}: a context notice at {int(m.group(1)):,} tokens would fire within a few turns of a new '
+                                        f'session; use a threshold of {NOTICE_FLOOR:,} or more ({GUIDE})')
+    return errs
+
+
 def validate_optimizations(doc, metrics, insights, out=None):
     errs = []
     check(doc, load(os.path.join(ROOT, 'schemas', 'optimizations.schema.json'), 'schema'), 'optimizations.json', errs)
@@ -266,6 +316,7 @@ def validate_optimizations(doc, metrics, insights, out=None):
         errs += month_errs(o.get('savings'), metrics, 'all', where)
         if o.get('effort') == 'one-click' and not o.get('apply'):
             errs.append(f'{where}: effort "one-click" needs an "apply" block')
+        errs += practice_errs(o, where)
         for k, st in enumerate(((o.get('apply') or {}).get('steps')) or []):
             if not isinstance(st, dict):
                 continue

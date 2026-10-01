@@ -1478,6 +1478,7 @@ class Model:
             models = collections.Counter(c['model'] for c in t)
             self.subs[aid] = dict(
                 aid=aid, sid=key[0], proj=t[0]['proj'], type=typ, desc=scrub(meta.get('description') or linp.get('description') or ''),
+                call_model=linp.get('model') if isinstance(linp.get('model'), str) else None,      # a model passed for this one call
                 model=models.most_common(1)[0][0], calls=t, n_calls=len(t), start=t[0]['start'], end=t[-1]['t1'],
                 usd=sum(c['usd'] for c in t), peak=max(c['ctx'] for c in t), cold=t[0]['ctx'],
                 ctx_sum=sum(c['ctx'] for c in t), out=sum(c['out'] for c in t), is_async=is_async,
@@ -2651,7 +2652,9 @@ REREAD_TOK = 10_000      # detail re-read after a compaction or a fresh start
 BRIEF_TOK = 5_000        # a short summary pasted into a fresh session
 RANGE_KEEP = 0.5         # share of a large file that a targeted read would still load
 BIG_READ = 8_000         # tokens: a large Read result
-COMPACT_AT = [60e3, 80e3, 100e3, 125e3, 150e3, 200e3, 250e3, 300e3, 400e3]
+# Thresholds SV4 replays. They start at 100K, the smallest auto-compact window Claude Code accepts (/autocompact takes
+# 100K–1M): below it you would compact every few turns and lose the thread, whatever the replay's dollars say.
+COMPACT_AT = [100e3, 125e3, 150e3, 200e3, 250e3, 300e3, 400e3, 500e3]
 PROMPT_CHANGED = {'Subagent resumed via SendMessage', 'Tool list changed (MCP/tools)', 'Model switch', 'Effort changed',
                   'Earlier messages changed'}          # these miss whatever the cache lifetime
 FIX = {  # cause -> (who can fix it, how)
@@ -2876,6 +2879,47 @@ def _sv_ttl(m):
     return out
 
 
+SUBAGENT_DEFAULT_TYPES = ('general-purpose', 'claude')     # built-in agent types that name no model of their own
+# Explore and Plan are defined with model: inherit (the main model) and a fork runs on its parent's model, so
+# CLAUDE_CODE_SUBAGENT_MODEL alone moves none of them (code.claude.com/docs/en/sub-agents, "Choose a model").
+
+
+@functools.lru_cache(maxsize=None)
+def agent_file_model(path):
+    """The model field in an agent file's frontmatter: its value, '' when the file names none, None when there is no file."""
+    try:
+        with open(path, encoding='utf-8', errors='replace') as fh:
+            head = [fh.readline() for _ in range(80)]
+    except OSError:
+        return None
+    if not head or head[0].strip() != '---':
+        return ''
+    for line in head[1:]:
+        if line.strip() == '---':
+            break
+        mm = re.match(r'\s*model\s*:\s*(.*?)\s*$', line)
+        if mm:
+            return mm.group(1).strip('\'"')
+    return ''
+
+
+def follows_subagent_default(m, sub):
+    """Whether CLAUDE_CODE_SUBAGENT_MODEL alone decides a subagent's model. Claude Code takes the model passed for the call
+    first, then the agent definition's model field (inherit = the main model), then the variable, then the main model. A
+    user or project agent file named like the type overrides the built-in agent of that name; a plugin's agent (a type
+    with a colon) is left out, since its model can't be read here."""
+    if not sub or sub.get('call_model'):
+        return False
+    typ = sub.get('type') or ''
+    if re.fullmatch(r'[A-Za-z0-9_.-]{1,100}', typ):
+        cwd = m.src.cwd.get(sub.get('proj'))
+        for base in ([os.path.join(cwd, '.claude')] if cwd else []) + [m.src.home]:
+            own = agent_file_model(os.path.join(base, 'agents', typ + '.md'))
+            if own is not None:
+                return own == ''
+    return typ in SUBAGENT_DEFAULT_TYPES
+
+
 def _sv_models(m):
     """The same calls at another model's list prices."""
     if 'sv_models' in m.cache:
@@ -2902,11 +2946,14 @@ def _sv_models(m):
         return sum(c['usd'] - sum(m.prices.cost(mdl, c['u'], m.prices.mult(mdl, c['where'])).values()) for c in calls
                    if (m.prices.rate(c['model']) or {}).get('out', 0) > top)
     sonnet = m.prices.pick('sonnet')
+    sub_calls = [c for c in m.real if c['agent']]
+    moved = {aid for aid, s in m.subs.items() if follows_subagent_default(m, s)}       # what CLAUDE_CODE_SUBAGENT_MODEL reaches
     m.cache['sv_models'] = out = dict(rows=rows, act_main=act_main, act_sub=act_sub, explore=sum(c['usd'] for c in explore),
                                       explore_haiku=sum(sum(m.prices.cost(haiku, c['u'], m.prices.mult(haiku, c['where'])).values()) for c in explore)
                                       if haiku else None,
                                       current=current, sonnet=sonnet, haiku=haiku, main_saving=cheaper(main_calls, current),
-                                      sub_saving=cheaper([c for c in m.real if c['agent']], sonnet))
+                                      sub_saving=cheaper(sub_calls, sonnet),
+                                      sub_default=cheaper([c for c in sub_calls if c['agent'] in moved], sonnet))
     return out
 
 
@@ -2964,7 +3011,8 @@ def sv_levers(m):
         dict(id='compact', label=f"/compact at about {f_tok(best['T'])} tokens" if best else '/compact earlier', usd=max(0.0, best['net']) if best else 0.0,
              card='SV4'),
         dict(id='ttl', label='Cache lifetime that fits each thread kind', usd=ttl_gain, card='SV5'),
-        dict(id='sub_model', label=f"Run subagents on {model_name(mod['sonnet'])}" if mod['sonnet'] else 'Run subagents on a cheaper model', usd=mod['sub_saving'], card='SV6'),
+        dict(id='sub_model', label=f"Run subagents on {model_name(mod['sonnet'])} by default" if mod['sonnet'] else 'Run subagents on a cheaper model',
+             usd=mod['sub_default'], card='SV6'),        # what CLAUDE_CODE_SUBAGENT_MODEL moves; Explore and Plan keep the main model
         dict(id='main_model', label=f"Main threads on {(model_name(mod['current']) if mod['current'] else 'one model')} (your current model)", usd=mod['main_saving'], card='SV6'),
         dict(id='fresh', label='Start fresh after long breaks', usd=fr['usd'], card='SV7'),
         dict(id='reads', label='Read large files in ranges', usd=rd['usd'], card='SV8'),
@@ -3144,7 +3192,9 @@ def sv4(m, g):
                  if best['net'] > 0 else 'Compacting earlier would not have paid off for your sessions.'),
         note=f'Replays every main thread: when the context would pass the threshold, it drops to the start-up size + {f_tok(SUMMARY_TOK)} '
              f'summary + {f_tok(REREAD_TOK)} re-read detail, and the compaction costs one full read plus {f_tok(SUMMARY_OUT)} output tokens. '
-             'Detail lost in a summary can cost extra work that this does not see.')
+             f'Thresholds start at {f_tok(COMPACT_AT[0])}, the smallest auto-compact window Claude Code accepts. '
+             'Detail lost in a summary can cost extra work that this does not see, so the threshold is a guide for compacting at a natural '
+             'break between tasks, not mid-task.')
 
 
 def sv5(m, g):
@@ -3244,10 +3294,13 @@ def sv6(m, g):
     ins = None
     if d['main_saving'] > 0.01 or d['sub_saving'] > 0.01:
         ins = (f"At list prices, the same main-thread work on {(model_name(d['current']) if d['current'] else 'one model')} (the model you use now) would have saved "
-               f"{f_save(m, d['main_saving'])}" + (f", and subagents on {model_name(d['sonnet'])} {f_save(m, d['sub_saving'])}." if d['sonnet'] else '.'))
+               f"{f_save(m, d['main_saving'])}" + (f", and subagents on {model_name(d['sonnet'])} {f_save(m, d['sub_saving'])}, "
+                                                   f"{f_usd(d['sub_default'])} of it from the subagents CLAUDE_CODE_SUBAGENT_MODEL moves." if d['sonnet'] else '.'))
     return card('SV6', 'What if another model had done the same work?', 'T P A', [
         K(kpi_save(m, f"Main threads on {(model_name(d['current']) if d['current'] else 'one model')}", d['main_saving'], 'your current model; pricier calls only'),
-          kpi_save(m, f"Subagents on {model_name(d['sonnet'])}", d['sub_saving'], 'pricier calls only') if d['sonnet'] else None,
+          kpi_save(m, f"Subagents on {model_name(d['sonnet'])}", d['sub_saving'], 'every subagent; pricier calls only') if d['sonnet'] else None,
+          kpi_save(m, 'Via CLAUDE_CODE_SUBAGENT_MODEL', d['sub_default'], 'the subagents it moves: general-purpose and agents naming no model; '
+                                                                         'Explore and Plan keep the main model') if d['sonnet'] else None,
           kpi_save(m, f"Explore subagents on {model_name(d['haiku'])}", max(0.0, d['explore'] - d['explore_haiku']) if d['explore_haiku'] is not None else None,
                    f"of {f_usd(d['explore'])} they cost") if d['haiku'] else None),
         BAR([r['k'] for r in rows], [S('Main threads', [r['mn'] for r in rows], 1), S('Subagents', [r['sb'] for r in rows], 2)], 'usd',
@@ -3257,7 +3310,9 @@ def sv6(m, g):
         why='Model choice multiplies everything else. This shows the price side only.',
         insight=ins,
         note='Same token counts at each model’s list price. A different model would use a different number of tokens and may do '
-             'the work better or worse; treat this as the price ceiling of switching, not a forecast.')
+             'the work better or worse; treat this as the price ceiling of switching, not a forecast. A subagent runs on the model '
+             'passed for its call, else its definition’s model (Explore and Plan: inherit, the main model), else '
+             'CLAUDE_CODE_SUBAGENT_MODEL, else the main model; the “Via” figure counts only the subagents that variable decides.')
 
 
 def sv7(m, g):
@@ -3433,7 +3488,7 @@ START_GROUP = {
 
 
 def memory_files(src, cwd, proj):
-    """The memory files a session in `cwd` loads at start, as they are on disk now: (path, tokens)."""
+    """The memory files a session in `cwd` loads at start, as they are on disk now: (path, tokens, lines)."""
     out, seen = [], set()
 
     def add(path, max_lines=None):
@@ -3446,7 +3501,7 @@ def memory_files(src, cwd, proj):
                 text = ''.join(fh.readlines()[:max_lines]) if max_lines else fh.read()
         except OSError:
             return
-        out.append((tilde(path), len(text) / 4))
+        out.append((tilde(path), len(text) / 4, text.count('\n') + (1 if text and not text.endswith('\n') else 0)))
     add(os.path.join(src.home, 'CLAUDE.md'))
     for p in sorted(glob.glob(os.path.join(src.home, 'rules', '*.md'))):
         add(p)
@@ -3489,7 +3544,7 @@ def cx5(m, g):
     tool_tok = [(t.get('name') or '?', len(json.dumps(t, ensure_ascii=False)) / 4) for t in tools if isinstance(t, dict)]
     mem = memory_files(g.src, s.get('cwd_first') or s['cwd_main'], s['proj'])
     est = {'Claude Code system prompt': sp, 'Built-in tools': sum(v for k, v in tool_tok if not k.startswith('mcp__')),
-           'MCP tools': sum(v for k, v in tool_tok if k.startswith('mcp__')), 'Memory files': sum(v for _, v in mem)}
+           'MCP tools': sum(v for k, v in tool_tok if k.startswith('mcp__')), 'Memory files': sum(v for _, v, _ in mem)}
     scale = min(1.0, rest / sum(est.values())) if sum(est.values()) else 1.0       # estimates never exceed what was measured
     for k, v in est.items():
         parts[k] += v * scale
@@ -3531,8 +3586,8 @@ def cx5(m, g):
                ('h', 'How to make it smaller', None)], rows, 'In plain words', width='half'),
         TABS([('Tools by size', TABLE([('n', 'Tool', None), ('t', 'Tokens', 'tokens')],
                                       [dict(n=k, t=round(v * scale)) for k, v in sorted(tool_tok, key=lambda x: -x[1])])),
-              ('Memory files', TABLE([('f', 'File', None), ('t', 'Tokens', 'tokens')],
-                                     [dict(f=p, t=round(v * scale)) for p, v in mem]))], title='Details')],
+              ('Memory files', TABLE([('f', 'File', None), ('t', 'Tokens', 'tokens'), ('l', 'Lines', 'count')],
+                                     [dict(f=p, t=round(v * scale), l=n) for p, v, n in mem]))], title='Details')],
         why='This is paid on every session before you type anything, and re-read on every call after.',
         insight=ins,
         note=f'From the first request of your latest session in this scope ({clip(s["label"], 50)}, {when}). Logged parts are measured. '

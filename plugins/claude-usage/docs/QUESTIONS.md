@@ -126,8 +126,8 @@ Added tokens by source (start-up baseline; tool results per tool; my prompts; Cl
 
 **CX5. What does a new session start with right now?** `T P`
 The first request of the latest session in the scope, broken down like `/context` but in plain words: Claude Code's system prompt, built-in tools (and the biggest one), MCP tools, memory files (CLAUDE.md, MEMORY.md), the skills and agent lists, MCP instructions, the deferred-tool list, hook output, reminders and the first message. A pie shows the parts (the biggest seven, the rest grouped) beside a table that says what each part is and how to make it smaller; tiles give the share of the context window (on a 1M window, also of a 200K one), the cost to load it and what carrying it costs.
-- How: logged parts are measured from the first call; the system prompt and tool definitions come from the `prompt_snapshot` Claude Code logs (the same session, else one on the same Claude Code version); memory files are read from disk. Estimates (≈ 4 characters per token) are scaled so the parts add up to the measured request.
-- Check: ✓ 39.2K at session start on 2.1.281: built-in tools 27.7K (the Artifact tool alone 13.3K), skills list 4.4K, system prompt 2.8K.
+- How: logged parts are measured from the first call; the system prompt and tool definitions come from the `prompt_snapshot` Claude Code logs (the same session, else one on the same Claude Code version); memory files are read from disk, each with its tokens and lines (the catalog's claude-md-length compares a CLAUDE.md with the docs' 200-line target). Estimates (≈ 4 characters per token) are scaled so the parts add up to the measured request.
+- Check: ✓ 39.2K at session start on 2.1.281: built-in tools 27.7K (the Artifact tool alone 13.3K), skills list 4.4K, system prompt 2.8K. ✓ 2.1.285: the repo's CLAUDE.md shows 388 lines (as `wc -l`) and 6.4K tokens (9.1K at 4 characters a token, scaled to the measured request).
 
 **CX6. How much of my cache-read spend comes from big contexts?** `T P`
 - Why: this is the price of long sessions, and it grows with every extra call.
@@ -366,8 +366,8 @@ Per item: tokens per session, its share of the saving, where it comes from (buil
 - Check: ✓ $34 of the $37.85 miss cost was avoidable (90%).
 
 **SV4. At what context size should I /compact, and what would it have saved?** `T P`
-- How: replay every main thread. Whenever its context would pass a threshold, drop it to the start-up size + 20K summary + 10K re-read detail, and charge the compaction (a full read, 5K output, the new write). Net saving at thresholds from 60K to 400K.
-- Check: ✓ best at 150K: 70 compactions, $74.60 net. Below 100K, compaction costs more than it saves.
+- How: replay every main thread. Whenever its context would pass a threshold, drop it to the start-up size + 20K summary + 10K re-read detail, and charge the compaction (a full read, 5K output, the new write). Net saving at thresholds from 100K to 500K: 100K is the smallest auto-compact window Claude Code accepts, and below it you would compact every few turns, which the replay can't price (lost detail, re-reads, mid-task summaries). The best threshold is a guide for compacting at natural breaks; the catalog turns it into a forced window only on a 1M model, and never below 200K.
+- Check: ✓ best at 150K: 70 compactions, $74.60 net. Below 100K, compaction costs more than it saves. ✓ 2026-09-30: best at 150K either way, 148 compactions, $163 net; the dropped 60K and 80K rows lost $1,911 and $1,310 on these sessions (a 44–55K start-up).
 
 **SV5. 5-minute or 1-hour cache: which fits my sessions?** `T P A`
 - How: replay every call under a 5-minute and a 1-hour lifetime, for main threads and subagents separately, and price the whole history for all 4 combinations (total bill = actual non-cache cost + simulated cache reads and writes).
@@ -384,8 +384,8 @@ Per item: tokens per session, its share of the saving, where it comes from (buil
   - Main threads favour 1 hour by $11, a close call: 52 pauses of 5–60 min cost $63 against a $52 premium. Break-even is 1.2 pauses per 100 calls; yours is 1.4.
 
 **SV6. What if another model had done the same work?** `T P A`
-- How: the same tokens at each model's list prices. The levers count only calls on pricier models.
-- Check: ✓ main threads on Opus 5.5 (the model in use now): $230. Subagents on Sonnet 5: $75. Explore subagents on Haiku 4.5: $19.
+- How: the same tokens at each model's list prices. The levers count only calls on pricier models. "Via CLAUDE_CODE_SUBAGENT_MODEL" counts only the subagents that variable would move, following Claude Code's order (the model passed for the call, then the definition's `model`, where `inherit` is the main model, then the variable, then the main model): no model passed for the call, and a type with no model of its own (general-purpose, the built-in `claude`, or a user or project agent file without a `model` line; a file named like a built-in overrides it). Explore and Plan (`inherit`), forks and plugin agents are left out. SV1's subagent lever uses this figure.
+- Check: ✓ main threads on Opus 5.5 (the model in use now): $230. Subagents on Sonnet 5: $75. Explore subagents on Haiku 4.5: $19. ✓ 2026-09-30: every subagent on Sonnet 5 $101, via the variable $37.03: general-purpose subagents without a per-call model ($122 of spend) are the only ones it moves; two `claude` agents launched with model opus ($44.61), Explore ($28.65), Plan ($15.28), general-purpose calls that passed a model ($28.09) and forks ($8.40) keep theirs.
 
 **SV7. What would starting a fresh session after long breaks have saved?** `T P S`
 - How: each return after the cache expired, priced as a fresh session (median start-up + 5K summary + 10K re-read), including every later call's smaller context until the next break or compaction.

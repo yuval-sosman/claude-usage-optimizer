@@ -2,7 +2,7 @@
 name: report
 description: Build and open the Claude Code usage report from the local transcripts (cost, caching, context, sessions, tools, hooks), with Claude-written insights on what each change would have saved. Use when the user asks to analyze, audit or explain their Claude Code usage, cost, cache hits or context size, or to run, refresh or open the usage report.
 argument-hint: "[--days N (default 60) | --since YYYY-MM-DD --until YYYY-MM-DD | --all] [--claude-dir DIR] [--no-insights] [--no-open]"
-allowed-tools: Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/usage_report.py" *), Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/candidates.py" *), Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/assemble.py" *), Read(~/.claude-usage/**), Read(~/.claude/plugins/cache/claude-usage-optimizer/claude-usage/**), Edit(~/.claude-usage/data/notes-insights.json)
+allowed-tools: Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/usage_report.py" *), Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/candidates.py" *), Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/assemble.py" *), Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/open.py" *), Read(~/.claude-usage/**), Read(~/.claude/plugins/cache/claude-usage-optimizer/claude-usage/**), Edit(~/.claude-usage/data/notes-insights.json)
 ---
 
 # Usage report + insights
@@ -20,6 +20,11 @@ every structure (savings, evidence, question ids, links); you bring the judgment
   (all KPIs, every table row and column, every chart entry; `card:CX3@<scope id>` for one project's scope).
 - **Never invent numbers.** Every figure in an insight must appear in the digest or be a simple, stated derivation of figures
   that do (put the derivation in `savings.basis`).
+- **Advice follows Claude Code's best practice; the numbers aim it.** The SV scenarios say what a change would have saved, not
+  whether it is a good way to work. Every action you write is one the official guidance recommends
+  ([../optimize/reference/best-practices.md](../optimize/reference/best-practices.md)): e.g. SV4's threshold becomes "/compact
+  with what to keep at a natural break once past ~150K" and "/clear before unrelated work", never "compact at 60K". When the
+  data favours something the guidance advises against, say what the guidance recommends instead, with the numbers.
 - Dollars are **API list-price equivalents** (tokens × prices.json). On a subscription they are a yardstick, not a bill. Say so
   once in the summary.
 - Never write `insights.json` yourself: `assemble.py` writes it from your notes (step 3).
@@ -32,6 +37,20 @@ Paths used below:
 - `<OUT>`: the output folder, `~/.claude-usage` by default. Step 1 prints it (so does `usage_report.py --where [--claude-dir …]`);
   substitute its real path. It holds `report.html`, the extracted data in `data/` and the files built from your notes:
   `insights.json`, `optimizations.json`.
+
+## Only opening it?
+
+When the user asked in words only to open or look at the report they already have (not to run, refresh or rebuild it),
+don't build it: a build counts everything again, which puts the current insights and optimizations out of date until
+they are written again. Run
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/open.py"
+```
+
+(with `--tab insights` or `--tab optimizations` when they named a tab), reply in two lines with what it printed, and stop.
+If it says there is no report yet, go on with step 1. Typed as `/claude-usage:report`, with or without options, it builds:
+go to step 1. (`/claude-usage:open` opens without building too.)
 
 ## 1. Build the report
 
@@ -65,7 +84,9 @@ message, ask the user for that folder (the one with `projects/` inside), and run
    other project scopes and the current setup. The levers already carry the SV numbers; the digest is where everything else
    comes from: context, caching, sessions, subagents, tools, hooks, errors, and the story behind each lever.
 3. [reference/insights-guide.md](reference/insights-guide.md): the categories, what makes a good insight, how savings are
-   stated, the checklist of what to look for.
+   stated, the checklist of what to look for. Then
+   [../optimize/reference/best-practices.md](../optimize/reference/best-practices.md): the official guidance each action
+   follows, what never to recommend, and the digest signals that point to a documented practice.
 
 ## 3. Write the notes, assemble
 
@@ -115,6 +136,7 @@ The notes, for example:
     other field you give replaces the bundle's (`null` removes it; `savings` is merged key by key). `evidence_add` and
     `questions_add` append to the bundle's lists (cut to 6, keeping the lever's main one and yours first). Keep the draft
     title and bottom line when they already say it; replace them only when you have a sharper finding specific to this user.
+    The bundle's actions already follow the guidance: make them name this user's project, file or model, not weaker.
   - **a whole insight** (no `lever`): every field of the schema's insight (`id`, `category`, `title`, `bottom_line`, `detail`,
     `questions`, `evidence`, `priority`, `confidence`, optional `scope`, `savings`, `actions`). In `savings`, leave out
     `pct_of_spend` and `usd_per_month` to have them computed from `usd_so_far`.

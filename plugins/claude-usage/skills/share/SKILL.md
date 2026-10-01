@@ -72,4 +72,4 @@ If it says the file is from a newer claude-usage, tell the user to update the pl
 file is damaged, ask the sender for a new one.
 
 Reply with whose report it is, its period, anything the `as sent:` line lists as out of date or missing, and the path
-of report.html.
+of report.html. Later, `/claude-usage:open received <name>` opens it again without unpacking.

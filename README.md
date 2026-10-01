@@ -21,8 +21,10 @@ saved so far. Nothing leaves your machine.
   context growth, sessions, subagents, tools, hooks, and a step-by-step timeline of every costly cache miss.
 - **Insights:** Claude reads the numbers and writes the bottom lines, cost first. Each one links to the charts behind it
   and says what it would have saved, all time and per 30 days.
-- **Optimizations:** concrete changes: settings, hooks, a status line, CLAUDE.md notes, habits. The ones a script can make
-  apply with one command you run yourself, with a diff preview, a backup and an undo. Claude never changes your setup.
+- **Optimizations:** concrete changes: settings, hooks, a status line, CLAUDE.md notes, habits. Each is a way of working
+  Claude Code's own documentation recommends, aimed and sized with your numbers, so a replay's saving never talks it into
+  something the docs advise against (such as compacting every few turns). The ones a script can make apply with one command
+  you run yourself, with a diff preview, a backup and an undo. Claude never changes your setup.
 
 ## Install
 
@@ -41,11 +43,13 @@ library only); runs on macOS, Linux and Windows.
 
 ```text
 /claude-usage:report        build the report, write the Insights tab, open it
+/claude-usage:open          open the report you already have, without building it again
 /claude-usage:optimize      turn the insights into changes you can apply one by one
 /claude-usage:brainstorm    dig into the numbers with Claude and test what-ifs
 /claude-usage:video         a 30–60 second video of your own highlights, to share
 /claude-usage:share         the whole report as one file, to send to whoever compares usage
 /claude-usage:company       many people's share files combined: totals, people compared, levers company-wide
+/claude-usage:clear         remove the report files to start from scratch (your setup stays)
 ```
 
 Or just ask *"why did Claude Code cost so much last week?"*
@@ -94,9 +98,9 @@ Undo:  python3 …/claude-usage/scripts/apply.py undo subagents-on-sonnet --dir 
 </details>
 
 <details>
-<summary><b>Optimizations</b>: a checklist, with the choices between changes</summary>
+<summary><b>Optimizations</b>: a list, with the choices between changes</summary>
 
-![The Optimizations tab: progress, how the changes relate, and each change with its saving and a copyable apply command](plugins/claude-usage/docs/images/optimizations.png)
+![The Optimizations tab: how the changes relate, and each change with its saving and a copyable apply command](plugins/claude-usage/docs/images/optimizations.png)
 </details>
 
 <details>
@@ -150,11 +154,13 @@ Each question, how it's counted and how to check it: [docs/QUESTIONS.md](plugins
 | Command | Options |
 |---|---|
 | `/claude-usage:report` | `--days N` (default 60) · `--since YYYY-MM-DD --until YYYY-MM-DD` · `--all` (every transcript on disk) · `--claude-dir DIR` · `--no-insights` (numbers only) · `--no-open` |
+| `/claude-usage:open` | `insights` or `optimizations` (the tab) · a question, insight or optimization id, e.g. `CX8` · `company` · `received [NAME]` (a report someone sent you) |
 | `/claude-usage:optimize` | a focus: `cost`, `cache`, `context`, `hooks` or anything else · `apply <id>`: preview one optimization and get the command to apply it yourself |
 | `/claude-usage:brainstorm` | a question or topic, e.g. `why are subagents so expensive?` |
 | `/claude-usage:video` | what to highlight, e.g. `cache misses and savings` · `--seconds 30-60` · `--no-mp4` |
 | `/claude-usage:share` | `--name NAME` · `--team TEAM` · `--no-open` · `open FILE`: open a share file someone sent you |
 | `/claude-usage:company` | `<folder of share files>` · `--since YYYY-MM-DD` · `--until YYYY-MM-DD` · `--no-open` |
+| `/claude-usage:clear` | `--yes` (skip the question) · `--keep video,share,received,company` · `--out DIR` |
 
 ```text
 /claude-usage:report --days 30
@@ -195,6 +201,15 @@ Each question, how it's counted and how to check it: [docs/QUESTIONS.md](plugins
 
 `--dir` is the report folder (default as for `--out`); `--claude-dir` is the Claude folder to change (default: the one
 the report was built from).
+
+**Opening a report again**: `python3 $S/open.py [--tab insights|optimizations] [--show ID] [--company | --received [NAME]] [--out DIR]`
+opens the report you already have (or the company report, or one someone sent you) without counting anything again, and
+says when its numbers were counted and whether its insights and optimizations are current. A page older than the files
+it is built from (or than the plugin's page, after an update) is built again from them first; the numbers stay the same.
+
+**Starting from scratch**: `python3 $S/clear.py [--yes] [--keep video,share,received,company] [--out DIR]` shows what it
+would remove from the report folder, and removes it with `--yes`: only this plugin's own files, never your settings or
+transcripts. `applied/` stays while an optimization is applied, so `apply.py undo` keeps working.
 
 **The video**: `python3 $S/video.py <command> [--out DIR]`
 
@@ -420,13 +435,15 @@ where Claude Code guards every write. To change it, pass `--out DIR`, or set `CL
 CLAUDE.md                            for working on the plugin
 plugins/claude-usage/
   .claude-plugin/plugin.json         the plugin manifest
-  skills/report|optimize|brainstorm|video|share|company/  the six skills and their reference guides
+  skills/report|open|optimize|brainstorm|video|share|company|clear/  the eight skills and their reference guides
   scripts/usage_report.py            the engine (stdlib Python 3.8+); report_template.html is the offline UI
   scripts/apply.py, validate.py      apply/undo optimizations; check Claude's output
   scripts/candidates.py, assemble.py the optimization drafts and savings bundles; merge Claude's notes into the final JSON
   scripts/video*.py, fonts/          the highlights video: storyboard, checks, template, recorder (headless browser + ffmpeg)
   scripts/share.py                   the whole report as one file to send, and back into a report folder
   scripts/company.py                 many people's share files combined into one company report
+  scripts/open.py                    open a report you already have, without building it again
+  scripts/clear.py                   remove the report folder's files to start from scratch
   scripts/prices.json                USD per million tokens per model
   scripts/hooks/                     hooks and status line the optimizations install
   schemas/                           the insights, optimizations, video storyboard and share file contracts
