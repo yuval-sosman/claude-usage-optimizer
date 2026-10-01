@@ -144,8 +144,9 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
   `migrate()` only touches report folders. Transcript text goes through `clip()`, which `scrub()`s secrets
   (`SECRET_IN_TEXT`); config.json goes through `redact()` (env values outside `ENV_KEEP` become `<set>`).
 - **Received files are untrusted.** `share.load()` caps size and nesting and rejects unwritable text; `plain()` strips
-  control and bidi characters from anything printed or shown; `render()` drops any `meta.apply` that came with the data
-  (the template also hides apply commands when `meta.shared`); unpack and `company.py --to` write only into a new folder
+  control and bidi characters from anything printed or shown; `render()` drops any `meta.apply` and `meta.prompt` (this
+  machine's plugin paths for the cards' "Apply with prompt" text) that came with the data (the template also hides apply
+  commands and prompts when `meta.shared`); unpack and `company.py --to` write only into a new folder
   or one they made; `company.py` skips a file it can't summarise.
 - **Skills never read transcripts.** They use only `<OUT>` files. If a skill needs a number, add it to the script's output.
 - **The scripts stay stdlib-only and portable** (the video's MP4 also needs a Chromium-based browser and ffmpeg; without

@@ -280,6 +280,12 @@ can only change what [`scripts/policy.py`](plugins/claude-usage/scripts/policy.p
 `apply.py undo <id>` removes just that change and keeps other optimizations and your own later edits. `apply.py list`
 shows what's applied, and `apply.py check` previews them all in one go. Settings and hooks take effect in new sessions.
 
+Every card, one-command or by hand, also has an **Apply with prompt** section: a short prompt with a **Copy prompt**
+button, to paste into Claude Code so Claude makes the change for you. It names the exact changes (the bundled hook files
+by their path in the plugin), and asks Claude to show each change and wait for your OK before writing it, back up each
+file first, and then tell you how to check that it worked. Slash commands stay yours to run. Unlike `apply.py`, Claude
+keeps no record for `apply.py undo`. A received report shows no prompts.
+
 The tab shows how optimizations interact:
 - **Pick one**: two fixes for the same cost (e.g. the stale-cache guard vs a 1-hour cache) appear as one choice. Mark the one
   you pick as done and the other is set aside as not needed.
