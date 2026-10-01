@@ -14,7 +14,7 @@ that is a threshold on the report's figures or a check of the current setup is e
                  and, where one can be written, a draft to adopt
   skipped        entries whose rule doesn't hold, or that are already in place, with the reason
   links          how the drafts relate (the catalog's Related lines), for assemble.py
-  levers         one bundle per savings lever (SV1's rows) for the insights: savings, evidence quoted as digest.md
+  levers         one bundle per savings lever (SV2's rows) for the insights: savings, evidence quoted as digest.md
                  writes it, questions, overlaps, a draft title, bottom line and actions
 Figures are read from the cards by label, like video.py does: a card or label that is missing skips that entry with the
 reason, never the whole run. usage_report.py calls write_candidates() after a full run. Standard library only.
@@ -64,6 +64,7 @@ class Report:
     """The all-projects figures of metrics.json, found by card id and label (never by position)."""
 
     def __init__(self, metrics):
+        metrics = UR.current_ids(metrics)           # a report from before the SV renumbering, under today's ids
         meta = metrics.get('meta') or {}
         self.metrics, self.generated, self.range = metrics, meta.get('generated'), meta.get('range') or {}
         top = (metrics.get('data') or {}).get('all') or {}
@@ -242,7 +243,7 @@ usd, tok, pct, span = UR.f_usd, UR.f_tok, UR.f_pct, UR.f_span
 
 
 def save(so, mo, *notes):
-    """A saving as the report words it; notes go inside its parenthesis: '$127 all time (≈ $185 per 30 days, SV4)'."""
+    """A saving as the report words it; notes go inside its parenthesis: '$127 all time (≈ $185 per 30 days, SV5)'."""
     return f'{usd(so)} all time (≈ {", ".join((f"{usd(mo)} per 30 days",) + notes)})'
 
 
@@ -373,9 +374,9 @@ def stop_hooks(R):
 
 
 def lever_row(R, key):
-    """SV1's row for a lever: by its id when the report wrote one, else by its card and label (reports from before the ids;
-    the model levers share SV6 and differ in wording)."""
-    rows = R.rows('SV1', 'c')
+    """SV2's row for a lever: by its id when the report wrote one, else by its card and label (reports from before the ids;
+    the model levers share SV7 and differ in wording)."""
+    rows = R.rows('SV2', 'c')
     if any('id' in r for r in rows):
         return next((r for r in rows if r.get('id') == key), None)
     card, prefix = LEVER_ROWS[key]
@@ -383,7 +384,7 @@ def lever_row(R, key):
 
 
 def sv3_row(R, cause):
-    return next((r for r in R.rows('SV3', 'w') if r.get('k') == cause), None)
+    return next((r for r in R.rows('SV4', 'w') if r.get('k') == cause), None)
 
 
 def window(R):
@@ -395,15 +396,15 @@ def window(R):
 
 
 def main_lifetime(R):
-    """The main thread's current cache lifetime: SV5's actual cost equals its 5-minute or its 1-hour replay."""
-    r = next((x for x in R.rows('SV5', 'c5', 'Cache read + write cost per thread kind') if x.get('k') == 'Main threads'), None)
+    """The main thread's current cache lifetime: SV6's actual cost equals its 5-minute or its 1-hour replay."""
+    r = next((x for x in R.rows('SV6', 'c5', 'Cache read + write cost per thread kind') if x.get('k') == 'Main threads'), None)
     if not r:
         return None
     return '5-minute' if abs(r['a'] - r['c5']) < abs(r['a'] - r['c1']) else '1-hour'
 
 
 def mix_of(k):
-    """SV5's cheapest mix, e.g. 'main 1 hour · subagents 5 min', from its tile's 'main 1 hour · subagents 5 min: $823 in total'."""
+    """SV6's cheapest mix, e.g. 'main 1 hour · subagents 5 min', from its tile's 'main 1 hour · subagents 5 min: $823 in total'."""
     return (k.get('sub') or 'the cheapest mix').split(':')[0]
 
 
@@ -447,8 +448,8 @@ def setting_model(val):
 
 
 def compact_best(R):
-    T = R.kpi('SV4', 'Best threshold')['value']
-    return T, R.kpi('SV4', 'Net saving')
+    T = R.kpi('SV5', 'Best threshold')['value']
+    return T, R.kpi('SV5', 'Net saving')
 
 
 # ---------- the catalog: one function per entry, in catalog.md's order ----------
@@ -465,12 +466,12 @@ def entry(name):
 
 @entry('main-model')
 def main_model(R, S, v):
-    """SV6's main-thread saving on the current model is over $10. A habit when the `model` setting already names that model
+    """SV7's main-thread saving on the current model is over $10. A habit when the `model` setting already names that model
     (or its family's alias); when it names another model, or none, whether to set it is Claude's call."""
-    k = R.kpi('SV6', 'Main threads on ', prefix=True)
+    k = R.kpi('SV7', 'Main threads on ', prefix=True)
     cur = k['label'][len('Main threads on '):]
     if k['value'] <= 10:
-        return skip(f"SV6: main threads on {cur} would have saved {usd(k['value'])}, under the $10 bar")
+        return skip(f"SV7: main threads on {cur} would have saved {usd(k['value'])}, under the $10 bar")
     cur_id = model_id(cur)
     fam = UR.model_parts(cur_id)[0]
     base = in_price(cur)
@@ -479,12 +480,12 @@ def main_model(R, S, v):
     share = sum(x for _, x in pricier) / R.spend * 100 if R.spend else 0
     slash_row = next((r for r in R.rows('EX1', 'n', 'Slash commands') if r.get('k') == '/model'), None)
     slash = (slash_row or {}).get('n')
-    facts = [R.fact('SV6', k['label']), soft(R.chart_fact, 'OV2', 'By model')] + ([R.row_fact('EX1', 'n', slash_row, ('k', 'n'), 'Slash commands')] if slash else [])
+    facts = [R.fact('SV7', k['label']), soft(R.chart_fact, 'OV2', 'By model')] + ([R.row_fact('EX1', 'n', slash_row, ('k', 'n'), 'Slash commands')] if slash else [])
     problem = sentence(f"{and_list(f'{c} ({usd(x)})' for c, x in pricier)}, pricier than {cur}, did {pct(share)} of your spend "
                        '(main threads and subagents, OV2).' if pricier else '',
-                       f"The same main-thread tokens on {cur} would have saved {save(k['value'], k['month'], 'SV6')}.",
+                       f"The same main-thread tokens on {cur} would have saved {save(k['value'], k['month'], 'SV7')}.",
                        f'You ran /model {plural(slash, "time")} (EX1).' if slash else '')
-    sv = lambda extra: savings(k['value'], k['month'], 'theoretical', f'SV6: the same main-thread tokens re-priced at {cur} list prices, '
+    sv = lambda extra: savings(k['value'], k['month'], 'theoretical', f'SV7: the same main-thread tokens re-priced at {cur} list prices, '
                                                                       'pricier calls only.' + extra)
     model = S.get('model')
     set_fam, set_id = setting_model(model) if model else (None, None)
@@ -493,7 +494,7 @@ def main_model(R, S, v):
                 f'Your settings already default to model={model}, so new sessions start there. What is left is the habit: switch to a '
                 f'stronger model with /model only for one hard subtask, then switch back. Switching models mid-session also re-writes the '
                 f'cache, so switch at a natural break or in a new session.',
-                R.questions(*(['SV6', 'OV2'] + (['EX1'] if slash else []))), 'habit', 'low',
+                R.questions(*(['SV7', 'OV2'] + (['EX1'] if slash else []))), 'habit', 'low',
                 ['Start sessions on the default (check with /model).',
                  'For a hard design or debugging step, run /model and pick the stronger model, do that step, then /model back.',
                  'Switch at a natural break: a model switch re-writes the cache.'],
@@ -502,14 +503,14 @@ def main_model(R, S, v):
                 tradeoffs='A cheaper model can take more turns or do worse on the hardest problems; that is why you switch up for those, '
                           'not for whole sessions.',
                 verify=f"In the next report, OV2's by-model split shows {cur} carrying most of the cost.", insights=['main_model'])
-        return draft(f"SV6: main threads on {cur} would have saved {save(k['value'], k['month'])}, over the $10 bar; model={model} already "
+        return draft(f"SV7: main threads on {cur} would have saved {save(k['value'], k['month'])}, over the $10 bar; model={model} already "
                      f"names {cur}'s family, so it's a habit.", o, ['main_model'])
     alias = fam or cur.split()[0].lower()
     oid = f'main-model-{alias}'
     o = opt(oid, f'Make {cur} your default model', 'cost', 'setting', problem,
             f'Sets model to "{alias}" in {SETTINGS}, so new sessions start on {cur}' + (f' instead of {model}' if model else '')
             + '. Switch to a stronger model with /model only for one hard subtask, then back.',
-            R.questions(*(['SV6', 'OV2'] + (['EX1'] if slash else []))), 'one-click', 'medium',
+            R.questions(*(['SV7', 'OV2'] + (['EX1'] if slash else []))), 'one-click', 'medium',
             [f'In {SETTINGS} set "model": "{alias}" (check that /model shows {cur} for it).', 'Start a new session.'],
             f'apply.py undo {oid}, or ' + (f'set "model" back to "{model}"' if model else 'remove "model"') + f' in {SETTINGS}.',
             docs('model-config', 'settings'), sv=sv(''),
@@ -518,7 +519,7 @@ def main_model(R, S, v):
             apply_summary=f'Set "model": "{alias}" in {SETTINGS}.',
             verify=f"A new session starts on {cur} (/model), and the next report's OV2 shows it carrying most of the cost.",
             insights=['main_model'])
-    return judge(f"SV6: main threads on {cur} would have saved {save(k['value'], k['month'])}; "
+    return judge(f"SV7: main threads on {cur} would have saved {save(k['value'], k['month'])}; "
                  + (f'settings name model={model}, which is not {cur}.' if model else f'no default model is set in {SETTINGS}.'),
                  f'Set the default (check the alias /model shows for {cur}; keep "[1m]" when the 1M window is needed), or keep it a habit '
                  '(write that one yourself)?', facts, o, ['main_model'])
@@ -526,17 +527,17 @@ def main_model(R, S, v):
 
 @entry('subagent-model')
 def subagent_model(R, S, v):
-    """SV6's saving on the subagents CLAUDE_CODE_SUBAGENT_MODEL moves is over $5 and the variable isn't set. It moves only
+    """SV7's saving on the subagents CLAUDE_CODE_SUBAGENT_MODEL moves is over $5 and the variable isn't set. It moves only
     subagents that name no model (general-purpose, agent files without a model field) and have none passed for the call:
     Explore and Plan are defined with model: inherit and keep the main model (sub-agents docs)."""
-    k = R.kpi('SV6', 'Subagents on ', prefix=True)
+    k = R.kpi('SV7', 'Subagents on ', prefix=True)
     target = k['label'][len('Subagents on '):]
-    via = R.has('SV6', 'Via CLAUDE_CODE_SUBAGENT_MODEL')
+    via = R.has('SV7', 'Via CLAUDE_CODE_SUBAGENT_MODEL')
     if not via:
-        return skip('SV6 has no “Via CLAUDE_CODE_SUBAGENT_MODEL” figure (a report made by an older version of the plugin): run '
+        return skip('SV7 has no “Via CLAUDE_CODE_SUBAGENT_MODEL” figure (a report made by an older version of the plugin): run '
                     '/claude-usage:report again to see what the variable would move')
     if via['value'] <= 5:
-        return skip(f"SV6: the subagents CLAUDE_CODE_SUBAGENT_MODEL moves would have saved {usd(via['value'])} on {target}, under the $5 bar "
+        return skip(f"SV7: the subagents CLAUDE_CODE_SUBAGENT_MODEL moves would have saved {usd(via['value'])} on {target}, under the $5 bar "
                     f"(all subagents: {usd(k['value'])}, most of it on Explore, Plan or calls that asked for a model)")
     have = S.get('env', 'CLAUDE_CODE_SUBAGENT_MODEL')
     if have:
@@ -548,35 +549,35 @@ def subagent_model(R, S, v):
         top = R.series('SE5', 'Cost by model')[0][0]
     except (Missing, IndexError):
         top = None
-    explore = R.has('SV6', 'Explore subagents on ', prefix=True)
+    explore = R.has('SV7', 'Explore subagents on ', prefix=True)
     ex_model = explore['label'].split(' on ')[-1] if explore else None
     oid = f'subagent-model-{alias}'
     o = opt(oid, f'Run subagents on {target} by default', 'delegation', 'setting',
             sentence(f"Subagents that name no model inherit your main model: {usd(top[1])} of {share['sub']} subagent spend ran on {top[0]} (SE5)."
                      if top and share and share.get('sub') and top[0] != target else '',
-                     f"The subagents this setting moves would have cost {save(via['value'], via['month'], 'SV6')} less on {target}"
+                     f"The subagents this setting moves would have cost {save(via['value'], via['month'], 'SV7')} less on {target}"
                      + (f" (all subagents: {usd(k['value'])}, but Explore, Plan and calls that asked for a model keep theirs)." if k['value'] > via['value'] + 0.5 else '.')),
             f'Sets CLAUDE_CODE_SUBAGENT_MODEL={alias} in {SETTINGS} env. General-purpose subagents and your agent files without a model '
             f'field then run on {target}. Explore and Plan keep your main model (they are defined with model: inherit), and a model '
             'Claude passes for one call ("use Opus for this review") still wins.',
-            R.questions('SV6', 'SE5', 'OV7'), 'one-click', 'medium',
+            R.questions('SV7', 'SE5', 'OV7'), 'one-click', 'medium',
             [f'In {SETTINGS} add "env": {{"CLAUDE_CODE_SUBAGENT_MODEL": "{alias}"}}.', 'Start a new session; /tasks shows the model a running subagent uses.',
              'When a subagent needs the strongest model, say so in the request (e.g. "review this with an Opus subagent").']
             + ([f"Optionally, for Explore: a user agent file named Explore (~/.claude/agents/Explore.md) with model: {ex_model.split()[0].lower()} "
-                f"replaces the built-in one, prompt and tools included, so write both; SV6 puts Explore on {ex_model} at "
+                f"replaces the built-in one, prompt and tools included, so write both; SV7 puts Explore on {ex_model} at "
                 f"{save(explore['value'], explore['month'])}."] if explore and explore.get('month') is not None and explore['value'] > 1 else [])
             + (['To move every subagent (Explore and Plan too), also set CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1 by hand: Claude then can no '
                 'longer pick a stronger model for one call, and agent files\' own models are ignored, so an agent pinned to a cheaper '
                 'model moves up too.'] if k['value'] > via['value'] + 1 and not (explore and explore['value'] < 0.5) else []),
             f'apply.py undo {oid}, or remove env.CLAUDE_CODE_SUBAGENT_MODEL from {SETTINGS}.', docs('sub-agents', 'model-config'),
-            sv=savings(via['value'], via['month'], 'theoretical', f'SV6: the same tokens at {target} list prices for the subagents the variable '
+            sv=savings(via['value'], via['month'], 'theoretical', f'SV7: the same tokens at {target} list prices for the subagents the variable '
                                                                   'moves (no model of their own, none passed for the call), pricier calls only.'),
             tradeoffs=f'Long implementation and review agents may take more turns or miss more on {target}; ask for a stronger model '
                       'explicitly when delegating a hard review or design task.',
             steps=[{'action': 'merge_json', 'path': SETTINGS, 'value': {'env': {'CLAUDE_CODE_SUBAGENT_MODEL': alias}}}],
             apply_summary=f'Add env CLAUDE_CODE_SUBAGENT_MODEL={alias} to {SETTINGS}.',
             verify=f"In the next report, SE5's cost by model shows {target} carrying most general-purpose subagent calls.", insights=['sub_model'])
-    return draft(f"SV6: the subagents CLAUDE_CODE_SUBAGENT_MODEL moves would have saved {save(via['value'], via['month'])} on {target}, over the "
+    return draft(f"SV7: the subagents CLAUDE_CODE_SUBAGENT_MODEL moves would have saved {save(via['value'], via['month'])} on {target}, over the "
                  f"$5 bar (all subagents: {usd(k['value'])}); the variable isn't set.", o, ['sub_model'])
 
 
@@ -588,7 +589,7 @@ def model_default_effort(mid):
 def effort_to_default(R, S, glob, per, think):
     """The persisted effort for the model you use now is above that model's documented default: a draft that removes it, so
     each model starts at its tuned default. None when the setting is at or below the default."""
-    k = soft(R.kpi, 'SV6', 'Main threads on ', prefix=True)
+    k = soft(R.kpi, 'SV7', 'Main threads on ', prefix=True)
     if not k:
         return None
     cur = k['label'][len('Main threads on '):]
@@ -621,7 +622,7 @@ def effort_to_default(R, S, glob, per, think):
             apply_summary=f'Remove {where} from {SETTINGS}.',
             verify=f"A new {cur} session shows effort {dflt} (/effort), and the next report's OV4 shows {dflt} carrying most calls.",
             insights=['main_model'])
-    return draft(f'{cur} is the model you use now (SV6), and its documented default effort is {dflt}, but settings keep it at {eff} ({where}). '
+    return draft(f'{cur} is the model you use now (SV7), and its documented default effort is {dflt}, but settings keep it at {eff} ({where}). '
                  f'{note} (code.claude.com/docs/en/model-config).', o, ['main_model'])
 
 
@@ -702,14 +703,14 @@ def effort_default(R, S, v):
 
 @entry('stop-hook-followup')
 def stop_hook_followup(R, S, v):
-    """SV1's Stop-hook follow-up lever is over $5. No generic apply: it is the user's own automation."""
+    """SV2's Stop-hook follow-up lever is over $5. No generic apply: it is the user's own automation."""
     row = lever_row(R, 'stop_hook')
     if not row or (row.get('u') or 0) <= 5:
-        return skip('SV1: Stop-hook follow-up work is under $5' if row else 'SV1 has no Stop-hook follow-up lever')
+        return skip('SV2: Stop-hook follow-up work is under $5' if row else 'SV2 has no Stop-hook follow-up lever')
     hooks = stop_hooks(R)
     name = hooks[0]['h'] if hooks else 'Your Stop hook'
     where = sorted({S.tilde(f) for f, e, _, cmd in S.hooks() if e == 'Stop' and (not hooks or hooks[0]['h'] in cmd)}, key=lambda f: (len(f), f))
-    facts = [R.row_fact('SV1', 'c', row, ('l', 'u', 'mo'))]
+    facts = [R.row_fact('SV2', 'c', row, ('l', 'u', 'mo'))]
     facts += [R.row_fact('EX5', 'go', r, ('h', 'sr', 'go', 'fc', 'fu')) for r in hooks[:3]]
     mem = next((r for r in R.rows('OUT3', 'n') if r.get('k') == 'Memory'), None)
     if mem:
@@ -719,23 +720,23 @@ def stop_hook_followup(R, S, v):
     o = opt('stop-hook-followup', f"Make {name}'s follow-up work cheaper", 'cost', 'hook',
             sentence(f"{name} ran {plural(hooks[0]['sr'], 'time')} on Stop, and {hooks[0]['go']} times Claude went on working "
                      'because of what it sent back (EX5).' if hooks else '',
-                     f"That work, before your next prompt, costs up to {save(row['u'], row['mo'], 'SV1')}."),
+                     f"That work, before your next prompt, costs up to {save(row['u'], row['mo'], 'SV2')}."),
             'Makes the hook ask for less: it speaks up only after turns that changed files or ran long, does nothing when stop_hook_active '
             'is set (so it cannot loop), and asks for one short, specific write instead of an open-ended task.',
-            R.questions('SV1', 'EX5', 'OUT3' if mem else 'EX5'), 'minutes', 'low',
+            R.questions('SV2', 'EX5', 'OUT3' if mem else 'EX5'), 'minutes', 'low',
             [f"Open the hook's script (the command is in {and_list(where[:2] + ([f'{len(where) - 2} more settings files'] if len(where) > 2 else []))})."
              if where else "Open the hook's script (see /hooks).",
              'Make it exit without output unless the turn changed files or ran long.',
              'Read stop_hook_active from its JSON input and do nothing when it is true, so it cannot loop.',
              'Keep what it asks Claude to write short and specific, or move summarising to a script that calls a cheaper model.'],
             'Revert the change to the hook script.', docs('hooks', 'hooks-guide'),
-            sv=savings(row['u'], row['mo'], 'upper_bound', "SV1's Stop-hook follow-up lever: the calls Claude made because the hook sent "
+            sv=savings(row['u'], row['mo'], 'upper_bound', "SV2's Stop-hook follow-up lever: the calls Claude made because the hook sent "
                                                           'something back (they follow its Stop run, before any new prompt); an upper bound, '
                                                           'since some of that work is wanted.'),
             tradeoffs='A turn that mattered but changed no files no longer gets the reminder; you can still ask for it. If a tool '
                       'generates the hook, change it at the source or a rebuild overwrites the edit.',
-            verify="In the next report, SV1's Stop-hook lever drops.", insights=['stop_hook'])
-    return judge(f"SV1: Stop-hook follow-up work would have saved up to {save(row['u'], row['mo'])}, over the $5 bar.",
+            verify="In the next report, SV2's Stop-hook lever drops.", insights=['stop_hook'])
+    return judge(f"SV2: Stop-hook follow-up work would have saved up to {save(row['u'], row['mo'])}, over the $5 bar.",
                  "Make the draft specific (which script, the real change, where its source lives), or drop it if the follow-up work is wanted.",
                  facts, o, ['stop_hook'])
 
@@ -744,7 +745,7 @@ WINDOW_RANGE = (100_000, 1_000_000)   # what Claude Code accepts for autoCompact
 WINDOW_FLOOR = 300_000   # the smallest auto-compact window this plugin recommends. Claude Code's own "auto" is "strongly
                          # recommended for the best cost and performance", and the docs' advice is to compact at natural breaks
                          # between tasks, so a forced window only ever caps a 1M-context model, high enough that a long task
-                         # keeps its room: WINDOW_TARGET, or the floor when SV4 finds nothing to save past the target.
+                         # keeps its room: WINDOW_TARGET, or the floor when SV5 finds nothing to save past the target.
 WINDOW_TARGET = 400_000
 
 
@@ -762,37 +763,37 @@ def configured_window(S):
 
 
 def next_window(R, T, floor=0):
-    """The first SV4 threshold above the best one (and at least floor) that still saves money: where auto-compact's window goes."""
-    rows = sorted([r for r in R.table('SV4', 'mo') if isinstance(r.get('t'), (int, float))], key=lambda r: r['t'])
+    """The first SV5 threshold above the best one (and at least floor) that still saves money: where auto-compact's window goes."""
+    rows = sorted([r for r in R.table('SV5', 'mo') if isinstance(r.get('t'), (int, float))], key=lambda r: r['t'])
     return next((r for r in rows if r['t'] > T and r['t'] >= floor and (r.get('u') or 0) > 0), None)
 
 
 def cap_row(R):
-    """SV4's row for the window auto-compact gets: WINDOW_TARGET's, or WINDOW_FLOOR's when the target's saves nothing; None
+    """SV5's row for the window auto-compact gets: WINDOW_TARGET's, or WINDOW_FLOOR's when the target's saves nothing; None
     when neither saves money."""
-    rows = {r['t']: r for r in R.table('SV4', 'mo') if isinstance(r.get('t'), (int, float))}
+    rows = {r['t']: r for r in R.table('SV5', 'mo') if isinstance(r.get('t'), (int, float))}
     return next((rows[t] for t in (WINDOW_TARGET, WINDOW_FLOOR) if ((rows.get(t) or {}).get('u') or 0) > 0), None)
 
 
 @entry('auto-compact-window')
 def auto_compact_window(R, S, v):
-    """Only for a model whose window is over WINDOW_FLOOR (a 1M model, where auto compacts at about 967K): SV4's best net
-    saving is over $5, and SV4's row for WINDOW_TARGET (400K) still saves money, else WINDOW_FLOOR's (300K): never lower,
-    whatever SV4's best threshold is, so a long task keeps its room. The window is that row (compaction triggers as usage
+    """Only for a model whose window is over WINDOW_FLOOR (a 1M model, where auto compacts at about 967K): SV5's best net
+    saving is over $5, and SV5's row for WINDOW_TARGET (400K) still saves money, else WINDOW_FLOOR's (300K): never lower,
+    whatever SV5's best threshold is, so a long task keeps its room. The window is that row (compaction triggers as usage
     approaches it), with that row's saving. On a 200K model, auto already compacts near 200K, the window Claude Code tunes
-    and strongly recommends: SV4 is acted on with /compact at natural breaks and the context notice instead."""
+    and strongly recommends: SV5 is acted on with /compact at natural breaks and the context notice instead."""
     T, net = compact_best(R)
     if net['value'] <= 5:
-        return skip(f"SV4: compacting at {size(T)} would have saved {usd(net['value'])}, under the $5 bar")
+        return skip(f"SV5: compacting at {size(T)} would have saved {usd(net['value'])}, under the $5 bar")
     win, model = window(R)
     if not win:
         return skip("CX5 doesn't give the model's context window")
     if win <= WINDOW_FLOOR:
         return skip(f"{model}'s window is {size(win)}: auto-compact already runs near it, the window Claude Code tunes and strongly "
-                    'recommends; compacting at natural breaks (and the context notice) is how to act on SV4 there')
+                    'recommends; compacting at natural breaks (and the context notice) is how to act on SV5 there')
     row = cap_row(R)
     if not row:
-        return skip(f'SV4: compacting at {size(WINDOW_TARGET)} (or {size(WINDOW_FLOOR)}) would have saved nothing')
+        return skip(f'SV5: compacting at {size(WINDOW_TARGET)} (or {size(WINDOW_FLOOR)}) would have saved nothing')
     W = int(row['t'])
     if W >= 0.75 * win:
         return skip(f"the model's window is {size(win)}: auto-compact already runs near {size(W)}")
@@ -812,18 +813,18 @@ def auto_compact_window(R, S, v):
                      f'On {model} with a {size(win)} window, auto-compact waits until the context nears {size(win)}.',
                      f"{pct(c1['value'])} of calls ran above 200K (CX1) and made {pct(c6['value'])} of cache-read spend (CX6)." if c1 and c6 else '',
                      f"The largest context reached {size(big['value'])} (CX1)." if big else '',
-                     f"Compacting at {size(W)} would have saved {save(row['u'], row['mo'], 'SV4')}."),
+                     f"Compacting at {size(W)} would have saved {save(row['u'], row['mo'], 'SV5')}."),
             f'Sets autoCompactWindow to {W} in {SETTINGS} (what /autocompact {W // 1000}k saves). Claude Code then summarises the conversation as '
             f'it approaches {size(W)} instead of near {size(win)}, so long sessions stop re-reading huge contexts on every call, '
             'while a long task still has room. Compacting yourself at a natural break, with what to keep, stays the better moment.',
-            R.questions('SV4', 'CX1', 'CX6', 'OV5'), 'one-click', 'medium',
+            R.questions('SV5', 'CX1', 'CX6', 'OV5'), 'one-click', 'medium',
             [f'Run /autocompact {W // 1000}k (it saves "autoCompactWindow": {W} to {SETTINGS} and applies to the current session), or set it there by hand.',
              'Keep compacting yourself at natural breaks: /compact with what to keep when a task is done, /clear before unrelated work.',
              'To go back to the tuned window: /autocompact auto.'],
             f'apply.py undo {oid}, /autocompact auto, or ' + (f'set "autoCompactWindow" back to {S.get("autoCompactWindow")!r}' if S.get('autoCompactWindow') else
                                                                 'remove "autoCompactWindow"') + f' in {SETTINGS}.', docs('model-config', 'costs'),
             sv=savings(row['u'], row['mo'], 'theoretical',
-                       f"SV4's {size(W)} row: every main thread replayed with a compaction at {size(W)}, net of the compactions' own cost."),
+                       f"SV5's {size(W)} row: every main thread replayed with a compaction at {size(W)}, net of the compactions' own cost."),
             tradeoffs='Claude Code calls its auto window "strongly recommended for the best cost and performance" and warns that overriding it '
                       'may cost more when resuming long sessions. A compaction drops detail and can land mid-task, so a long single task may '
                       'lose context it needed; the docs advise compacting at natural breaks instead of waiting for it.',
@@ -831,24 +832,24 @@ def auto_compact_window(R, S, v):
             apply_summary=f'Set "autoCompactWindow": {W} in {SETTINGS}.',
             verify=f'/autocompact reports a {size(W)} window from settings, and a long session compacts before its context passes {size(W)}.',
             insights=['compact'])
-    return draft(f"SV4: best threshold {size(T)} (net {usd(net['value'])}, over $5); {model}'s window is {size(win)}; the cap is "
-                 f"{size(WINDOW_TARGET)} (never under {size(WINDOW_FLOOR)}), and SV4's {size(W)} row saves {usd(row['u'])}; "
+    return draft(f"SV5: best threshold {size(T)} (net {usd(net['value'])}, over $5); {model}'s window is {size(win)}; the cap is "
+                 f"{size(WINDOW_TARGET)} (never under {size(WINDOW_FLOOR)}), and SV5's {size(W)} row saves {usd(row['u'])}; "
                  + (f'{setting} is higher.' if have else "autoCompactWindow isn't set."), o, ['compact'])
 
 
 @entry('context-guard')
 def context_guard(R, S, v):
-    """Same data as auto-compact-window: SV4's best net saving is over $5. The notice fires at SV4's best threshold. When the
-    user's own auto-compact window already sits near it, the notice adds little and SV4's saving may already be theirs:
+    """Same data as auto-compact-window: SV5's best net saving is over $5. The notice fires at SV5's best threshold. When the
+    user's own auto-compact window already sits near it, the notice adds little and SV5's saving may already be theirs:
     Claude's call."""
     T, net = compact_best(R)
     if net['value'] <= 5:
-        return skip(f"SV4: compacting at {size(T)} would have saved {usd(net['value'])}, under the $5 bar")
+        return skip(f"SV5: compacting at {size(T)} would have saved {usd(net['value'])}, under the $5 bar")
     if S.has_hook('context_guard.py'):
         return skip('a context_guard.py hook is already installed')
     win, _ = window(R)
     if win and T >= win:
-        return skip(f"SV4's best threshold {size(T)} is not below the model's {size(win)} window")
+        return skip(f"SV5's best threshold {size(T)} is not below the model's {size(win)} window")
     T = int(T)
     v['threshold'] = T
     have, setting = configured_window(S)
@@ -858,7 +859,7 @@ def context_guard(R, S, v):
     c1, clear = R.has('CX1', 'Calls above 200K'), R.has('CX4', 'Median context at /clear')
     oid = f'context-guard-{T // 1000}k'
     o = opt(oid, f'Get a notice when the context passes {size(T)}', 'context', 'hook',
-            sentence(f"Compacting whenever a main thread passes about {size(T)} would have saved {save(net['value'], net['month'], 'SV4')}.",
+            sentence(f"Compacting whenever a main thread passes about {size(T)} would have saved {save(net['value'], net['month'], 'SV5')}.",
                      f'Your {setting} makes auto-compact wait until about {size(have)}.' if have else '',
                      (f"{pct(c1['value'])} of calls run above 200K (CX1)" if c1 else '')
                      + (f", while you /clear at a median of {size(clear['value'])} (CX4): the notice is for the sessions you keep going."
@@ -866,52 +867,52 @@ def context_guard(R, S, v):
             f'Installs context_guard.py as a UserPromptSubmit hook. When the context passes {size(T)} it shows a one-line notice, repeated '
             'every 50K more, so that at the next natural break you can /clear (free) before unrelated work, or /compact with what to keep '
             'when the work goes on. It never blocks a prompt, and you choose the moment, not the threshold.',
-            R.questions('SV4', 'CX4', 'CX1'), 'one-click', 'low', hook_manual('context_guard.py', 'UserPromptSubmit', cmd),
+            R.questions('SV5', 'CX4', 'CX1'), 'one-click', 'low', hook_manual('context_guard.py', 'UserPromptSubmit', cmd),
             f'apply.py undo {oid}, or remove that hook group from {SETTINGS} and delete the script.', docs('hooks', 'costs'),
             sv=None if near else savings(net['value'], net['month'], 'theoretical',
-                                         f'SV4: net saving if every main thread had compacted at {size(T)}; realised only when you act on the notice.'),
+                                         f'SV5: net saving if every main thread had compacted at {size(T)}; realised only when you act on the notice.'),
             tradeoffs='Only a line of text; the saving depends on you acting on it.', steps=steps,
             apply_summary=f'Copy context_guard.py to {HOOKS}/ and add it as a UserPromptSubmit hook (threshold {size(T)}) in {SETTINGS}.',
             verify=f'In a session past {size(T)}, the next prompt shows a notice with the context size.', insights=['compact'])
     if near:
-        return judge(f"SV4: compacting at {size(T)} would have saved {save(net['value'], net['month'])}, but {setting} already compacts near "
+        return judge(f"SV5: compacting at {size(T)} would have saved {save(net['value'], net['month'])}, but {setting} already compacts near "
                      f'{size(have)}: the notice would fire just before a compaction that happens anyway.',
-                     'Only worth proposing when the user wants to compact earlier, by hand; the draft claims no saving (SV4 may count '
-                     'compactions the setting already brings, if it was set during the period).', [R.fact('SV4', 'Best threshold', 'Net saving')],
+                     'Only worth proposing when the user wants to compact earlier, by hand; the draft claims no saving (SV5 may count '
+                     'compactions the setting already brings, if it was set during the period).', [R.fact('SV5', 'Best threshold', 'Net saving')],
                      o, ['compact'])
-    return draft(f"SV4: compacting at {size(T)} would have saved {save(net['value'], net['month'])}, over the $5 bar; no context_guard.py hook yet.",
+    return draft(f"SV5: compacting at {size(T)} would have saved {save(net['value'], net['month'])}, over the $5 bar; no context_guard.py hook yet.",
                  o, ['compact'])
 
 
 @entry('big-read-guard')
 def big_read_guard(R, S, v):
-    """SV8's saving is over $3. --max-kb matches the reads SV8 counts: its token threshold at ~4 bytes a token, rounded up to 10 KB."""
-    k = R.kpi('SV8', 'Saved if read in ranges')
+    """SV9's saving is over $3. --max-kb matches the reads SV9 counts: its token threshold at ~4 bytes a token, rounded up to 10 KB."""
+    k = R.kpi('SV9', 'Saved if read in ranges')
     if k['value'] <= 3:
-        return skip(f"SV8: reading large files in ranges would have saved {usd(k['value'])}, under the $3 bar")
+        return skip(f"SV9: reading large files in ranges would have saved {usd(k['value'])}, under the $3 bar")
     if S.has_hook('big_read_guard.py'):
         return skip('a big_read_guard.py hook is already installed')
-    n = R.kpi('SV8', 'Whole-file reads over ', prefix=True)
+    n = R.kpi('SV9', 'Whole-file reads over ', prefix=True)
     thr = parse_tok(n['label'][len('Whole-file reads over '):]) or 8000
     kb = max(20, int(math.ceil(thr * 4 / 1024 / 10.0)) * 10)
     steps, cmd = hook_steps('big_read_guard.py', 'PreToolUse', f'--max-kb {kb}', matcher='Read')
-    cost = R.has('SV8', 'What they cost')
+    cost = R.has('SV9', 'What they cost')
     top = next(iter(R.rows('EX8', 'rep', 'Files read most')), None)
     half = (k.get('sub') or '').replace('if a range kept', 'keeps').strip() or 'keeps half'
     o = opt('big-read-guard', 'Steer Claude to targeted reads of large files', 'context', 'hook',
-            sentence(f"{plural(n['value'], 'whole-file read')} over {size(thr)} tokens" + (f" cost {usd(cost['value'])} to write and carry (SV8)." if cost else ' (SV8).'),
+            sentence(f"{plural(n['value'], 'whole-file read')} over {size(thr)} tokens" + (f" cost {usd(cost['value'])} to write and carry (SV9)." if cost else ' (SV9).'),
                      f"{top['f']} alone was read {plural(top['r'], 'time')} in {plural(top['s'], 'session')} (EX8)." if top else ''),
             f'Installs big_read_guard.py as a PreToolUse hook on Read. The first whole-file Read of a file over {kb} KB (about '
             f'{size(kb * 1024 / 4)} tokens) is denied with a reason telling Claude to grep for the part it needs and Read with offset/limit. '
             'If Claude does need the whole file, repeating the Read goes through.',
-            R.questions('SV8', 'EX8', 'CX3'), 'one-click', 'low', hook_manual('big_read_guard.py', 'PreToolUse', cmd, matcher='Read'),
+            R.questions('SV9', 'EX8', 'CX3'), 'one-click', 'low', hook_manual('big_read_guard.py', 'PreToolUse', cmd, matcher='Read'),
             f'apply.py undo big-read-guard, or remove that hook group from {SETTINGS} and delete the script.', docs('hooks'),
-            sv=savings(k['value'], k['month'], 'upper_bound', f'SV8: whole-file reads over {size(thr)} tokens, assuming a targeted read {half}.'),
+            sv=savings(k['value'], k['month'], 'upper_bound', f'SV9: whole-file reads over {size(thr)} tokens, assuming a targeted read {half}.'),
             tradeoffs='One extra round-trip the first time a big file really is needed whole. File reads through cat or sed in Bash are not covered.',
             steps=steps, apply_summary=f'Copy big_read_guard.py to {HOOKS}/ and add it as a PreToolUse hook on Read ({kb} KB) in {SETTINGS}.',
             verify=f'Ask Claude to read a file over {kb} KB whole: the first Read is denied with a hint, and Claude follows up with a Grep or a ranged Read.',
             insights=['reads'])
-    return draft(f"SV8: ranged reads would have saved up to {save(k['value'], k['month'])}, over the $3 bar; no big_read_guard.py hook yet.",
+    return draft(f"SV9: ranged reads would have saved up to {save(k['value'], k['month'])}, over the $3 bar; no big_read_guard.py hook yet.",
                  o, ['reads'])
 
 
@@ -1020,7 +1021,7 @@ def transcript_retention(R, S, v):
             f"The report covers {plural(R.days, 'day')}, close to the 30 days of transcripts Claude Code keeps by default, so older sessions "
             'drop out of every later report.',
             f'Sets cleanupPeriodDays to 90 in {SETTINGS}, so the next reports can compare months instead of weeks.',
-            R.questions('SV1', 'TR1'), 'one-click', 'low', [f'In {SETTINGS} add "cleanupPeriodDays": 90.'],
+            R.questions('SV2', 'TR1'), 'one-click', 'low', [f'In {SETTINGS} add "cleanupPeriodDays": 90.'],
             f'apply.py undo transcript-retention, or remove "cleanupPeriodDays" from {SETTINGS}.', docs('settings'),
             tradeoffs='Transcripts take more disk space, and your prompts, code and command output stay on this machine longer '
                       '(claude project purge deletes a project\'s early).',
@@ -1031,37 +1032,37 @@ def transcript_retention(R, S, v):
 
 @entry('stale-cache-guard')
 def stale_cache_guard(R, S, v):
-    """SV7's saving is over $2, or CX8's costliest misses are returns after a break. --min-context is SV7's fresh-start size
+    """SV8's saving is over $2, or CX8's costliest misses are returns after a break. --min-context is SV8's fresh-start size
     rounded up to 10K (below it a fresh start saves nothing), at least 60000."""
-    k = R.kpi('SV7', 'Saved by starting fresh')
+    k = R.kpi('SV8', 'Saved by starting fresh')
     brk = sv3_row(R, 'You came back after a break')
     first = [r.get('cause') for r in R.rows('CX8', 'cause', 'Every miss')[:3]]
     if k['value'] <= 2 and 'You came back after a break' not in first:
-        return skip(f"SV7: starting fresh would have saved {usd(k['value'])}, under the $2 bar, and CX8's costliest misses aren't returns after a break")
+        return skip(f"SV8: starting fresh would have saved {usd(k['value'])}, under the $2 bar, and CX8's costliest misses aren't returns after a break")
     if S.has_hook('stale_cache_guard.py'):
         return skip('a stale_cache_guard.py hook is already installed')
-    fresh = R.has('SV7', 'A fresh session starts at')
+    fresh = R.has('SV8', 'A fresh session starts at')
     minc = max(60000, int(math.ceil(((fresh or {}).get('value') or 0) / 10000.0)) * 10000)
     steps, cmd = hook_steps('stale_cache_guard.py', 'UserPromptSubmit', f'--min-context {minc} --grace 180')
     n = lead_int(k.get('sub'))
-    ctx = sorted((r.get('x') or 0 for r in R.rows('SV7', 'x')), reverse=True)[:2]
+    ctx = sorted((r.get('x') or 0 for r in R.rows('SV8', 'x')), reverse=True)[:2]
     life = main_lifetime(R)
     start = R.has('CX5', 'A new session starts with')
     if k['value'] > 2:
-        sv = savings(k['value'], k['month'], 'upper_bound', 'SV7: each return after the cache expired priced as a fresh session; '
+        sv = savings(k['value'], k['month'], 'upper_bound', 'SV8: each return after the cache expired priced as a fresh session; '
                                                             'realised when you start fresh at the prompt it holds.')
-        basis = f"SV7: starting fresh would have saved up to {save(k['value'], k['month'])}, over the $2 bar"
+        basis = f"SV8: starting fresh would have saved up to {save(k['value'], k['month'])}, over the $2 bar"
     else:
-        sv = savings(brk['u'], brk['mo'], 'measured', "SV3's “You came back after a break” row: the extra cost of those misses.") if brk else None
+        sv = savings(brk['u'], brk['mo'], 'measured', "SV4's “You came back after a break” row: the extra cost of those misses.") if brk else None
         basis = "CX8's costliest misses are returns after a break"
     o = opt('stale-cache-guard', 'Pause before your first prompt into a big session whose cache has expired', 'cache', 'hook',
             sentence(f"{plural(n, 'time')} you came back to a session after its {life + ' ' if life else ''}cache expired"
-                     + (f", including {and_list([size(x) for x in ctx])} contexts (SV7)." if ctx else ' (SV7).') if n else '',
-                     f"Each return re-wrote the whole context ({usd(brk['u'])} of misses, SV3), and every later call kept re-reading it." if brk else ''),
+                     + (f", including {and_list([size(x) for x in ctx])} contexts (SV8)." if ctx else ' (SV8).') if n else '',
+                     f"Each return re-wrote the whole context ({usd(brk['u'])} of misses, SV4), and every later call kept re-reading it." if brk else ''),
             f'Installs stale_cache_guard.py as a UserPromptSubmit hook. When the last call is older than the cache lifetime (read from the '
             f'transcript) and the context is over {size(minc)}, it holds that one prompt, shows what continuing will re-write, and suggests '
             '/clear with a handoff or /compact. Sending the same prompt again within 3 minutes goes through.',
-            R.questions('SV7', 'SV3', 'CX8', 'ME3'), 'one-click', 'low',
+            R.questions('SV8', 'SV4', 'CX8', 'ME3'), 'one-click', 'low',
             hook_manual('stale_cache_guard.py', 'UserPromptSubmit', cmd)[:2]
             + ['Or, without the hook: before a long break, /compact while the cache is still warm (cheap then), or ask for a short handoff '
                'note. Back at a big, expired session, /clear (free) and start from the note; /compact then reads the whole context once, '
@@ -1100,15 +1101,15 @@ def statusline_cache(R, S, v):
     return draft('No statusLine is configured in any settings file.', o, ['fresh', 'compact'])
 
 
-TTL_PIN = {'promptCacheTtl': '1h', 'subagentPromptCacheTtl': '5m'}     # the mix recommended whenever SV5 supports it
+TTL_PIN = {'promptCacheTtl': '1h', 'subagentPromptCacheTtl': '5m'}     # the mix recommended whenever SV6 supports it
 TTL_ENV = {'promptCacheTtl': 'CLAUDE_CODE_PROMPT_CACHE_TTL', 'subagentPromptCacheTtl': 'CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL'}
 
 
 def ttl_rows(R):
-    """SV5's two thread kinds, each row with its actual lifetime (`cur`, '5m' or '1h': the replay its actual cost matches)
+    """SV6's two thread kinds, each row with its actual lifetime (`cur`, '5m' or '1h': the replay its actual cost matches)
     and the cheaper one (`best`)."""
     out = {}
-    for r in R.table('SV5', 'c5', 'Cache read + write cost per thread kind'):
+    for r in R.table('SV6', 'c5', 'Cache read + write cost per thread kind'):
         if r.get('k') in ('Main threads', 'Subagents'):
             out[r['k']] = dict(r, cur='5m' if abs(r['a'] - r['c5']) < abs(r['a'] - r['c1']) else '1h',
                                best='5m' if r.get('b') == '5 minutes' else '1h')
@@ -1117,23 +1118,23 @@ def ttl_rows(R):
 
 @entry('cache-ttl-fit')
 def cache_ttl_fit(R, S, v):
-    """When SV5 favours 1 hour for main threads and 5 minutes for subagents (the usual result for interactive work): pin that
+    """When SV6 favours 1 hour for main threads and 5 minutes for subagents (the usual result for interactive work): pin that
     mix in settings, as one of the first recommendations (first). Unset, the main lifetime is automatic: 1 hour only on a
     subscription within its usage limits, 5 minutes on an API key, Bedrock, Vertex or Foundry; and ENABLE_PROMPT_CACHING_1H
-    moves subagents to 1 hour. It claims SV5's saving when the actual mix differs, none when the history already ran that way.
-    When SV5 favours another mix: that mix, if it differs from the actual one and saves over $3; a close call (under 5%) or
+    moves subagents to 1 hour. It claims SV6's saving when the actual mix differs, none when the history already ran that way.
+    When SV6 favours another mix: that mix, if it differs from the actual one and saves over $3; a close call (under 5%) or
     a last week that favours the other lifetime is left to Claude. Like unused-listings-off, a lifetime an applied earlier
     version set is carried."""
-    k = R.kpi('SV5', 'Cheapest mix saves')
+    k = R.kpi('SV6', 'Cheapest mix saves')
     rows = ttl_rows(R)
     main, sub = rows.get('Main threads'), rows.get('Subagents')
     if not main:
-        return skip('SV5 has no main-thread row')
+        return skip('SV6 has no main-thread row')
     if S.get('env', 'DISABLE_PROMPT_CACHING'):
         return skip('DISABLE_PROMPT_CACHING is set, so no cache lifetime applies')
     if main['best'] == '1h' and (not sub or sub['best'] == '5m'):
         return ttl_pin(R, S, v, k, main, sub)
-    recent = re.search(r'Last 7 days alone favour (.+?)\.(?:\s|$)', R.insights_text('SV5'))
+    recent = re.search(r'Last 7 days alone favour (.+?)\.(?:\s|$)', R.insights_text('SV6'))
     change, close, against = {}, [], []
     for kind, key in (('Main threads', 'promptCacheTtl'), ('Subagents', 'subagentPromptCacheTtl')):
         r = rows.get(kind)
@@ -1146,36 +1147,36 @@ def cache_ttl_fit(R, S, v):
         if recent and f'{kind.lower()} {other}' in recent.group(1):
             against.append(kind.lower())
     if not change or k['value'] <= 3:
-        return skip(f'SV5: the cheapest mix ({mix_of(k)})' + (' is your actual mix' if not change else f" saves only {usd(k['value'])}"))
+        return skip(f'SV6: the cheapest mix ({mix_of(k)})' + (' is your actual mix' if not change else f" saves only {usd(k['value'])}"))
     v['ttl_main'], v['ttl_sub'] = change.get('promptCacheTtl'), change.get('subagentPromptCacheTtl')
     what = and_list([f'the main thread to {change["promptCacheTtl"]}' if 'promptCacheTtl' in change else '',
                      f'subagents to {change["subagentPromptCacheTtl"]}' if 'subagentPromptCacheTtl' in change else ''])
     o = opt('cache-ttl-fit', f'Move {what} cache lifetime', 'cache', 'setting',
             f"Replaying your whole history under each lifetime mix, {mix_of(k)} would have cost the least: {save(k['value'], k['month'])} less "
-            'than your actual mix (SV5).',
+            'than your actual mix (SV6).',
             f'Sets {and_list([f"{x}={y}" for x, y in change.items()])} in {SETTINGS}.',
-            R.questions('SV5', 'CX10'), 'one-click', 'low',
+            R.questions('SV6', 'CX10'), 'one-click', 'low',
             [f'In {SETTINGS} add ' + ', '.join(f'"{x}": "{y}"' for x, y in change.items()) + '.', 'Start a new session.'],
             f'apply.py undo cache-ttl-fit, or remove {and_list(list(change))} from {SETTINGS}.', docs('prompt-caching', 'settings'),
-            sv=savings(k['value'], k['month'], 'theoretical', "SV5: the whole history re-priced under the cheapest lifetime mix, against your actual total."),
-            tradeoffs='A 1-hour entry costs 2× input to write instead of 1.25×; a 5-minute one expires during short pauses. SV5 prices both on your history.',
+            sv=savings(k['value'], k['month'], 'theoretical', "SV6: the whole history re-priced under the cheapest lifetime mix, against your actual total."),
+            tradeoffs='A 1-hour entry costs 2× input to write instead of 1.25×; a 5-minute one expires during short pauses. SV6 prices both on your history.',
             steps=[{'action': 'merge_json', 'path': SETTINGS, 'value': dict(change)}],
             apply_summary=f'Add {and_list([f"{x}={y}" for x, y in change.items()])} to {SETTINGS}.',
-            verify="The next report's SV5 shows the new lifetime as your actual mix.", insights=['ttl'])
-    rule = f"SV5: {mix_of(k)} saves {save(k['value'], k['month'])} against your actual mix, over the $3 bar."
+            verify="The next report's SV6 shows the new lifetime as your actual mix.", insights=['ttl'])
+    rule = f"SV6: {mix_of(k)} saves {save(k['value'], k['month'])} against your actual mix, over the $3 bar."
     if close or against:
         return judge(rule + (f" A close call for {and_list(close)}." if close else '') + (f" The last 7 days favour the other lifetime for {and_list(against)}." if against else ''),
-                     "Propose the change, or say in an insight that it's too close to call?", [R.fact('SV5', 'Cheapest mix saves')], o, ['ttl'],
+                     "Propose the change, or say in an insight that it's too close to call?", [R.fact('SV6', 'Cheapest mix saves')], o, ['ttl'],
                      carry=TTL_KEYS)
     return draft(rule, o, ['ttl'], carry=TTL_KEYS)
 
 
 def ttl_pin(R, S, v, k, main, sub):
-    """cache-ttl-fit when SV5 favours main 1 hour · subagents 5 minutes: set whichever of the two isn't pinned yet."""
+    """cache-ttl-fit when SV6 favours main 1 hour · subagents 5 minutes: set whichever of the two isn't pinned yet."""
     env = {key: S.get('env', name) for key, name in TTL_ENV.items()}
     need = {key: val for key, val in TTL_PIN.items() if S.get(key) != val and env[key] != val}
     if not need:
-        return skip('SV5 favours main 1 hour · subagents 5 minutes, and promptCacheTtl and subagentPromptCacheTtl already pin it')
+        return skip('SV6 favours main 1 hour · subagents 5 minutes, and promptCacheTtl and subagentPromptCacheTtl already pin it')
     moves = {key: val for key, val in need.items() if (main if key == 'promptCacheTtl' else sub or {}).get('cur') not in (None, val)}
     v['ttl_main'], v['ttl_sub'] = moves.get('promptCacheTtl'), moves.get('subagentPromptCacheTtl')
     v['ttl_pin'] = 'promptCacheTtl' in need and 'promptCacheTtl' not in moves       # main already ran 1 hour: pinned, not moved
@@ -1190,11 +1191,11 @@ def ttl_pin(R, S, v, k, main, sub):
             'Bedrock, Vertex or Foundry; and ENABLE_PROMPT_CACHING_1H would move subagents to 1 hour.')
     if moves:
         title = 'Use a 1-hour cache for the main thread and 5 minutes for subagents'
-        problem = (f"Replaying your whole history under each lifetime mix (SV5), main 1 hour · subagents 5 minutes would have "
+        problem = (f"Replaying your whole history under each lifetime mix (SV6), main 1 hour · subagents 5 minutes would have "
                    f"cost the least: {save(k['value'], k['month'])} less than your actual mix. " + auto)
     else:
         title = 'Pin the cache lifetimes: 1 hour for the main thread, 5 minutes for subagents'
-        problem = (f'SV5 replays your history under both lifetimes: {margins}. You run that mix today, but '
+        problem = (f'SV6 replays your history under both lifetimes: {margins}. You run that mix today, but '
                    f'{and_list(list(need))} {"isn’t" if len(need) == 1 else "aren’t"} set. ' + auto)
     manual = [f'In {SETTINGS} add ' + ', '.join(f'"{x}": "{y}"' for x, y in need.items()) + '.']
     manual += [f'Remove {TTL_ENV[key]} from your environment (or the env block of {SETTINGS}): it wins over the setting.' for key in need if env[key]]
@@ -1205,18 +1206,18 @@ def ttl_pin(R, S, v, k, main, sub):
             f'Sets {and_list([f"{x}={y}" for x, y in need.items()])} in {SETTINGS}, so the main conversation keeps its cache through '
             'pauses of 5 to 60 minutes and subagents, which rarely pause, write the cheaper 5-minute entries, whatever the account '
             'or usage state.',
-            R.questions('SV5', 'CX10'), 'one-click', 'low', manual,
+            R.questions('SV6', 'CX10'), 'one-click', 'low', manual,
             f'apply.py undo cache-ttl-fit, or remove {and_list(list(need))} from {SETTINGS}: the automatic lifetimes come back.',
             docs('prompt-caching', 'settings'),
             sv=savings(k['value'], k['month'], 'theoretical',
-                       'SV5: the whole history re-priced under main 1 hour · subagents 5 minutes, against your actual total.') if moves else None,
+                       'SV6: the whole history re-priced under main 1 hour · subagents 5 minutes, against your actual total.') if moves else None,
             tradeoffs='A 1-hour entry costs 2× input to write instead of 1.25×, so it pays only while pauses of 5 to 60 minutes keep '
-                      'happening (SV5 prices both on your own pauses). Pinned, the main thread writes 1-hour entries past a '
+                      'happening (SV6 prices both on your own pauses). Pinned, the main thread writes 1-hour entries past a '
                       "subscription's usage limits too, where they cost more per write.",
             steps=[{'action': 'merge_json', 'path': SETTINGS, 'value': dict(need)}],
             apply_summary=f'Add {and_list([f"{x}={y}" for x, y in need.items()])} to {SETTINGS}.',
-            verify="The next report's SV5 shows main 1 hour · subagents 5 min as your actual mix.", insights=['ttl'], first=True)
-    rule = (f"SV5 favours main 1 hour (by {usd(main['d'])})" + (f" and subagents 5 minutes (by {usd(sub['d'])})" if sub else '')
+            verify="The next report's SV6 shows main 1 hour · subagents 5 min as your actual mix.", insights=['ttl'], first=True)
+    rule = (f"SV6 favours main 1 hour (by {usd(main['d'])})" + (f" and subagents 5 minutes (by {usd(sub['d'])})" if sub else '')
             + f"; {and_list(list(need))} not pinned" + (f"; pinning moves {and_list(list(moves))}, saving {usd(k['value'])}" if moves else
                                                       ': no saving against your actual mix, which already ran that way') + '.')
     return draft(rule, o, ['ttl'], notes, carry=TTL_KEYS)
@@ -1224,11 +1225,11 @@ def ttl_pin(R, S, v, k, main, sub):
 
 @entry('keep-awake')
 def keep_awake(R, S, v):
-    """SV3 has a “Computer went to sleep” row and the user is on macOS."""
-    R.table('SV3', 'w')
+    """SV4 has a “Computer went to sleep” row and the user is on macOS."""
+    R.table('SV4', 'w')
     row = sv3_row(R, 'Computer went to sleep')
     if not row:
-        return skip('SV3 has no misses after the computer went to sleep')
+        return skip('SV4 has no misses after the computer went to sleep')
     if not S.mac():
         return skip("keep_awake.sh uses macOS's caffeinate, and this report's home folder isn't a macOS one")
     if S.has_hook('keep_awake.sh'):
@@ -1237,29 +1238,29 @@ def keep_awake(R, S, v):
     steps, cmd = hook_steps('keep_awake.sh', 'UserPromptSubmit', '7200', runner='bash')
     o = opt('keep-awake', 'Keep the Mac awake while Claude works', 'reliability', 'hook',
             sentence(f"Your computer went to sleep mid-response {plural(slept, 'time')} (ME7);" if slept else '',
-                     f"the retries after {row['n']} of them were cache misses costing {save(row['u'], row['mo'], 'SV3')}, plus the cut-off work."
-                     if slept else f"{row['n']} cache misses followed the computer going to sleep, costing {save(row['u'], row['mo'], 'SV3')}."),
+                     f"the retries after {row['n']} of them were cache misses costing {save(row['u'], row['mo'], 'SV4')}, plus the cut-off work."
+                     if slept else f"{row['n']} cache misses followed the computer going to sleep, costing {save(row['u'], row['mo'], 'SV4')}."),
             'Installs keep_awake.sh as a UserPromptSubmit hook. After each prompt it runs caffeinate -i for up to 2 hours (one process at a '
             'time), so the Mac doesn\'t idle-sleep during long subagent or pipeline runs.',
-            R.questions('SV3', 'ME7', 'CX8'), 'one-click', 'low',
+            R.questions('SV4', 'ME7', 'CX8'), 'one-click', 'low',
             ['Before a long run, start `caffeinate -i -t 7200` in a terminal.',
              f'Or install the hook: copy keep_awake.sh to {HOOKS}/ and add it under hooks.UserPromptSubmit: {cmd}.'],
             f'apply.py undo keep-awake, or remove that hook group from {SETTINGS} and delete the script.', docs('hooks'),
-            sv=savings(row['u'], row['mo'], 'measured', "SV3's “Computer went to sleep” row: the extra cost of the misses that followed a sleep error."),
+            sv=savings(row['u'], row['mo'], 'measured', "SV4's “Computer went to sleep” row: the extra cost of the misses that followed a sleep error."),
             tradeoffs='The Mac stays awake up to 2 hours after each prompt; closing the lid on battery still sleeps.', steps=steps,
             apply_summary=f'Copy keep_awake.sh to {HOOKS}/ and add it as a UserPromptSubmit hook (7200 s) in {SETTINGS}.',
             verify='After a prompt, `pgrep -fl caffeinate` shows a caffeinate -i process.', insights=['misses'])
-    return draft(f"SV3: {row['n']} misses after the computer went to sleep cost {save(row['u'], row['mo'])}; macOS.", o, ['misses'])
+    return draft(f"SV4: {row['n']} misses after the computer went to sleep cost {save(row['u'], row['mo'])}; macOS.", o, ['misses'])
 
 
 @entry('unused-listings-off')
 def unused_listings_off(R, S, v):
-    """SV2 lists unused items a user setting switches off, worth $1 or more together: skillOverrides for personal and synced
+    """SV3 lists unused items a user setting switches off, worth $1 or more together: skillOverrides for personal and synced
     skills (as "name-only", the lighter option for skills used rarely: the name stays listed, the description goes), and
     disableClaudeAiConnectors when no claude.ai connector is used at all. Project skills and built-in items are left out.
     When a newer version replaces an applied one (apply.py undoes the old first), assemble.py carries what the applied
     version switched off (the `carry` keys), so nothing comes back on; the user's own entries are never copied."""
-    rows = R.table('SV2', 'h', 'Every unused item, largest first')
+    rows = R.table('SV3', 'h', 'Every unused item, largest first')
     have = S.get('skillOverrides') or {}
     used_conn = any((r.get('k') or '').startswith('claude.ai') and r.get('u') for r in R.rows('EX2', 's', 'MCP servers'))
     skills, conn, proj = [], [], []
@@ -1272,12 +1273,12 @@ def unused_listings_off(R, S, v):
         elif r.get('h') == '"disableClaudeAiConnectors": true' and not used_conn and not S.get('disableClaudeAiConnectors'):
             conn.append(r)
     if not skills and not conn:
-        return skip('SV2 has no unused skill or claude.ai connector a user setting can switch off')
+        return skip('SV3 has no unused skill or claude.ai connector a user setting can switch off')
     notes = [f"Left out project skills {and_list([r['n'] for r in proj])} ({and_list(sorted({r.get('o', '') for r in proj}))}): they belong to "
              "that project; add them (a merge_json into that project's .claude/settings.local.json) only if the user doesn't use them there."] if proj else []
     so = round(sum(r['u'] for _, r in skills) + sum(r['u'] for r in conn), 2)
     if so < 1:
-        return skip(f'SV2: the unused skills and connectors a user setting switches off add up to {usd(so)}, under $1: not worth losing them')
+        return skip(f'SV3: the unused skills and connectors a user setting switches off add up to {usd(so)}, under $1: not worth losing them')
     mo = month(R, so)
     synced = [n for n, _ in skills if n.startswith('anthropic-skills:')]
     own = [n for n, _ in skills if not n.startswith('anthropic-skills:')]
@@ -1295,17 +1296,17 @@ def unused_listings_off(R, S, v):
                                              ('stop loading ' if skills else 'Stop loading ') + conn_t if conn else '']),
             'tooling', 'setting',
             sentence(f"{unused['value']} of {(unused.get('sub') or '').replace('of ', '')} skills were never used (EX2)." if unused and unused.get('sub') else '',
-                     f'Of what you can switch off, {items} add up to {save(so, mo, "SV2")}.'),
+                     f'Of what you can switch off, {items} add up to {save(so, mo, "SV3")}.'),
             f'In {SETTINGS}, ' + and_list([f"sets skillOverrides to \"name-only\" for {and_list(own + ([f'the {len(synced)} unused anthropic-skills'] if synced else []))}" if skills else '',
                                            'sets disableClaudeAiConnectors to true' if conn else ''])
             + ('. Claude still sees each skill\'s name, and /name still runs it, but its description no longer loads in every session' if skills else '')
             + '. Built-in skills are left alone; each skill comes back in full by removing its line.',
-            R.questions('SV2', 'EX2', 'CX5'), 'one-click', 'low',
+            R.questions('SV3', 'EX2', 'CX5'), 'one-click', 'low',
             ([f'In {SETTINGS} add "skillOverrides": {{' + ', '.join(f'"{n}": "name-only"' for n, _ in skills[:2]) + (', …' if len(skills) > 2 else '')
               + '} for each skill you don\'t use ("off" instead hides one from you too).'] if skills else [])
             + (['Add "disableClaudeAiConnectors": true if you don\'t use claude.ai connectors from Claude Code.'] if conn else []) + ['Start a new session.'],
             f'apply.py undo unused-listings-off, or remove those keys from {SETTINGS}.', docs('skills', 'settings', 'mcp') if conn else docs('skills', 'settings'),
-            sv=savings(so, mo, 'theoretical', f"SV2's rows for {items}, priced on every main-thread call that re-read them, less the few "
+            sv=savings(so, mo, 'theoretical', f"SV3's rows for {items}, priced on every main-thread call that re-read them, less the few "
                                               'tokens each skill name still takes.'),
             tradeoffs=sentence((f"Claude sees only the names of {and_list(short[:4] + (['the other synced skills'] if len(short) > 4 else []))}, so it "
                                 'may not think of them unprompted: ask for one by name.' if short else
@@ -1315,15 +1316,15 @@ def unused_listings_off(R, S, v):
             apply_summary=f'Merge {and_list([f"skillOverrides ({len(skills)} skills → name-only)" if skills else "", "disableClaudeAiConnectors: true" if conn else ""])} into {SETTINGS}.',
             verify='In a new session, /context lists those skills at a few tokens each' + (f' and /mcp no longer shows claude.ai {cname}.' if cname else '.'),
             insights=['unused'])
-    return draft(f"SV2: {len(skills)} skill{'s' if len(skills) != 1 else ''}" + (' and a claude.ai connector' if conn else '') + f' a user setting switches off, worth {save(so, mo)}.',
+    return draft(f"SV3: {len(skills)} skill{'s' if len(skills) != 1 else ''}" + (' and a claude.ai connector' if conn else '') + f' a user setting switches off, worth {save(so, mo)}.',
                  o, ['unused'], notes, carry=['skillOverrides', 'disableClaudeAiConnectors'])
 
 
 @entry('mcp-off-where-unused')
 def mcp_off_where_unused(R, S, v):
-    """SV2 lists MCP servers switched off by hand (/mcp disable, /chrome); SV3's tool-list-change misses add the connect-first
+    """SV3 lists MCP servers switched off by hand (/mcp disable, /chrome); SV4's tool-list-change misses add the connect-first
     habit (the catalog's mcp-connect-first, folded in here; alone when no server is unused)."""
-    rows = [r for r in R.rows('SV2', 'h', 'Every unused item, largest first') if r.get('k') == 'MCP server' and not (r.get('h') or '').startswith('"')]
+    rows = [r for r in R.rows('SV3', 'h', 'Every unused item, largest first') if r.get('k') == 'MCP server' and not (r.get('h') or '').startswith('"')]
     tl = sv3_row(R, 'Tool list changed (MCP/tools)')
     ex2 = {r.get('k'): r for r in R.rows('EX2', 's', 'MCP servers')}
     changes = R.has('EX3', 'Mid-session tool-list changes')
@@ -1332,29 +1333,29 @@ def mcp_off_where_unused(R, S, v):
     notes = [f"{r['k']} loaded in {plural(r['s'], 'session')} with {plural(r['u'], 'tool call')} (EX2): nearly unused; add it to the manual steps if the user "
              'agrees (the Chrome extension: /chrome, turn off “enabled by default”).' for r in low]
     tl_text = (f"The tool list changed mid-session {plural(changes['value'], 'time')} (EX3), and {tl['n']} of those changes re-wrote whole contexts "
-               f"({usd(tl['u'])}, SV3)." if tl and changes else '')
+               f"({usd(tl['u'])}, SV4)." if tl and changes else '')
     connect = 'Before the first prompt of a session, wait until MCP servers have finished connecting (check /mcp).'
     if not rows:
         if not tl:
-            return skip('SV2 lists no unused MCP server, and SV3 has no tool-list-change misses')
+            return skip('SV3 lists no unused MCP server, and SV4 has no tool-list-change misses')
         o = opt('mcp-connect-first', "Don't send the first prompt while MCP servers connect", 'cache', 'habit',
-                tl_text or f"{tl['n']} cache misses followed a tool-list change ({usd(tl['u'])}, SV3).",
+                tl_text or f"{tl['n']} cache misses followed a tool-list change ({usd(tl['u'])}, SV4).",
                 'A habit: let the MCP servers finish connecting before the first prompt, so their tools join the prompt before anything is cached.',
-                R.questions('SV3', 'EX3', 'CX8'), 'habit', 'low',
+                R.questions('SV4', 'EX3', 'CX8'), 'habit', 'low',
                 [connect, 'Keep servers a project never uses out of it: take unused ones out of your user MCP config, and set up the '
                           'rest only in the projects that use them.'],
-                "Nothing to undo: it's a habit.", docs('mcp', 'prompt-caching'), verify='In the next report, SV3 shows fewer “Tool list changed” misses.')
-        return judge(f"SV3: {tl['n']} misses after a tool-list change ({usd(tl['u'])}); no MCP server is unused.",
+                "Nothing to undo: it's a habit.", docs('mcp', 'prompt-caching'), verify='In the next report, SV4 shows fewer “Tool list changed” misses.')
+        return judge(f"SV4: {tl['n']} misses after a tool-list change ({usd(tl['u'])}); no MCP server is unused.",
                      'Did those changes happen right at session start (EX3 lists them)? Only then is waiting for the servers the fix. With MCP '
                      'tool search (the default on supported models) a server that connects late no longer changes the cached tool list, so check '
                      'that these misses are recent.',
-                     [R.row_fact('SV3', 'w', tl, ('k', 'n', 'u', 'mo')),
+                     [R.row_fact('SV4', 'w', tl, ('k', 'n', 'u', 'mo')),
                       R.fact('EX3', 'Mid-session tool-list changes') if changes else None], o, ['misses'])
     so = round(sum(r['u'] for r in rows), 2)
     mo = month(R, so)
     chrome = [r for r in rows if r.get('h') == '/chrome settings']
     plain = [r for r in rows if r not in chrome and r.get('o') == 'your MCP config (user scope)']     # in the user MCP config
-    other = [r for r in rows if r not in chrome and r not in plain]      # connected another way (a project's, a plugin's): SV2's own advice
+    other = [r for r in rows if r not in chrome and r not in plain]      # connected another way (a project's, a plugin's): SV3's own advice
     manual = [f"Keep {r['n']}'s definition: run claude mcp get {r['n']} and save what it prints." for r in plain]
     manual += [f"Remove it from your user config: claude mcp remove {r['n']} -s user. When a project needs it, add it there alone "
                f"(claude mcp add … -s local in that project, or its .mcp.json)." for r in plain]
@@ -1372,34 +1373,34 @@ def mcp_off_where_unused(R, S, v):
                      f"Switches {and_list([r['n'] for r in other])} off where {'it connects' if len(other) == 1 else 'they connect'}."
                      if other else '',
                      'The Chrome extension connects only when asked.' if chrome else ''),
-            R.questions('SV2', 'EX2', 'EX3', 'SV3') if tl else R.questions('SV2', 'EX2'), 'minutes', 'low', manual,
+            R.questions('SV3', 'EX2', 'EX3', 'SV4') if tl else R.questions('SV3', 'EX2'), 'minutes', 'low', manual,
             ' '.join([f"claude mcp add-json {r['n']} '<the definition you saved>' -s user." for r in plain]
                      + [f"/mcp enable {r['n']} where you switched it off." for r in other]
                      + (["Turn Chrome's default back on in /chrome."] if chrome else [])), docs('mcp'),
-            sv=savings(so, mo, 'theoretical', f"SV2's {and_list(names)} row{'s' if len(rows) > 1 else ''} ("
+            sv=savings(so, mo, 'theoretical', f"SV3's {and_list(names)} row{'s' if len(rows) > 1 else ''} ("
                        + ', '.join(f"{r['t']:,} tokens per session" for r in rows) + ')'
-                       + (f". The tool-list-change misses (SV3, {usd(tl['u'])}) could shrink too, but the transcripts don't say which server changed, "
+                       + (f". The tool-list-change misses (SV4, {usd(tl['u'])}) could shrink too, but the transcripts don't say which server changed, "
                           'so they are not counted.' if tl else '.')),
             tradeoffs=(f'A project that later needs {plain[0]["n"]} gets it with one claude mcp add there' if plain else
                        f'Turn {other[0]["n"]} back on with /mcp enable when you need it' if other else
                        'Turn it on in /chrome when you want browser automation') + '.',
             verify=f'/mcp in a new session no longer lists {and_list(names)}.', insights=['unused'])
-    return draft(f"SV2: {and_list(names)} unused, switched off by hand, worth {save(so, mo)}" + ('; SV3 has tool-list-change misses.' if tl else '.'),
+    return draft(f"SV3: {and_list(names)} unused, switched off by hand, worth {save(so, mo)}" + ('; SV4 has tool-list-change misses.' if tl else '.'),
                  o, ['unused', 'misses'] if tl else ['unused'], notes)
 
 
 @entry('scope-where-used')
 def scope_where_used(R, S, v):
-    """(judgment) SV2's "used in some projects, loaded in every one" rows over $1: a user-level MCP server, personal skill
+    """(judgment) SV3's "used in some projects, loaded in every one" rows over $1: a user-level MCP server, personal skill
     or plugin that loads everywhere but is used in a few projects. Setting it up there alone is a one-time change, instead
     of switching it off and on per project. Which file (shared .mcp.json or .claude/settings.json, or the personal local
     scope, which a task worktree doesn't inherit) is the user's call, so the steps are by hand."""
-    rows = R.rows('SV2', 'i', 'Used in some projects, loaded in every one: set up only where used')
+    rows = R.rows('SV3', 'i', 'Used in some projects, loaded in every one: set up only where used')
     rows = [r for r in rows if (r.get('u') or 0) > 0]
     so = round(sum(r['u'] for r in rows), 2)
     if not rows or so < 1:
-        return skip(f'SV2: what loads in projects that never use it adds up to {usd(so)}, under $1' if rows
-                    else 'SV2 lists nothing used in some projects and only loaded in others')
+        return skip(f'SV3: what loads in projects that never use it adds up to {usd(so)}, under $1' if rows
+                    else 'SV3 lists nothing used in some projects and only loaded in others')
     mo = month(R, so)
     names = [r['n'] for r in rows]
     what = {'MCP server': 'MCP server', 'skill': 'skill', 'plugin': 'plugin'}
@@ -1414,30 +1415,30 @@ def scope_where_used(R, S, v):
             manual += [f"{r['n']}: set \"enabledPlugins\": {{\"{r['n']}\": true}} in .claude/settings.local.json (just you) or "
                        f".claude/settings.json (the team too) of each project that uses it, then false in {SETTINGS}. Used in {there}."]
         else:
-            manual += [f"{r['n']}: {r['h']} (a copy in each)."]              # SV2's advice names the skill folder or command file
+            manual += [f"{r['n']}: {r['h']} (a copy in each)."]              # SV3's advice names the skill folder or command file
     manual.append('Start a new session in one of those projects and one elsewhere to check.')
-    facts = [R.row_fact('SV2', 'i', r, ('n', 'k', 'w', 'i', 's', 'u', 'mo'), 'Used in some projects, loaded in every one: set up only where used')
+    facts = [R.row_fact('SV3', 'i', r, ('n', 'k', 'w', 'i', 's', 'u', 'mo'), 'Used in some projects, loaded in every one: set up only where used')
              for r in rows[:6]]
     wt = [r['n'] for r in rows if r.get('x') == 'yes']
-    facts += [ev('SV2', f"{r['n']}: {r['w']} has task worktrees (.claude/worktrees)") for r in rows[:6] if r.get('x') == 'yes']
+    facts += [ev('SV3', f"{r['n']}: {r['w']} has task worktrees (.claude/worktrees)") for r in rows[:6] if r.get('x') == 'yes']
     o = opt('scope-where-used', f"Load {and_list(names[:3] + ([f'{len(names) - 3} more'] if len(names) > 3 else []))} only where "
             f"{'it is' if len(names) == 1 else 'they are'} used", 'tooling', 'setting',
             sentence(*[f"{r['n']} ({what.get(r['k'], r['k'])}) is used in {r['w']} but loads in {plural(r['s'], 'session')} of "
-                       f"{plural(r['i'], 'other project')} too (SV2)." for r in rows[:3]],
-                     f'Loading them where they are never used costs {save(so, mo, "SV2")}.'),
+                       f"{plural(r['i'], 'other project')} too (SV3)." for r in rows[:3]],
+                     f'Loading them where they are never used costs {save(so, mo, "SV3")}.'),
             'Sets each one up in the projects that use it and takes it out of your user-level setup, so the other projects never load '
             'it: a one-time change instead of switching it off and on.',
-            R.questions('SV2', 'EX2'), 'minutes', 'low', manual,
+            R.questions('SV3', 'EX2'), 'minutes', 'low', manual,
             'Put each back at user level: claude mcp add-json <name> \'<its definition>\' -s user, the skill folder (or command '
             f'file) back where it was in ~/.claude, or the plugin back to true in {SETTINGS}.', docs('mcp', 'skills', 'settings'),
-            sv=savings(so, mo, 'theoretical', "SV2's “used in some projects” rows: each item's listing, re-read on every main-thread "
+            sv=savings(so, mo, 'theoretical', "SV3's “used in some projects” rows: each item's listing, re-read on every main-thread "
                                               'call of the sessions in projects that never used it.'),
             tradeoffs=sentence('A new project that needs one of them gets it set up there, once.',
                                f"{and_list(wt)}'s project has task worktrees: the personal local scope and settings.local.json don't reach "
                                "them, so the project's shared .mcp.json or .claude/settings.json fits better if the team can have it."
                                if wt else ''),
-            verify="In the next report, SV2's “used in some projects” table no longer lists them.", insights=['unused'])
-    return judge(f"SV2: {plural(len(rows), 'item')} used in some projects load in others that never use them, worth {save(so, mo)}.",
+            verify="In the next report, SV3's “used in some projects” table no longer lists them.", insights=['unused'])
+    return judge(f"SV3: {plural(len(rows), 'item')} used in some projects load in others that never use them, worth {save(so, mo)}.",
                  'For each item, pick where it goes: the personal local scope (settings.local.json, claude mcp add -s local) or the '
                  "project's shared file (.mcp.json, .claude/settings.json) when the team uses it too or the project has task worktrees.",
                  facts, o, ['unused'])
@@ -1520,24 +1521,24 @@ def fix_broken_hook(R, S, v):
 
 @entry('subagent-briefs')
 def subagent_briefs(R, S, v):
-    """SV3 has avoidable “Subagent resumed via SendMessage” misses worth $1 or more."""
-    R.table('SV3', 'w')
+    """SV4 has avoidable “Subagent resumed via SendMessage” misses worth $1 or more."""
+    R.table('SV4', 'w')
     row = sv3_row(R, 'Subagent resumed via SendMessage')
     if not row or (row.get('u') or 0) < 1:
-        return skip('SV3 has no subagent-resume misses worth $1')
+        return skip('SV4 has no subagent-resume misses worth $1')
     cx = next((r for r in R.rows('CX8', 'h') if r.get('k') == row['k']), None)
     start = R.has('CX11', 'Subagent start')
     o = opt('subagent-briefs', 'Start a fresh subagent instead of resuming a big finished one', 'delegation', 'claude_md',
             sentence(f"{plural(cx['n'], 'subagent resume')} via SendMessage re-wrote {size(cx['t'])} tokens (CX8);" if cx else '',
-                     f"the avoidable ones cost {save(row['u'], row['mo'], 'SV3')}" + (f", while a fresh subagent starts at about {size(start['value'])} (CX11)." if start else '.')),
+                     f"the avoidable ones cost {save(row['u'], row['mo'], 'SV4')}" + (f", while a fresh subagent starts at about {size(start['value'])} (CX11)." if start else '.')),
             'Adds one line to ~/.claude/CLAUDE.md telling Claude to brief a fresh subagent (what changed, what to check) instead of resuming '
             'a large one that has sat idle: a subagent\'s cache lasts 5 minutes by default, so a late resume re-writes its whole history, '
             'while a resume within a few minutes can still read the cache it warmed.',
-            R.questions('CX8', 'SV3', 'CX11'), 'one-click', 'low',
+            R.questions('CX8', 'SV4', 'CX11'), 'one-click', 'low',
             ['Add the line above to ~/.claude/CLAUDE.md.',
              'When delegating a follow-up review yourself after a pause, ask for "a new subagent with the diff and what to check" rather than "resume the reviewer".'],
             'apply.py undo subagent-briefs, or delete the line from ~/.claude/CLAUDE.md.', docs('memory', 'sub-agents'),
-            sv=savings(row['u'], row['mo'], 'upper_bound', 'SV3: the extra cost of the resume misses counted as avoidable; an upper bound, '
+            sv=savings(row['u'], row['mo'], 'upper_bound', 'SV4: the extra cost of the resume misses counted as avoidable; an upper bound, '
                                                            'since some follow-ups need the old context and a fresh subagent\'s own start (CX11) '
                                                            'is not subtracted.'),
             tradeoffs='CLAUDE.md loads in every session (one line, ~60 tokens). A fresh subagent may need to re-read a few files, and '
@@ -1548,7 +1549,7 @@ def subagent_briefs(R, S, v):
                                'with SendMessage: its cache has expired, so a resume re-writes its whole history.\n'}],
             apply_summary='Append one line to ~/.claude/CLAUDE.md (created if missing).',
             verify='In the next report, CX8 shows few or no “Subagent resumed via SendMessage” misses.', insights=['misses'])
-    return draft(f"SV3: {row['n']} avoidable subagent-resume misses cost {save(row['u'], row['mo'])}.", o, ['misses'])
+    return draft(f"SV4: {row['n']} avoidable subagent-resume misses cost {save(row['u'], row['mo'])}.", o, ['misses'])
 
 
 def parse_money(s):
@@ -1560,13 +1561,13 @@ def parse_money(s):
 
 LINKS = [
     ('main-model', 'effort-default', 'overlaps', None,
-     'Both cut the same main-thread output cost: SV6 re-prices the tokens you had, a lower effort cuts the thinking tokens themselves.',
+     'Both cut the same main-thread output cost: SV7 re-prices the tokens you had, a lower effort cuts the thinking tokens themselves.',
      'Both cut main-thread output cost on the same calls: effort cuts the thinking tokens, the model habit their price.'),
     ('subagent-model', 'subagent-briefs', 'overlaps', None,
      'The resume misses subagent-briefs avoids are priced at the model the subagents ran on; on {sub_target} they cost less, so the two savings share that part.',
      "Its saving is priced at the subagents' current model; with subagents on {sub_target} the same misses would cost less."),
     ('subagent-model', 'cache-ttl-fit', 'overlaps', lambda v: v.get('ttl_sub'),
-     "SV5's subagent cache writes are priced at the model the subagents ran on; on {sub_target} the lifetime change is worth less.",
+     "SV6's subagent cache writes are priced at the model the subagents ran on; on {sub_target} the lifetime change is worth less.",
      'Its subagent saving is priced at the subagents\' current model; with subagents on {sub_target} it shrinks.'),
     ('auto-compact-window', 'context-guard', 'overlaps', None,
      'A backstop for the runs that grow unattended (a long task, a /goal); the notice asks for a /compact at a natural break from '
@@ -1579,7 +1580,7 @@ LINKS = [
      'less and part of this saving goes.'),
     ('auto-compact-window', 'big-read-guard', 'overlaps', None,
      'Part of what compaction drops is big whole-file reads the big-read guard would have kept out, so the two savings share that part.',
-     'SV8 counts carrying each big read for the rest of the session; compacting earlier drops it from the context too, so part of the saving is shared.'),
+     'SV9 counts carrying each big read for the rest of the session; compacting earlier drops it from the context too, so part of the saving is shared.'),
     ('code-intelligence', 'big-read-guard', 'complements', None,
      'Symbol navigation finds the part of a file Claude needs; the big-read guard catches the whole-file reads that still happen.',
      'The guard asks for a targeted read; a language server tells Claude where the definition is, so the targeted read is easy.'),
@@ -1591,14 +1592,14 @@ LINKS = [
      'Its saving is priced at the context sizes you had. Compacting at the {threshold_t} notice keeps them smaller, so each expired return would cost less.'),
     ('context-guard', 'big-read-guard', 'overlaps', None,
      'Part of what compacting at the notice drops is big whole-file reads the big-read guard would have kept out.',
-     'SV8 counts carrying each big read for the rest of the session; compacting at the notice drops it from the context too.'),
+     'SV9 counts carrying each big read for the rest of the session; compacting at the notice drops it from the context too.'),
     ('stale-cache-guard', 'statusline-cache', 'complements', None,
      "The status line's cache countdown warns you before you type; the guard catches the prompt when you didn't look.",
      'Its cache countdown shows when the cache is about to expire; the stale-cache guard stops the costly prompt if you miss it.'),
     ('stale-cache-guard', 'cache-ttl-fit', 'alternative', lambda v: v.get('ttl_main') == '1h',
      'Both go after the returns after a break. Pick this if you would rather restart small after long breaks; with the 1-hour lifetime in '
      'place it only fires after pauses over an hour.',
-     'Both go after the returns after a break. Pick this if you mostly continue after pauses of 5–60 minutes (SV5\'s break-even); with it in '
+     'Both go after the returns after a break. Pick this if you mostly continue after pauses of 5–60 minutes (SV6\'s break-even); with it in '
      "place the guard's saving mostly goes."),
     ('stale-cache-guard', 'cache-ttl-fit', 'complements', lambda v: v.get('ttl_pin'),
      'The pinned 1-hour lifetime keeps the cache through pauses under an hour; this guard stops the costly first prompt after longer ones.',
@@ -1636,9 +1637,9 @@ def related_from(links_, oid, present):
 
 # ---------- savings levers, for the insights ----------
 
-LEVER_ROWS = {   # SV1 row: (its Details card, label prefix)
-    'main_model': ('SV6', 'Main threads on '), 'sub_model': ('SV6', 'Run subagents on'), 'compact': ('SV4', ''), 'misses': ('SV3', ''),
-    'ttl': ('SV5', ''), 'fresh': ('SV7', ''), 'reads': ('SV8', ''), 'unused': ('SV2', ''), 'stop_hook': ('EX5', ''),
+LEVER_ROWS = {   # SV2 row: (its Details card, label prefix)
+    'main_model': ('SV7', 'Main threads on '), 'sub_model': ('SV7', 'Run subagents on'), 'compact': ('SV5', ''), 'misses': ('SV4', ''),
+    'ttl': ('SV6', ''), 'fresh': ('SV8', ''), 'reads': ('SV9', ''), 'unused': ('SV3', ''), 'stop_hook': ('EX5', ''),
 }
 LEVER_TITLES = {   # one title per lever, free of model names and thresholds, for pages that show many people (company.py)
     'main_model': 'Main threads on a cheaper model', 'sub_model': 'Subagents on a cheaper model', 'compact': '/compact earlier',
@@ -1658,125 +1659,125 @@ def lever_bundle(R, key, row):
     pct_ = row.get('s')
     kind, cat, facts, extra = 'theoretical', 'cost', [], {}
     if key == 'main_model':
-        k = R.kpi('SV6', 'Main threads on ', prefix=True)
+        k = R.kpi('SV7', 'Main threads on ', prefix=True)
         cur = k['label'][len('Main threads on '):]
         slash_row = next((r for r in R.rows('EX1', 'n', 'Slash commands') if r.get('k') == '/model'), None)
         slash = (slash_row or {}).get('n')
-        oid, qs = 'cost-model-mix', ('SV6', 'OV2', 'EX1', 'OV4')
-        facts = [R.fact('SV6', k['label']), soft(R.chart_fact, 'OV2', 'By model')] + ([R.row_fact('EX1', 'n', slash_row, ('k', 'n'), 'Slash commands')] if slash else [])
-        basis = f'SV6/SV1: the same main-thread tokens re-priced at {cur} list prices, counting only calls that ran on a pricier model.'
+        oid, qs = 'cost-model-mix', ('SV7', 'OV2', 'EX1', 'OV4')
+        facts = [R.fact('SV7', k['label']), soft(R.chart_fact, 'OV2', 'By model')] + ([R.row_fact('EX1', 'n', slash_row, ('k', 'n'), 'Slash commands')] if slash else [])
+        basis = f'SV7/SV2: the same main-thread tokens re-priced at {cur} list prices, counting only calls that ran on a pricier model.'
         title = f'Main-thread work on pricier models than {cur} drove the bill'
-        bottom = f'At list prices, the same main-thread tokens on {cur} would have saved {save(so, mo, pct(pct_) + " of spend", "SV6")}.'
+        bottom = f'At list prices, the same main-thread tokens on {cur} would have saved {save(so, mo, pct(pct_) + " of spend", "SV7")}.'
         actions = [f'Keep {cur} as the default and switch up with /model only for a hard subtask, then back',
                    'Switch models at a natural break: a switch re-writes the cache']
     elif key == 'sub_model':
-        k = R.kpi('SV6', 'Subagents on ', prefix=True)
+        k = R.kpi('SV7', 'Subagents on ', prefix=True)
         target = k['label'][len('Subagents on '):]
-        oid, qs = f"cost-subagents-{target.split()[0].lower()}", ('SV6', 'SE5', 'OV7')
-        facts = [R.fact('SV6', 'Via CLAUDE_CODE_SUBAGENT_MODEL'), R.fact('SV6', k['label']), soft(R.chart_fact, 'SE5', 'Cost by model', 3)]
-        explore = R.has('SV6', 'Explore subagents on ', prefix=True)
+        oid, qs = f"cost-subagents-{target.split()[0].lower()}", ('SV7', 'SE5', 'OV7')
+        facts = [R.fact('SV7', 'Via CLAUDE_CODE_SUBAGENT_MODEL'), R.fact('SV7', k['label']), soft(R.chart_fact, 'SE5', 'Cost by model', 3)]
+        explore = R.has('SV7', 'Explore subagents on ', prefix=True)
         if explore:
-            facts.append(R.fact('SV6', explore['label']))
-        basis = (f'SV6: the same tokens re-priced at {target} list prices for the subagents CLAUDE_CODE_SUBAGENT_MODEL moves (general-purpose '
+            facts.append(R.fact('SV7', explore['label']))
+        basis = (f'SV7: the same tokens re-priced at {target} list prices for the subagents CLAUDE_CODE_SUBAGENT_MODEL moves (general-purpose '
                  'and agents naming no model, with none passed for the call), counting only calls on pricier models.')
         title = f'Subagents that name no model inherit a pricier model than {target}'
-        bottom = (f'At list prices, general-purpose subagents and others that name no model would have cost {save(so, mo, pct(pct_) + " of spend", "SV6")} '
+        bottom = (f'At list prices, general-purpose subagents and others that name no model would have cost {save(so, mo, pct(pct_) + " of spend", "SV7")} '
                   f'less on {target}; Explore and Plan follow your main model.')
         actions = [f'Run subagents on {target} by default (see the optimization)', 'Ask for a stronger model explicitly for hard reviews or designs']
     elif key == 'compact':
         T, net = compact_best(R)
-        oid, qs = f'cost-compact-{int(T) // 1000}k', ('SV4', 'CX6', 'CX1', 'CX4', 'OV3')
-        facts = [R.fact('SV4', 'Best threshold', 'Net saving')]
+        oid, qs = f'cost-compact-{int(T) // 1000}k', ('SV5', 'CX6', 'CX1', 'CX4', 'OV3')
+        facts = [R.fact('SV5', 'Best threshold', 'Net saving')]
         for cid, lb in (('CX6', 'From calls above 200K'), ('CX4', 'Median context at /clear'), ('CX1', 'Calls above 200K'), ('OV3', 'Cache read')):
             if R.has(cid, lb):
                 facts.append(R.fact(cid, lb))
-        basis = f'SV4: every main thread replayed with /compact at {size(T)} (start-up size + 20K summary + 10K re-read detail), net of the compactions\' own cost.'
+        basis = f'SV5: every main thread replayed with /compact at {size(T)} (start-up size + 20K summary + 10K re-read detail), net of the compactions\' own cost.'
         title = f'Compacting near {size(T)} tokens pays for itself'
         bottom = (f'Every call re-reads the whole context, so compacting whenever a main thread passes about {size(T)} would have saved '
-                  f'{save(so, mo, pct(pct_) + " of spend")} after paying for the compactions (SV4).')
+                  f'{save(so, mo, pct(pct_) + " of spend")} after paying for the compactions (SV5).')
         actions = [f'/clear before unrelated work; once past ~{size(T)}, /compact with what to keep at the next natural break',
                    'See the context notice (and, on a 1M-context model, the auto-compact cap) in the optimizations']
     elif key == 'misses':
-        k = R.kpi('SV3', 'Avoidable')
-        oid, qs, kind = 'cost-avoidable-misses', ('SV3', 'CX8', 'ME3'), 'measured'
-        facts = [R.fact('SV3', 'Avoidable'), soft(R.fact, 'CX8', 'Cache misses', 'Tokens re-written', 'Extra cost of misses')]
-        top = next(iter(R.rows('SV3', 'w')), None)
+        k = R.kpi('SV4', 'Avoidable')
+        oid, qs, kind = 'cost-avoidable-misses', ('SV4', 'CX8', 'ME3'), 'measured'
+        facts = [R.fact('SV4', 'Avoidable'), soft(R.fact, 'CX8', 'Cache misses', 'Tokens re-written', 'Extra cost of misses')]
+        top = next(iter(R.rows('SV4', 'w')), None)
         if top:
-            facts.append(R.row_fact('SV3', 'w', top, ('k', 'n', 'u', 'mo')))
-        basis = 'SV3: the extra cost (write − read price) of every miss whose cause a habit or a setting could have prevented.'
+            facts.append(R.row_fact('SV4', 'w', top, ('k', 'n', 'u', 'mo')))
+        basis = 'SV4: the extra cost (write − read price) of every miss whose cause a habit or a setting could have prevented.'
         title = 'Most cache-miss cost was avoidable' if (lead_int(k.get('sub')) or 0) >= 50 else 'Part of the cache-miss cost was avoidable'
         bottom = (f"Cache misses a habit or a setting would have prevented cost {save(so, mo, pct(pct_) + ' of spend')}, "
-                  f"{(k.get('sub') or '').strip()} (SV3).")
-        actions = [f"Start with the biggest cause: {top['k'].lower()} ({top['h']})" if top and top.get('h') else 'Start with the biggest cause in SV3']
+                  f"{(k.get('sub') or '').strip()} (SV4).")
+        actions = [f"Start with the biggest cause: {top['k'].lower()} ({top['h']})" if top and top.get('h') else 'Start with the biggest cause in SV4']
     elif key == 'stop_hook':
         hooks = stop_hooks(R)
-        oid, qs, kind = 'cost-stop-hook-followup', ('SV1', 'EX5', 'OUT3'), 'upper_bound'
-        facts = [R.row_fact('SV1', 'c', row, ('l', 'u', 'mo'))]
+        oid, qs, kind = 'cost-stop-hook-followup', ('SV2', 'EX5', 'OUT3'), 'upper_bound'
+        facts = [R.row_fact('SV2', 'c', row, ('l', 'u', 'mo'))]
         facts += [R.row_fact('EX5', 'go', r, ('h', 'sr', 'go', 'fc', 'fu')) for r in hooks[:2]]
-        basis = ("SV1's Stop-hook follow-up lever: the calls Claude made because the hook sent something back (they follow its Stop run, "
+        basis = ("SV2's Stop-hook follow-up lever: the calls Claude made because the hook sent something back (they follow its Stop run, "
                  'before any new prompt); an upper bound since some of that work is wanted.')
         title = 'A Stop hook sets off extra work after turns'
         bottom = (f"{hooks[0]['h'] if hooks else 'Your Stop hook'} made Claude go on working after {hooks[0]['go'] if hooks else 'some'} "
-                  f"of its runs; that work costs up to {save(so, mo, pct(pct_) + ' of spend', 'SV1')}.")
+                  f"of its runs; that work costs up to {save(so, mo, pct(pct_) + ' of spend', 'SV2')}.")
         actions = ['Make the hook fire only after turns that changed files or ran long', 'Keep what it asks Claude to write short and specific']
     elif key == 'fresh':
-        k = R.kpi('SV7', 'Saved by starting fresh')
-        oid, qs, kind = 'cost-fresh-after-breaks', ('SV7', 'CX8', 'ME3'), 'upper_bound'
-        facts = [R.fact('SV7', 'Saved by starting fresh')]
-        top = next(iter(R.rows('SV7', 'x')), None)
+        k = R.kpi('SV8', 'Saved by starting fresh')
+        oid, qs, kind = 'cost-fresh-after-breaks', ('SV8', 'CX8', 'ME3'), 'upper_bound'
+        facts = [R.fact('SV8', 'Saved by starting fresh')]
+        top = next(iter(R.rows('SV8', 'x')), None)
         if top:
-            facts.append(R.row_fact('SV7', 'x', top, ('t', 's', 'x', 'u')))
+            facts.append(R.row_fact('SV8', 'x', top, ('t', 's', 'x', 'u')))
         brk = sv3_row(R, 'You came back after a break')
         if brk:
-            facts.append(R.row_fact('SV3', 'w', brk, ('k', 'n', 'u', 'mo')))
-        basis = ('SV7: each return after the cache expired priced as a fresh session (median start-up + 5K summary + 10K re-read detail), '
+            facts.append(R.row_fact('SV4', 'w', brk, ('k', 'n', 'u', 'mo')))
+        basis = ('SV8: each return after the cache expired priced as a fresh session (median start-up + 5K summary + 10K re-read detail), '
                  'until the next break or compaction.')
         title = 'Returning to a big, expired session re-writes all of it'
         n_back = lead_int(k.get('sub'))
         bottom = (f"Starting fresh instead of returning to an expired session would have saved up to {save(so, mo, pct(pct_) + ' of spend')}"
-                  + (f", over {plural(n_back, 'return')} (SV7)." if n_back else ' (SV7).'))
+                  + (f", over {plural(n_back, 'return')} (SV8)." if n_back else ' (SV8).'))
         actions = ['Before a long break, /compact while the cache is still warm (cheap then)',
                    'Back at a big session whose cache expired, /clear (free) and start from a short note; /compact only if you need the history']
     elif key == 'reads':
-        oid, qs, kind, cat = 'context-large-reads', ('SV8', 'EX8', 'CX3'), 'upper_bound', 'context'
-        facts = [ev('SV8', ' · '.join(kpi_text(i) for i in (R.kpi('SV8', 'Whole-file reads over ', True), R.kpi('SV8', 'Saved if read in ranges'))))]
+        oid, qs, kind, cat = 'context-large-reads', ('SV9', 'EX8', 'CX3'), 'upper_bound', 'context'
+        facts = [ev('SV9', ' · '.join(kpi_text(i) for i in (R.kpi('SV9', 'Whole-file reads over ', True), R.kpi('SV9', 'Saved if read in ranges'))))]
         top = next(iter(R.rows('EX8', 'rep', 'Files read most')), None)
         if top:
             facts.append(R.row_fact('EX8', 'rep', top, ('f', 'r', 's', 'ln'), 'Files read most'))
-        half = (R.kpi('SV8', 'Saved if read in ranges').get('sub') or '').replace('if a range kept', 'would have loaded').strip() or 'would have loaded half'
-        basis = f'SV8: Read calls without offset/limit over the size threshold, assuming a ranged read (or a grep first) {half}.'
+        half = (R.kpi('SV9', 'Saved if read in ranges').get('sub') or '').replace('if a range kept', 'would have loaded').strip() or 'would have loaded half'
+        basis = f'SV9: Read calls without offset/limit over the size threshold, assuming a ranged read (or a grep first) {half}.'
         title = 'Large files read whole stay in context for the rest of the session'
-        bottom = f'Reading large files in ranges would have saved up to {save(so, mo, pct(pct_) + " of spend")}: each whole read is re-read on every later call (SV8).'
+        bottom = f'Reading large files in ranges would have saved up to {save(so, mo, pct(pct_) + " of spend")}: each whole read is re-read on every later call (SV9).'
         actions = ['Grep for the part you need, then Read with offset/limit', 'Split files Claude reads whole again and again']
     elif key == 'unused':
-        k = R.kpi('SV2', 'Of which you can switch off')
+        k = R.kpi('SV3', 'Of which you can switch off')
         so, mo = k['value'], k.get('month') if k.get('month') is not None else month(R, k['value'])
         pct_ = round(so / R.spend * 100, 1) if R.spend else None
-        oid, qs, cat = 'tooling-unused-listings', ('SV2', 'EX2', 'CX5'), 'tooling'
-        facts = [R.fact('SV2', 'Of which you can switch off')]
+        oid, qs, cat = 'tooling-unused-listings', ('SV3', 'EX2', 'CX5'), 'tooling'
+        facts = [R.fact('SV3', 'Of which you can switch off')]
         ex = [lb for lb in ('Unused skills', 'Unused MCP servers') if R.has('EX2', lb)]
         if ex:
             facts.append(R.fact('EX2', *ex))
         if R.has('CX5', 'A new session starts with'):
             facts.append(R.fact('CX5', 'A new session starts with'))
         n_off = lead_int(k.get('sub'))
-        basis = f"SV2: the listing size of the {f'{n_off} ' if n_off else ''}items with a way to switch them off, priced on every main-thread call that re-read them."
+        basis = f"SV3: the listing size of the {f'{n_off} ' if n_off else ''}items with a way to switch them off, priced on every main-thread call that re-read them."
         n_sk, n_mcp = R.has('EX2', 'Unused skills'), R.has('EX2', 'Unused MCP servers')
         title = and_list([f"{n_sk['value']} unused skills" if n_sk else '', f"{n_mcp['value']} unused MCP servers" if n_mcp and n_mcp['value'] else '']) \
             + ' load in every session' if n_sk or n_mcp else 'Unused listings load in every session'
-        bottom = f'Switching off the unused skills and servers you can would have saved {save(so, mo, pct(pct_) + " of spend", "SV2")}.'
+        bottom = f'Switching off the unused skills and servers you can would have saved {save(so, mo, pct(pct_) + " of spend", "SV3")}.'
         actions = ['List unused skills by name only with skillOverrides (see the optimization)',
                    'Take MCP servers no project uses out of your user config; set the rest up only where they are used']
         extra = {'lever_total': {'usd_so_far': row['u'], 'usd_per_month': row['mo'],
-                                 'note': 'SV1 counts every unused item, built-in ones too; the savings above count only what you can switch off.'}}
+                                 'note': 'SV2 counts every unused item, built-in ones too; the savings above count only what you can switch off.'}}
     elif key == 'ttl':
-        k = R.kpi('SV5', 'Cheapest mix saves')
-        oid, qs, cat = 'cache-lifetime-fit', ('SV5', 'CX10', 'CX7'), 'cache'
-        facts = [R.fact('SV5', 'Cheapest mix saves')]
-        basis = 'SV5: the whole history re-priced under the cheapest lifetime mix, against your actual total.'
+        k = R.kpi('SV6', 'Cheapest mix saves')
+        oid, qs, cat = 'cache-lifetime-fit', ('SV6', 'CX10', 'CX7'), 'cache'
+        facts = [R.fact('SV6', 'Cheapest mix saves')]
+        basis = 'SV6: the whole history re-priced under the cheapest lifetime mix, against your actual total.'
         title = 'A different cache lifetime would have been cheaper'
-        bottom = f"Replaying your history under each lifetime mix, {mix_of(k)} would have saved {save(so, mo, 'SV5')} against your actual mix."
-        actions = ['See the cache lifetime optimization, and SV5\'s break-even line before switching']
+        bottom = f"Replaying your history under each lifetime mix, {mix_of(k)} would have saved {save(so, mo, 'SV6')} against your actual mix."
+        actions = ['See the cache lifetime optimization, and SV6\'s break-even line before switching']
     else:
         raise Missing(f'no bundle for lever {key}')
     b = {'lever': key, 'label': row['l'], 'id': oid, 'category': cat, 'questions': R.questions(*qs),
@@ -1795,12 +1796,12 @@ def lever_bundle(R, key, row):
 
 
 def lifetimes_fit(R, v):
-    """SV5 finds the actual lifetime mix is already the cheapest: an insight about what not to change, or, when that mix is
+    """SV6 finds the actual lifetime mix is already the cheapest: an insight about what not to change, or, when that mix is
     main 1 hour · subagents 5 minutes and isn't pinned in settings (v['ttl_need'], from cache-ttl-fit), to pin it."""
-    k = R.kpi('SV5', 'Cheapest mix saves')
+    k = R.kpi('SV6', 'Cheapest mix saves')
     if k['value'] > 0.005:
         return None
-    facts = [R.fact('SV5', 'Cheapest mix saves')]
+    facts = [R.fact('SV6', 'Cheapest mix saves')]
     for cid, lb in (('CX10', 'Main threads: pauses of 5–60 min'), ('CX7', 'Cache hit rate'), ('CX10', 'Subagents: pauses of 5–60 min')):
         if R.has(cid, lb):
             facts.append(R.fact(cid, lb))
@@ -1808,13 +1809,13 @@ def lifetimes_fit(R, v):
     need = (v or {}).get('ttl_need') or []
     pin = {'promptCacheTtl': '"promptCacheTtl": "1h"', 'subagentPromptCacheTtl': '"subagentPromptCacheTtl": "5m"'}
     return {'lever': 'ttl', 'label': 'Cache lifetime that fits each thread kind', 'id': 'cache-lifetimes-right', 'category': 'cache',
-            'questions': R.questions('SV5', 'CX10', 'CX7'), 'evidence': facts[:3],
+            'questions': R.questions('SV6', 'CX10', 'CX7'), 'evidence': facts[:3],
             'title': 'Your cache lifetimes are the cheapest mix: pin them so they stay' if need else
                      'Your cache lifetimes are already the cheapest mix',
-            'bottom_line': (f'Replaying your whole history under every lifetime mix, your actual one ({mix}) costs the least (SV5). It '
+            'bottom_line': (f'Replaying your whole history under every lifetime mix, your actual one ({mix}) costs the least (SV6). It '
                             'comes from the automatic setting, which gives the main thread 1 hour only on a subscription within its usage '
                             'limits: pin it in settings.') if need else
-                           (f'Replaying your whole history under every lifetime mix, your actual one ({mix}) costs the least (SV5): leave '
+                           (f'Replaying your whole history under every lifetime mix, your actual one ({mix}) costs the least (SV6): leave '
                             'the cache lifetime settings as they are.'),
             'actions': [f"Set {' and '.join(pin[x] for x in need)} in ~/.claude/settings.json"] if need else
                        ['Keep promptCacheTtl and subagentPromptCacheTtl as they are'],

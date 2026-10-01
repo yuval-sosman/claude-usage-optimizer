@@ -62,7 +62,7 @@ fixed thinking budget; adaptive models ignore it), `ENABLE_TOOL_SEARCH` (deferre
   resumed subagent within its cache lifetime, a fork (reads the parent's cache).
 - Compaction while the cache is warm reads the history from the cache ("a mid-session `/compact` costs a fraction of what the
   context size suggests"); after the cache expired it reprocesses the whole history uncached.
-- The report measures what actually happened (CX8–CX12, SV3, SV5): prefer its numbers over these rules.
+- The report measures what actually happened (CX8–CX12, SV4, SV6): prefer its numbers over these rules.
 
 ## Hooks (checked in the hook parser)
 
@@ -124,7 +124,7 @@ model for one call. A user or project agent named `Explore` replaces the built-i
 `model`. `/tasks` shows the model a running subagent uses.
 
 Resuming a finished subagent (SendMessage) re-sends its history; within its cache lifetime (5 minutes by default) that reads
-the cache the original run warmed, after it the history is written again. The report (CX8, SV3) shows what happened for this user.
+the cache the original run warmed, after it the history is written again. The report (CX8, SV4) shows what happened for this user.
 
 ## Disable rules (Claude Code's own guidance)
 

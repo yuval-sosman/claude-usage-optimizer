@@ -12,7 +12,7 @@ data/metrics.json, data/digest.md (what /claude-usage:company reads) and data/pe
   `where` and `fast` keeps its own call costs.
 - People are compared per 30 days of their own period (the report's `days`), since periods differ. --since/--until keeps
   only the calls in that window and each person's days inside it.
-- Savings levers come from each person's own report (SV1, and SV2's switch-off-able part for unused listings), scaled to
+- Savings levers come from each person's own report (SV2, and SV3's switch-off-able part for unused listings), scaled to
   these prices and capped at their spend. Levers overlap within a person; one lever summed across people doesn't.
 - Files that share session ids hold the same history: the newest is kept. Files of the same person (name, else account)
   with no sessions in common are one person on two machines: merged. Every decision is printed and noted on the page.
@@ -159,7 +159,7 @@ def summarise(sh, name, prices, since, until):
     if p['unpriced']:
         p['flags'].append('no price here for ' + ', '.join(sorted(p['unpriced'])) + " (the sender's cost used)")
 
-    # the period: the report's days (SV1's basis), from the first call on; a window keeps the part inside it
+    # the period: the report's days (SV2's basis), from the first call on; a window keeps the part inside it
     rep = sh.get('report') or {}
     head = ((rep.get('data') or {}).get('all') or {}).get('headline') or {}
     days = num(head.get('days')) or max(1.0, (last - first).total_seconds() / 86400)
@@ -212,8 +212,8 @@ def summarise(sh, name, prices, since, until):
     R = C.Report(rep)
     lev = {}
     for key in LEVERS:
-        if key == 'unused':                           # what the person can switch off (SV2), not built-in items
-            k = R.has('SV2', 'Of which you can switch off')
+        if key == 'unused':                           # what the person can switch off (SV3), not built-in items
+            k = R.has('SV3', 'Of which you can switch off')
             u, mo = (num(k.get('value')), num(k.get('month'))) if k else (0.0, 0.0)
         else:
             row = C.lever_row(R, key)
@@ -428,7 +428,7 @@ def co3(ps):
         UR.K(UR.kpi('Cache hit rate', UR.r1(pct(a['cr'], a['ctx'])), 'pct'), UR.kpi('Cache misses', mi['n'], 'count'),
              UR.kpi('Tokens re-written', mi['tok'], 'tokens'), UR.kpi('Extra cost of misses', UR.r2(mi['usd']), 'usd'),
              UR.kpi('Share of spend', UR.r1(pct(mi['usd'], mi['spend'])), 'pct'),
-             UR.kpi('Avoidable, per 30 days', UR.r2(avoid), 'usd', 'from each person\'s report (SV1)')),
+             UR.kpi('Avoidable, per 30 days', UR.r2(avoid), 'usd', 'from each person\'s report (SV2)')),
         UR.BAR(causes, [UR.S('Extra cost', [UR.r2(mi['cause'][c]) for c in causes])], 'usd', title='Extra cost of misses, by cause')],
         note=(f"{len(ps) - a['miss_known']} of {len(ps)} files have no cache-miss rows: their misses are not counted. " if a['miss_known'] < len(ps) else '')
         + 'Which misses were avoidable is judged in each person\'s report; the rows only say what each one cost.')

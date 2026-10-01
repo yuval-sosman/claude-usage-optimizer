@@ -28,7 +28,7 @@ These were settled while testing the questions. Several are traps if done naivel
 | **Human prompt** | A `user` line with `promptSource` = `typed` or `queued`, plus `queued_command` attachments where `commandMode` = `prompt`. Count these separately: slash commands (`<command-name>`), `<task-notification>`s, `sdk` prompts, and `isMeta` lines. |
 | **Turn** | From one human prompt or slash command to the next. `system/turn_duration` gives Claude's busy time for the turn. |
 | **Context (ctx)** | `input + cache_read + cache_creation` for one call. |
-| **Request start / gap** | Start = the later of (the previous call's last line, the last user/attachment line before this call). Gap = time from one call's start to the next call's start in the same thread. Idle = the previous call's last line → this call's start; the cache TTL is counted from there (see SV5). |
+| **Request start / gap** | Start = the later of (the previous call's last line, the last user/attachment line before this call). Gap = time from one call's start to the next call's start in the same thread. Idle = the previous call's last line → this call's start; the cache TTL is counted from there (see SV6). |
 | **Cache hit rate** | Σ cache_read ÷ Σ ctx. |
 | **Re-written tokens** | `max(0, min(ctx(previous call) − cache_read − input, cache_creation))` in the same thread, and 0 when a `compact_boundary` falls between the two calls (compaction replaces the conversation, so nothing after it is a re-write). A **miss** is any call where this is above 1,000. Label each miss with `diagnostics.cache_miss_reason.type` when present, but take the token count from this formula. Checked against the 25 logged diagnostics: their own token figure runs 10–25% lower. |
 | **Cold start** | The first call in a thread. Its cache write is the thread's start-up baseline. |
@@ -46,8 +46,8 @@ These were settled while testing the questions. Several are traps if done naivel
 
 Of the questions below, these gave the biggest or most surprising answers on your data:
 
-0. **SV9** How efficient was my use? → 70/100 (B+): the documented practices would have saved 30% of spend; Context lost the most points (C+).
-1. **SV1** Which change would have saved the most? → main-thread work on Opus 5.5 (the current default) instead of Opus 5 / Fable 5: $230 (36% of spend).
+0. **SV1** How efficient was my use? → 70/100 (B+): the documented practices would have saved 30% of spend; Context lost the most points (C+).
+1. **SV2** Which change would have saved the most? → main-thread work on Opus 5.5 (the current default) instead of Opus 5 / Fable 5: $230 (36% of spend).
 2. **OV3** What dominates the bill? → cache reads 55%, output only 17%.
 3. **CX9** Tokens re-read per token written → 163×.
 4. **CX8** Why the cache missed → resuming finished subagents with `SendMessage` and returning after long breaks re-wrote the most; its step-by-step section shows each costly miss on a timeline.
@@ -156,7 +156,7 @@ Long quiet stretches are drawn narrow with their real length printed. Each miss 
 - Why: the cause label says what kind of miss it was, while the timeline shows when and why. Comparing the idle time with the cache lifetime tells you whether being quicker would have helped.
 - How: per miss, take every record of the thread (plus the main thread, for a subagent) from shortly before the previous call to the miss. Then:
   - idle = the previous call's last line → the next request's start;
-  - expiry = the previous call's last line + the TTL (the same clock as SV5);
+  - expiry = the previous call's last line + the TTL (the same clock as SV6);
   - trigger = the first input after the previous reply.
 
   `cache_misses.csv` has one row per miss with these timestamps.
@@ -167,7 +167,7 @@ This is read amplification: cache_read ÷ output.
 - Check: ✓ 163×.
 
 **CX10. Does each cache TTL fit my gap pattern?** `T P A`
-The two options side by side, for main threads and for subagents apart. Every call is replayed under both lifetimes (SV5's method), and each option's cache cost is split into:
+The two options side by side, for main threads and for subagents apart. Every call is replayed under both lifetimes (SV6's method), and each option's cache cost is split into:
   - cache reads;
   - writing new content (1.25× input for 5 minutes, 2× for 1 hour);
   - re-writes after a pause of 5–60 minutes (5 minutes only: the one place the options differ);
@@ -344,14 +344,43 @@ re-reads cheaper), so they don't add up. The Insights tab takes its savings from
 Every saving in the report (these cards, OV8's waste, and the Insights and Optimizations tabs) is shown
 twice so it is easy to read: **all time**, over the analysed days, and **per 30 days**, the same pace projected to 30 days
 (all time × 30 ÷ days covered). Saving tiles show both side by side, tables add a "Per 30 days" column, and charts a second
-series. Rows that each describe one event (SV7's returns, SV8's reads) keep a single figure.
+series. Rows that each describe one event (SV8's returns, SV9's reads) keep a single figure.
 
-**SV1. How much could I have saved so far, lever by lever?** `T P`
+**SV1. What is my efficiency score, and where did the points go?** `T P`
+One number from 1 to 100 with a school grade, A+ down to C-, and the same for five areas, so it says where the points went.
+The headline shows it beside the cost; the card leads the SV section.
+- How:
+  - Each area's share of spend is what the largest of its SV2 levers would have saved (they act on the same cost, so only
+    one counts). Context: SV5's /compact and SV9's ranged reads, 35 points. Caching: SV4's avoidable misses, SV6's cache
+    lifetime and SV8's fresh starts, 25. Subagents: SV7 via `CLAUDE_CODE_SUBAGENT_MODEL`, 15. Hooks: EX5's Stop-hook
+    follow-up work (an upper bound), 15. Setup: SV3's unused listings, 10.
+  - Together the areas keep Π(1 − share) of the spend, the way the tabs and the video combine savings (each change saves
+    its share of what the others leave). The score is that kept share out of 100: 100 minus the share of spend the
+    documented practices would have saved, overlaps removed, rounded half up and kept within 1–100.
+  - The combined loss is split between the areas in proportion to their shares, so the points they lose add up to
+    100 − score. An area's score is the points it kept out of its points; the points-weighted average of the area scores
+    is the overall score, unless an area lost more than all its points (its score is then 1).
+  - The main-thread model (SV2's model lever) is not graded: the right model depends on the work, and that lever compares
+    with the model you use now, so moving to a cheaper model would lower the score.
+  - Grades, generous on purpose (a C means more than 42% of spend was avoidable): A+ 88–100, A 82–87, A- 76–81, B+ 70–75,
+    B 64–69, B- 58–63, C+ 50–57, C 40–49, C- below 40. An (i) beside the score shows this table.
+  - All projects adds a row per project (each group scope): its score, grade, spend, and the area that lost the most points.
+  - Progress: every full run that ends now (not `--until`) saves its high-level scores (score, grade, area scores, spend
+    per 30 days, cache hit rate, median peak context) in `<OUT>/history/scores.json`, one entry a day (a second run the
+    same day replaces it). With an earlier day there, All projects charts the score over the last 12 reports, lists them
+    with the change from one to the next, and the headline shows the change since the last report beside the score.
+    `/claude-usage:clear` removes the history unless `--keep history`.
+- Check: ✓ 2026-10-01 (Sep 6 → 30): 70/100 (B+), 30% of spend avoidable with overlaps removed. Context 53 (C+, 16.4 points:
+  /compact at about 150K, $212 = 18% of spend), Caching 77 (A-, 5.6: avoidable misses, $72.67), Subagents 80 (A-, 3.1),
+  Hooks 73 (B+, 4.0, upper bound), Setup 88 (A+, 1.2). The points lost add up to 30.3 = 100 − 69.7. Projects range from
+  44 (C) to 89 (A+). The engine's other cards, CSVs and drafts are unchanged by it (old and new engine on the same days).
+
+**SV2. How much could I have saved so far, lever by lever?** `T P`
 Every lever below side by side, with its share of spend and a 30-day projection.
 - Why: the cost questions say where the money went; this says which change would have kept the most of it.
 - Check: ✓ main-thread work on Opus 5.5 instead of Opus 5 / Fable 5: $230 (36%). Subagents on Sonnet 5: $75. /compact at ~150K: $75. Stop-hook follow-up work: $48 (upper bound; the work EX5's "What Stop hooks set off" charges to the memory hook). Avoidable misses: $34.
 
-**SV2. What do unused skills, MCP servers and agent types cost me?** `T P`
+**SV3. What do unused skills, MCP servers and agent types cost me?** `T P`
 Per item: tokens per session, its share of the saving, where it comes from (built in, personal, synced, project, plugin, MCP config, connector), and how to switch it off.
 - How: listing sizes from `skill_listing`, `mcp_instructions_delta` and `agent_listing_delta` for items never used through Skill, a slash command, an MCP tool or Agent. Priced on every main-thread call of the sessions that loaded them.
 - Used in some projects, loaded in every one (all projects only): an MCP server in the user config, a personal skill or a
@@ -362,15 +391,15 @@ Per item: tokens per session, its share of the saving, where it comes from (buil
   item no project uses keeps the first table's advice (off, or out of the user config).
 - Check: ✓ 4.2K tokens per session, $11.79 so far. $7.88 of it can be switched off: the claude.ai Docs connector $1.32, the synced anthropic-skills (about 240 tokens each), and so on. The rest are built in. Nothing is used in some projects and loaded in others.
 
-**SV3. Which cache misses were avoidable, and what would avoiding them have saved?** `T P S`
+**SV4. Which cache misses were avoidable, and what would avoiding them have saved?** `T P S`
 - How: the CX8 cause of each miss, plus "computer went to sleep" API errors, mapped to who can fix it: your habits, how Claude delegates, your setup, or not in your control.
 - Check: ✓ $34 of the $37.85 miss cost was avoidable (90%).
 
-**SV4. At what context size should I /compact, and what would it have saved?** `T P`
+**SV5. At what context size should I /compact, and what would it have saved?** `T P`
 - How: replay every main thread. Whenever its context would pass a threshold, drop it to the start-up size + 20K summary + 10K re-read detail, and charge the compaction (a full read, 5K output, the new write). Net saving at thresholds from 100K to 500K: 100K is the smallest auto-compact window Claude Code accepts, and below it you would compact every few turns, which the replay can't price (lost detail, re-reads, mid-task summaries). The best threshold is a guide for compacting at natural breaks; the catalog turns it into a forced window only on a 1M model, as a 400K cap (300K when nothing is saved past 400K, never lower).
 - Check: ✓ best at 150K: 70 compactions, $74.60 net. Below 100K, compaction costs more than it saves. ✓ 2026-09-30: best at 150K either way, 148 compactions, $163 net; the dropped 60K and 80K rows lost $1,911 and $1,310 on these sessions (a 44–55K start-up).
 
-**SV5. 5-minute or 1-hour cache: which fits my sessions?** `T P A`
+**SV6. 5-minute or 1-hour cache: which fits my sessions?** `T P A`
 - How: replay every call under a 5-minute and a 1-hour lifetime, for main threads and subagents separately, and price the whole history for all 4 combinations (total bill = actual non-cache cost + simulated cache reads and writes).
   - The idle time is the time from the end of the previous response to the request; the cache clock runs from there. Measured start-to-start, 7 subagent hits seemed to come after more than 5 minutes; measured from the response's end, none do.
   - The replay is anchored. A longer lifetime than the actual one never adds a miss and a shorter one never removes one, so only the other direction is predicted: a hit becomes a miss when idle > τ, and an expiry miss becomes a hit when idle ≤ τ.
@@ -387,46 +416,17 @@ Per item: tokens per session, its share of the saving, where it comes from (buil
   - All 5 min: $677; all 1 hour: $697; actual (main 1 hour, subagents 5 min): $666, which is also the cheapest mix.
   - Main threads favour 1 hour by $11, a close call: 52 pauses of 5–60 min cost $63 against a $52 premium. Break-even is 1.2 pauses per 100 calls; yours is 1.4.
 
-**SV6. What if another model had done the same work?** `T P A`
-- How: the same tokens at each model's list prices. The levers count only calls on pricier models. "Via CLAUDE_CODE_SUBAGENT_MODEL" counts only the subagents that variable would move, following Claude Code's order (the model passed for the call, then the definition's `model`, where `inherit` is the main model, then the variable, then the main model): no model passed for the call, and a type with no model of its own (general-purpose, the built-in `claude`, or a user or project agent file without a `model` line; a file named like a built-in overrides it). Explore and Plan (`inherit`), forks and plugin agents are left out. SV1's subagent lever uses this figure.
+**SV7. What if another model had done the same work?** `T P A`
+- How: the same tokens at each model's list prices. The levers count only calls on pricier models. "Via CLAUDE_CODE_SUBAGENT_MODEL" counts only the subagents that variable would move, following Claude Code's order (the model passed for the call, then the definition's `model`, where `inherit` is the main model, then the variable, then the main model): no model passed for the call, and a type with no model of its own (general-purpose, the built-in `claude`, or a user or project agent file without a `model` line; a file named like a built-in overrides it). Explore and Plan (`inherit`), forks and plugin agents are left out. SV2's subagent lever uses this figure.
 - Check: ✓ main threads on Opus 5.5 (the model in use now): $230. Subagents on Sonnet 5: $75. Explore subagents on Haiku 4.5: $19. ✓ 2026-09-30: every subagent on Sonnet 5 $101, via the variable $37.03: general-purpose subagents without a per-call model ($122 of spend) are the only ones it moves; two `claude` agents launched with model opus ($44.61), Explore ($28.65), Plan ($15.28), general-purpose calls that passed a model ($28.09) and forks ($8.40) keep theirs.
 
-**SV7. What would starting a fresh session after long breaks have saved?** `T P S`
+**SV8. What would starting a fresh session after long breaks have saved?** `T P S`
 - How: each return after the cache expired, priced as a fresh session (median start-up + 5K summary + 10K re-read), including every later call's smaller context until the next break or compaction.
 - Check: ✓ 6 returns, $16.83 (upper bound).
 
-**SV8. What would reading large files in ranges have saved?** `T P S`
+**SV9. What would reading large files in ranges have saved?** `T P S`
 - How: Read calls without offset/limit that returned ≥8K tokens; their cost to write and carry. Assumes a targeted read (or a grep first) keeps 50%.
 - Check: ✓ 75 reads (1.2M tokens) cost $25.36; about $12.68 saved.
-
-**SV9. What is my efficiency score, and where did the points go?** `T P`
-One number from 1 to 100 with a school grade, A+ down to C-, and the same for five areas, so it says where the points went.
-The headline shows it beside the cost; the card leads the SV section.
-- How:
-  - Each area's share of spend is what the largest of its SV1 levers would have saved (they act on the same cost, so only
-    one counts). Context: SV4's /compact and SV8's ranged reads, 35 points. Caching: SV3's avoidable misses, SV5's cache
-    lifetime and SV7's fresh starts, 25. Subagents: SV6 via `CLAUDE_CODE_SUBAGENT_MODEL`, 15. Hooks: EX5's Stop-hook
-    follow-up work (an upper bound), 15. Setup: SV2's unused listings, 10.
-  - Together the areas keep Π(1 − share) of the spend, the way the tabs and the video combine savings (each change saves
-    its share of what the others leave). The score is that kept share out of 100: 100 minus the share of spend the
-    documented practices would have saved, overlaps removed, rounded half up and kept within 1–100.
-  - The combined loss is split between the areas in proportion to their shares, so the points they lose add up to
-    100 − score. An area's score is the points it kept out of its points; the points-weighted average of the area scores
-    is the overall score, unless an area lost more than all its points (its score is then 1).
-  - The main-thread model (SV1's model lever) is not graded: the right model depends on the work, and that lever compares
-    with the model you use now, so moving to a cheaper model would lower the score.
-  - Grades, generous on purpose (a C means more than 42% of spend was avoidable): A+ 88–100, A 82–87, A- 76–81, B+ 70–75,
-    B 64–69, B- 58–63, C+ 50–57, C 40–49, C- below 40. An (i) beside the score shows this table.
-  - All projects adds a row per project (each group scope): its score, grade, spend, and the area that lost the most points.
-  - Progress: every full run that ends now (not `--until`) saves its high-level scores (score, grade, area scores, spend
-    per 30 days, cache hit rate, median peak context) in `<OUT>/history/scores.json`, one entry a day (a second run the
-    same day replaces it). With an earlier day there, All projects charts the score over the last 12 reports, lists them
-    with the change from one to the next, and the headline shows the change since the last report beside the score.
-    `/claude-usage:clear` removes the history unless `--keep history`.
-- Check: ✓ 2026-10-01 (Sep 6 → 30): 70/100 (B+), 30% of spend avoidable with overlaps removed. Context 53 (C+, 16.4 points:
-  /compact at about 150K, $212 = 18% of spend), Caching 77 (A-, 5.6: avoidable misses, $72.67), Subagents 80 (A-, 3.1),
-  Hooks 73 (B+, 4.0, upper bound), Setup 88 (A+, 1.2). The points lost add up to 30.3 = 100 − 69.7. Projects range from
-  44 (C) to 89 (A+). The engine's other cards, CSVs and drafts are unchanged by it (old and new engine on the same days).
 
 ## TR: Trends & change detection
 

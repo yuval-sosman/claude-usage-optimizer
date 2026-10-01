@@ -23,7 +23,7 @@ and every structure (savings, evidence, question ids, links); you bring the judg
   that do (put the derivation in `savings.basis`).
 - **Advice follows Claude Code's best practice; the numbers aim it.** The SV scenarios say what a change would have saved, not
   whether it is a good way to work. Every action you write is one the official guidance recommends
-  ([../optimize/reference/best-practices.md](../optimize/reference/best-practices.md)): e.g. SV4's threshold becomes "/compact
+  ([../optimize/reference/best-practices.md](../optimize/reference/best-practices.md)): e.g. SV5's threshold becomes "/compact
   with what to keep at a natural break once past ~150K" and "/clear before unrelated work", never "compact at 60K". When the
   data favours something the guidance advises against, say what the guidance recommends instead, with the numbers.
 - Dollars are **API list-price equivalents** (tokens × prices.json). On a subscription they are a yardstick, not a bill. Say so
@@ -75,13 +75,13 @@ message, ask the user for that folder (the one with `projects/` inside), and run
    ```bash
    python3 "${CLAUDE_PLUGIN_ROOT}/scripts/candidates.py" --out "<OUT>" --show levers
    ```
-   One line per lever (SV1's rows, largest first): the insight `id` to use, `category`, `questions`, a `savings` object
+   One line per lever (SV2's rows, largest first): the insight `id` to use, `category`, `questions`, a `savings` object
    (all time, per 30 days, share of spend, kind, basis, which other levers it overlaps), `evidence` with every number exactly
    as the digest writes it, more `facts` you may cite, a draft `title`, `bottom_line` and `actions`, and the `optimizations`
    drafted for it.
    A lever without `savings` is a positive finding (e.g. the cache lifetimes already fit).
 2. `<OUT>/data/digest.md`, completely (in parts with offset/limit if it is too big for one read): every question of the report
-   (IDs like `OV3`, `CX8`, `SV4`) with its numbers, top table rows and one-line insight, then the costliest cache misses, the
+   (IDs like `OV3`, `CX8`, `SV5`) with its numbers, top table rows and one-line insight, then the costliest cache misses, the
    other project scopes and the current setup. The levers already carry the SV numbers; the digest is where everything else
    comes from: context, caching, sessions, subagents, tools, hooks, errors, and the story behind each lever.
 3. [reference/insights-guide.md](reference/insights-guide.md): the categories, what makes a good insight, how savings are
@@ -126,7 +126,7 @@ The notes, for example:
 }
 ```
 
-- `summary` (required): 3–5 sentences, cost first: total spend, the efficiency score and grade (SV9) and, when SV9 shows
+- `summary` (required): 3–5 sentences, cost first: total spend, the efficiency score and grade (SV1) and, when SV1 shows
   one, its change since the last report, the two or three
   biggest levers with their savings (all time and per 30 days), one sentence on what already works well, and that dollars
   are list-price equivalents. At most 900
@@ -156,7 +156,7 @@ run them with the same full path as this skill's commands. The differences:
 
 - You have read `digest.md` and best-practices.md already: don't read them again. Do read its
   [catalog.md](../optimize/reference/catalog.md) and [claude-code.md](../optimize/reference/claude-code.md) as its step 1 says.
-- The drafts marked `first` lead the tab, in Start here (the cache-lifetime pin, whenever SV5 supports it): keep them unless
+- The drafts marked `first` lead the tab, in Start here (the cache-lifetime pin, whenever SV6 supports it): keep them unless
   something specific to this user argues against one, and lead the optimizations summary with them.
 - Skip its render command and its reply: step 5 renders once, and step 6 replies for both tabs.
 

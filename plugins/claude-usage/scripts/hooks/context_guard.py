@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """UserPromptSubmit hook: tell you (not Claude) when the context has grown past the size where /compact pays off.
 
-Your usage report replays your sessions to find the context size where compacting saves the most (question SV4). This
+Your usage report replays your sessions to find the context size where compacting saves the most (question SV5). This
 hook shows a one-line notice when the current context passes it, then stays quiet until it grows another --step tokens
 (or drops back, e.g. after /compact, and passes it again). It never blocks.
 

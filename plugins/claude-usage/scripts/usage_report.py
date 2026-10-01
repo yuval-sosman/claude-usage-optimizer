@@ -43,7 +43,7 @@ import webbrowser
 HERE = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, HERE)
 import layout  # noqa: E402
-VERSION = '2.0'
+VERSION = '2.1'       # 2.1: the score is SV1 and the savings cards are SV2–SV9 (SV9 and SV1–SV8 before; current_ids() reads both)
 DEFAULT_DAYS = 60     # the window without --since, --days or --all: recent enough to act on, long enough to see habits
 USER_HOME = os.path.expanduser('~')
 
@@ -623,7 +623,7 @@ def LIST(items, title=None):
 HIDDEN_CARDS = {'OV6', 'ME4', 'ME5', 'EX10', 'EX11', 'EX12', 'EX13', 'EX14', 'EX15'}   # computed and kept in metrics.json / digest.md, not shown (OV6's medians sit in the headline)
 
 
-CARD_ORDER = {'SV9': 0.5}   # display position when it differs from the number (the score leads its section); ids stay stable for links
+CARD_ORDER = {}   # display position when it differs from the number (e.g. {'XX5': 0.5} leads its section); ids stay stable for links
 
 
 CARD_SECTION = {}   # section when it differs from the id's letters (e.g. {'TL1': 'EX'}), so moving a card between sections keeps its id and links
@@ -1621,7 +1621,7 @@ class G:
         self.src, self.prices, self.scope, self.model_slots = src, prices, scope, model_slots
         self.is_all = scope['kind'] == 'all'
         self.where = {}
-        self.history = []                # earlier runs' scores (read_history), all projects only: SV9's progress
+        self.history = []                # earlier runs' scores (read_history), all projects only: SV1's progress
 
     def slot(self, model):
         return self.model_slots.get(model)
@@ -1976,8 +1976,8 @@ def cx8(m, g):
         ps, pc = share(extra, m.usd), share(extra, cache_usd)
         ins = (f"Misses re-wrote {f_tok(tok)} tokens, {f_pct(share(tok, cw))} of all cache writes. They cost {money(extra)} more than cache hits "
                f"would have: {f_pct(ps)} of your total spend and {f_pct(pc)} of what you paid for caching ({f_usd(cache_usd)}). "
-               + ('That makes preventing them one of your bigger levers (see SV3 for which ones were avoidable).' if ps >= 5 else
-                  'Worth preventing, though not where most of your money goes (see SV3 for which ones were avoidable).' if ps >= 2 else
+               + ('That makes preventing them one of your bigger levers (see SV4 for which ones were avoidable).' if ps >= 5 else
+                  'Worth preventing, though not where most of your money goes (see SV4 for which ones were avoidable).' if ps >= 2 else
                   'Small: your misses are not where your money goes.'))
     return card('CX8', 'How many cache misses did I have, and how many tokens did each re-write?', 'T P S A W', [
         K(kpi('Cache misses', len(rows), 'count', f'calls that re-wrote >{MISS_MIN:,} tokens'),
@@ -2101,7 +2101,7 @@ def cx10(m, g):
             'A 1-hour entry costs 2× input to write instead of 1.25×, so it pays off only when those pauses (and the context they would '
             're-write) are frequent enough.',
         insight=' '.join(verdict),
-        note='Every call replayed under both lifetimes (the SV5 method, which also prices the whole bill). Input and output cost the same '
+        note='Every call replayed under both lifetimes (the SV6 method, which also prices the whole bill). Input and output cost the same '
              'under both, so only the cache cost is compared. Set with promptCacheTtl (main threads) and subagentPromptCacheTtl (subagents).')
 
 
@@ -2653,7 +2653,7 @@ REREAD_TOK = 10_000      # detail re-read after a compaction or a fresh start
 BRIEF_TOK = 5_000        # a short summary pasted into a fresh session
 RANGE_KEEP = 0.5         # share of a large file that a targeted read would still load
 BIG_READ = 8_000         # tokens: a large Read result
-# Thresholds SV4 replays. They start at 100K, the smallest auto-compact window Claude Code accepts (/autocompact takes
+# Thresholds SV5 replays. They start at 100K, the smallest auto-compact window Claude Code accepts (/autocompact takes
 # 100K–1M): below it you would compact every few turns and lose the thread, whatever the replay's dollars say.
 COMPACT_AT = [100e3, 125e3, 150e3, 200e3, 250e3, 300e3, 400e3, 500e3]
 PROMPT_CHANGED = {'Subagent resumed via SendMessage', 'Tool list changed (MCP/tools)', 'Model switch', 'Effort changed',
@@ -2997,7 +2997,7 @@ def _sv_reads(m):
 
 
 def sv_levers(m):
-    """Every lever with its standalone saving so far; SV1 and the insights read this."""
+    """Every lever with its standalone saving so far; SV2 and the insights read this."""
     if 'sv_levers' in m.cache:
         return m.cache['sv_levers']
     un, ms_, comp, ttl, mod, fr, rd = (_sv_unused(m), _sv_misses(m), _sv_compact(m), _sv_ttl(m), _sv_models(m), _sv_fresh(m),
@@ -3007,16 +3007,16 @@ def sv_levers(m):
     ttl_gain = max(0.0, m.usd - min(x['usd'] for x in ttl['combos']))
     post = _post_stop(m)[0]
     levers = [
-        dict(id='unused', label='Remove unused skills, MCP servers and agent types', usd=un['usd'], card='SV2'),
-        dict(id='misses', label='Avoid the avoidable cache misses', usd=avoid, card='SV3'),
+        dict(id='unused', label='Remove unused skills, MCP servers and agent types', usd=un['usd'], card='SV3'),
+        dict(id='misses', label='Avoid the avoidable cache misses', usd=avoid, card='SV4'),
         dict(id='compact', label=f"/compact at about {f_tok(best['T'])} tokens" if best else '/compact earlier', usd=max(0.0, best['net']) if best else 0.0,
-             card='SV4'),
-        dict(id='ttl', label='Cache lifetime that fits each thread kind', usd=ttl_gain, card='SV5'),
+             card='SV5'),
+        dict(id='ttl', label='Cache lifetime that fits each thread kind', usd=ttl_gain, card='SV6'),
         dict(id='sub_model', label=f"Run subagents on {model_name(mod['sonnet'])} by default" if mod['sonnet'] else 'Run subagents on a cheaper model',
-             usd=mod['sub_default'], card='SV6'),        # what CLAUDE_CODE_SUBAGENT_MODEL moves; Explore and Plan keep the main model
-        dict(id='main_model', label=f"Main threads on {(model_name(mod['current']) if mod['current'] else 'one model')} (your current model)", usd=mod['main_saving'], card='SV6'),
-        dict(id='fresh', label='Start fresh after long breaks', usd=fr['usd'], card='SV7'),
-        dict(id='reads', label='Read large files in ranges', usd=rd['usd'], card='SV8'),
+             usd=mod['sub_default'], card='SV7'),        # what CLAUDE_CODE_SUBAGENT_MODEL moves; Explore and Plan keep the main model
+        dict(id='main_model', label=f"Main threads on {(model_name(mod['current']) if mod['current'] else 'one model')} (your current model)", usd=mod['main_saving'], card='SV7'),
+        dict(id='fresh', label='Start fresh after long breaks', usd=fr['usd'], card='SV8'),
+        dict(id='reads', label='Read large files in ranges', usd=rd['usd'], card='SV9'),
         dict(id='stop_hook', label='Stop-hook follow-up work (upper bound)', usd=sum(c['usd'] for c in post), card='EX5'),
     ]
     for lv in levers:
@@ -3027,13 +3027,13 @@ def sv_levers(m):
     return levers
 
 
-def sv1(m, g):
+def sv2(m, g):
     lv = [x for x in sv_levers(m) if x['usd'] > 0.005]
     if not lv:
-        return card('SV1', 'How much could I have saved so far, lever by lever?', 'T P', [], empty='No savings scenario applies here.')
+        return card('SV2', 'How much could I have saved so far, lever by lever?', 'T P', [], empty='No savings scenario applies here.')
     top = lv[0]
     m.facts.update(sv_top=top['label'], sv_top_usd=top['usd'])
-    return card('SV1', 'How much could I have saved so far, lever by lever?', 'T P', [
+    return card('SV2', 'How much could I have saved so far, lever by lever?', 'T P', [
         K(kpi_save(m, 'Biggest lever', top['usd'], clip(top['label'], 48)), kpi('Its share of spend', top['share'], 'pct'),
           kpi('Days covered', span_days(m), 'count', '“all time” is these days; “per 30 days” projects them to 30')),
         BAR([x['label'] for x in lv], [S('All time', [r2(x['usd']) for x in lv], 1), S('Per 30 days (projected)', [r2(x['month']) for x in lv], 2)],
@@ -3105,7 +3105,7 @@ def item_origin(src, kind, name, where=None):
     return 'built in', 'leave it'
 
 
-def sv2(m, g):
+def sv3(m, g):
     u, e = _sv_unused(m), _ext(m)
     wt = {group_of(p) for p in g.src.cwd if group_of(p) != p}                   # projects with task worktrees
     scoped = [dict(n=(o['pid'] or name) if kind == 'plugin' else name, k=kind, o=o['origin'], w=places(g.src, o['used'], 3),
@@ -3113,14 +3113,14 @@ def sv2(m, g):
                    u=r2(sum(o['idle'].values())), mo=r2(per_month(m, sum(o['idle'].values()))), h=scope_how(g.src, kind, name, o))
               for (kind, name), o in (g.where if g.is_all else {}).items() if sum(o['idle'].values()) >= 0.005]
     if not u['tok'] and not scoped:
-        return card('SV2', 'What do unused skills, MCP servers and agent types cost me?', 'T P', [], empty='Nothing loaded went unused.')
+        return card('SV3', 'What do unused skills, MCP servers and agent types cost me?', 'T P', [], empty='Nothing loaded went unused.')
     tot = sum(t for _, _, t in e['items']) or 1
     rows = []
     for kind, name, tok_ in sorted(e['items'], key=lambda x: -x[2]):
         origin, how = item_origin(g.src, kind, name, g.where)
         rows.append(dict(n=name, k=kind, t=round(tok_), u=r2(u['usd'] * tok_ / tot), mo=r2(per_month(m, u['usd'] * tok_ / tot)), o=origin, h=how))
     removable = [r for r in rows if r['h'] != 'leave it']
-    return card('SV2', 'What do unused skills, MCP servers and agent types cost me?', 'T P', ([
+    return card('SV3', 'What do unused skills, MCP servers and agent types cost me?', 'T P', ([
         K(kpi('Unused tokens per session', u['tok'], 'tokens', f"{len(e['un_sk'])} skills · {len(e['un_mcp'])} MCP · {len(e['un_ag'])} agent types"),
           kpi_save(m, 'Saved if removed', u['usd'], f"{u['calls']:,} calls in {u['sessions']} sessions re-read them"),
           kpi_save(m, 'Of which you can switch off', sum(r['u'] for r in removable), f"{len(removable)} items; the rest are built in")),
@@ -3140,10 +3140,10 @@ def sv2(m, g):
              'Some built-in skills and agent types cannot be switched off.')
 
 
-def sv3(m, g):
+def sv4(m, g):
     rows = _sv_misses(m)
     if not rows:
-        return card('SV3', 'Which cache misses were avoidable, and what would avoiding them have saved?', 'T P S', [],
+        return card('SV4', 'Which cache misses were avoidable, and what would avoiding them have saved?', 'T P S', [],
                     empty='No cache misses in this scope.')
     agg = collections.defaultdict(lambda: dict(n=0, usd=0.0, who='', how=''))
     for r in rows:
@@ -3157,7 +3157,7 @@ def sv3(m, g):
     for a in agg.values():
         who[a['who']] += a['usd']
     wk = sorted(who, key=lambda k: -who[k])
-    return card('SV3', 'Which cache misses were avoidable, and what would avoiding them have saved?', 'T P S', [
+    return card('SV4', 'Which cache misses were avoidable, and what would avoiding them have saved?', 'T P S', [
         K(kpi_save(m, 'Avoidable', avoid, f"{f_pct(share(avoid, sum(r['usd'] for r in rows)))} of all miss cost"),
           kpi('Not in your control', who.get('not in your control', 0.0), 'usd')),
         BAR(wk, [S('All time', [r2(who[k]) for k in wk], 1), S('Per 30 days (projected)', [r2(per_month(m, who[k])) for k in wk], 2)], 'usd',
@@ -3170,15 +3170,15 @@ def sv3(m, g):
         note='Misses that followed a “computer went to sleep” API error are grouped as their own cause. CX8 traces each one, step by step.')
 
 
-def sv4(m, g):
+def sv5(m, g):
     res = _sv_compact(m)
     if not res or not any(r['n'] for r in res):
-        return card('SV4', 'At what context size should I /compact, and what would it have saved?', 'T P', [],
+        return card('SV5', 'At what context size should I /compact, and what would it have saved?', 'T P', [],
                     empty='No main thread grew past the smallest threshold.')
     best = max(res, key=lambda r: r['net'])
     m.facts.update(sv_compact_T=best['T'], sv_compact_usd=best['net'])
     shown = [r for r in res if r['net'] >= -2 * best['net']] if best['net'] > 0 else res   # keep the optimum readable
-    return card('SV4', 'At what context size should I /compact, and what would it have saved?', 'T P', [
+    return card('SV5', 'At what context size should I /compact, and what would it have saved?', 'T P', [
         K(kpi('Best threshold', best['T'], 'tokens', f"{best['n']} compactions"),
           kpi_save(m, 'Net saving', best['net'], f"after {f_usd(best['cost'])} spent compacting")),
         LINE([int(r['T']) for r in shown], [S('All time', [r2(r['net']) for r in shown], 1),
@@ -3198,12 +3198,12 @@ def sv4(m, g):
              'break between tasks, not mid-task.')
 
 
-def sv5(m, g):
+def sv6(m, g):
     t = _sv_ttl(m)
     title = '5-minute or 1-hour cache: which fits my sessions?'
     kinds = [(k, lbl) for k, lbl in (('main', 'Main threads'), ('sub', 'Subagents')) if t[k]['calls']]
     if not kinds:
-        return card('SV5', title, 'T P A', [])
+        return card('SV6', title, 'T P A', [])
     life = {300: '5 min', 3600: '1 hour'}
     combo = lambda x: f"main {life[x['main']]} · subagents {life[x['sub']]}"
     best = min(t['combos'], key=lambda x: x['usd'])
@@ -3255,7 +3255,7 @@ def sv5(m, g):
             delta = t['daily'][k][-1][1] - (before[-1] if before else 0.0) if t['daily'][k] else 0.0
             if abs(delta) >= 1 and (before or len(days) > 1):
                 recent.append(f"{lbl.lower()} {'1 hour' if delta > 0 else '5 minutes'} by {f_usd(abs(delta))}")
-    return card('SV5', title, 'T P A', [
+    return card('SV6', title, 'T P A', [
         K(kpi('Total if every entry lived 5 min', c55['usd'], 'usd', f"{'+' if c55['usd'] >= m.usd else '−'}{f_usd(abs(c55['usd'] - m.usd))} vs actual"),
           kpi('Total if every entry lived 1 hour', c11['usd'], 'usd', f"{'+' if c11['usd'] >= m.usd else '−'}{f_usd(abs(c11['usd'] - m.usd))} vs actual"),
           kpi('Actual total', m.usd, 'usd', 'your real mix'),
@@ -3286,7 +3286,7 @@ def sv5(m, g):
              'Input, output and other costs are unchanged. Set with promptCacheTtl and subagentPromptCacheTtl (see the optimizations).')
 
 
-def sv6(m, g):
+def sv7(m, g):
     d = _sv_models(m)
     act = d['act_main'] + d['act_sub']
     rows = [dict(k=model_name(r['model']), mn=r2(r['main']), sb=r2(r['sub']), t=r2(r['main'] + r['sub']), v=r2(act - r['main'] - r['sub']),
@@ -3297,7 +3297,7 @@ def sv6(m, g):
         ins = (f"At list prices, the same main-thread work on {(model_name(d['current']) if d['current'] else 'one model')} (the model you use now) would have saved "
                f"{f_save(m, d['main_saving'])}" + (f", and subagents on {model_name(d['sonnet'])} {f_save(m, d['sub_saving'])}, "
                                                    f"{f_usd(d['sub_default'])} of it from the subagents CLAUDE_CODE_SUBAGENT_MODEL moves." if d['sonnet'] else '.'))
-    return card('SV6', 'What if another model had done the same work?', 'T P A', [
+    return card('SV7', 'What if another model had done the same work?', 'T P A', [
         K(kpi_save(m, f"Main threads on {(model_name(d['current']) if d['current'] else 'one model')}", d['main_saving'], 'your current model; pricier calls only'),
           kpi_save(m, f"Subagents on {model_name(d['sonnet'])}", d['sub_saving'], 'every subagent; pricier calls only') if d['sonnet'] else None,
           kpi_save(m, 'Via CLAUDE_CODE_SUBAGENT_MODEL', d['sub_default'], 'the subagents it moves: general-purpose and agents naming no model; '
@@ -3316,14 +3316,14 @@ def sv6(m, g):
              'CLAUDE_CODE_SUBAGENT_MODEL, else the main model; the “Via” figure counts only the subagents that variable decides.')
 
 
-def sv7(m, g):
+def sv8(m, g):
     f = _sv_fresh(m)
     if not f['rows']:
-        return card('SV7', 'What would starting a fresh session after long breaks have saved?', 'T P S', [],
+        return card('SV8', 'What would starting a fresh session after long breaks have saved?', 'T P S', [],
                     empty='You never came back to a big session after its cache expired.')
     rows = [dict(t=local(r['c']['start']).strftime('%m-%d %H:%M'), s=sess_label(m, r['c']['sid'], 44), x=r['c']['prev']['ctx'],
                  d=r['d'], n=r['n'], u=r2(r['usd'])) for r in sorted(f['rows'], key=lambda r: -r['usd'])]
-    return card('SV7', 'What would starting a fresh session after long breaks have saved?', 'T P S', [
+    return card('SV8', 'What would starting a fresh session after long breaks have saved?', 'T P S', [
         K(kpi_save(m, 'Saved by starting fresh', f['usd'], f"{len(f['rows'])} returns after the cache expired"),
           kpi('A fresh session starts at', f['base'], 'tokens', 'median start-up context')),
         TABLE([('t', 'Came back', None), ('s', 'Session', None), ('x', 'Context', 'tokens'), ('d', 'Not carried', 'tokens'),
@@ -3334,12 +3334,12 @@ def sv7(m, g):
              'every later call until the next break or compaction reads that much less. An upper bound when the old context was still useful.')
 
 
-def sv8(m, g):
+def sv9(m, g):
     r = _sv_reads(m)
     if not r['items']:
-        return card('SV8', 'What would reading large files in ranges have saved?', 'T P S', [], empty='No large whole-file reads.')
+        return card('SV9', 'What would reading large files in ranges have saved?', 'T P S', [], empty='No large whole-file reads.')
     top = sorted(r['items'], key=lambda it: -it['carry_usd'])[:12]
-    return card('SV8', 'What would reading large files in ranges have saved?', 'T P S', [
+    return card('SV9', 'What would reading large files in ranges have saved?', 'T P S', [
         K(kpi('Whole-file reads over ' + f_tok(BIG_READ), len(r['items']), 'count', f"{f_tok(r['tokens'])} tokens"),
           kpi('What they cost', r['stake'], 'usd', 'written once, then re-read'),
           kpi_save(m, 'Saved if read in ranges', r['usd'], f'if a range kept {int(RANGE_KEEP * 100)}%')),
@@ -3351,9 +3351,9 @@ def sv8(m, g):
              f'(or a grep first) would have loaded {int(RANGE_KEEP * 100)}% of the file.')
 
 
-# ------------------------------------------------------------------------------------------ SV9: the efficiency score
+# ------------------------------------------------------------------------------------------ SV1: the efficiency score
 
-SCORE_AREAS = [   # (id, name, points, SV1 levers, what it grades): an area's levers act on the same cost, so the largest counts
+SCORE_AREAS = [   # (id, name, points, SV2 levers, what it grades): an area's levers act on the same cost, so the largest counts
     ('context', 'Context', 35, ('compact', 'reads'), '/compact at a natural break, large files read in ranges'),
     ('caching', 'Caching', 25, ('misses', 'ttl', 'fresh'), 'avoidable cache misses, cache lifetimes, fresh starts after long breaks'),
     ('subagents', 'Subagents', 15, ('sub_model',), 'subagents on a cheaper model by default'),
@@ -3373,12 +3373,12 @@ def half_up(x):
 
 
 def efficiency(m):
-    """The efficiency score, 1–100, from SV1's levers. Each area's share of spend is what its largest lever would have saved;
+    """The efficiency score, 1–100, from SV2's levers. Each area's share of spend is what its largest lever would have saved;
     together the areas keep Π(1 − share) of the spend (each change saves its share of what the others leave, as the video
     and the tabs combine savings), and the score is that kept share out of 100. The combined loss is split between the
     areas in proportion to their shares, so the points lost add up to 100 − score, and an area's own score is the points it
     kept out of its points (the points-weighted average of the area scores is the score, unless an area lost more than all
-    its points). The main-thread model is not graded: see sv9's note."""
+    its points). The main-thread model is not graded: see sv1's note."""
     if 'efficiency' in m.cache:
         return m.cache['efficiency']
     lv = {x['id']: x for x in sv_levers(m)}
@@ -3398,13 +3398,13 @@ def efficiency(m):
     return out
 
 
-def sv9(m, g):
+def sv1(m, g):
     q = 'What is my efficiency score, and where did the points go?'
     if not m.real or not m.usd:
-        return card('SV9', q, 'T P', [], empty='No API calls in this scope.')
+        return card('SV1', q, 'T P', [], empty='No API calls in this scope.')
     e = efficiency(m)
     areas = e['areas']
-    m.facts['score'] = dict(value=e['score'], grade=e['grade'], card='SV9', scale=[[g_, lo] for g_, lo in GRADES],
+    m.facts['score'] = dict(value=e['score'], grade=e['grade'], card='SV1', scale=[[g_, lo] for g_, lo in GRADES],
                             areas=[dict(label=a['label'], score=a['score'], grade=a['grade'], points=a['points']) for a in areas])
     worst = max(areas, key=lambda a: a['lost'])
     rows = [dict(a=a['label'], s=a['score'], g=a['grade'], l=r1(a['lost']), p=a['points'],
@@ -3441,7 +3441,7 @@ def sv9(m, g):
                           share=r1(100 * a['share'])) for a in areas]}
     if prev:
         blk['prev'] = dict(m.facts['score']['prev'])
-    return card('SV9', q, 'T P', [
+    return card('SV1', q, 'T P', [
         blk, *progress,
         dict(TABLE([('a', 'Area', None), ('s', 'Score', 'count'), ('g', 'Grade', None), ('l', 'Points lost', 'count'),
                     ('p', 'Of', 'count'), ('u', 'Saved, all time', 'usd'), ('mo', 'Per 30 days', 'usd'), ('sh', 'Share of spend', 'pct'),
@@ -3454,11 +3454,11 @@ def sv9(m, g):
                 if worst['lever'] and e['lost'] >= 0.5 else f"Efficiency score {e['score']}/100 ({e['grade']}).")
                 + (f" Since your last report ({prev[-1]['generated'][:10]}) it went from {prev[-1]['score']} to {e['score']}"
                    f" ({e['score'] - prev[-1]['score']:+d})." if prev else ''),
-        note='Each area loses points for the share of spend its largest lever would have saved (SV1, each priced on its own, as if '
+        note='Each area loses points for the share of spend its largest lever would have saved (SV2, each priced on its own, as if '
              'applied from the first day). The areas combine as the changes would: each saves its share of what the others leave, '
              'so overlaps count once and the points lost add up to 100 minus the score. An area\'s score is the points it kept, out '
              'of its points (Context 35, Caching 25, Subagents 15, Hooks 15, Setup 10). The main-thread model is not graded: the right '
-             'model depends on the work, and SV6 compares models. Stop-hook work is an upper bound. Grades: A+ 88–100, A 82–87, '
+             'model depends on the work, and SV7 compares models. Stop-hook work is an upper bound. Grades: A+ 88–100, A 82–87, '
              'A- 76–81, B+ 70–75, B 64–69, B- 58–63, C+ 50–57, C 40–49, C- below 40.')
 
 
@@ -3619,7 +3619,7 @@ START_PARTS = {
     'MCP tools': ('Tools from MCP servers that load up front.', 'Disconnect servers you don’t use (/mcp).'),
     'Memory files': ('Your CLAUDE.md files and the auto-memory index (MEMORY.md), loaded into every session.',
                      'Keep them short; move detail into files Claude reads when needed.'),
-    'Skills list': ('One line per skill, so Claude knows what it can invoke.', 'Turn off skills you never use (skillOverrides; see SV2).'),
+    'Skills list': ('One line per skill, so Claude knows what it can invoke.', 'Turn off skills you never use (skillOverrides; see SV3).'),
     'Agent types list': ('One line per subagent type.', 'Remove agent definitions you never use.'),
     'MCP server instructions': ('Usage notes each connected MCP server adds.', 'Disconnect servers you don’t use (/mcp).'),
     'Deferred tools list': ('Names of tools that load only when needed (ToolSearch), mostly from MCP servers.',
@@ -4214,8 +4214,8 @@ def where_used(m):
     """Skills, MCP servers and plugins that a user-level setting loads into every project, used in some projects and only
     loaded in others: {(kind, name): dict(used={project: uses}, idle={project: usd}, sessions=idle sessions, tok=tokens per
     session, origin=…, pid=the plugin's id)}, costliest idle first. Computed once, on all projects (build() hands it to every
-    scope): SV2 lists it and item_origin words its advice from it. Loading an item costs its listing on every main-thread call
-    of the session: written on the first call and after a miss, re-read on the others (as SV2 prices unused items)."""
+    scope): SV3 lists it and item_origin words its advice from it. Loading an item costs its listing on every main-thread call
+    of the session: written on the first call and after a miss, re-read on the others (as SV3 prices unused items)."""
     if 'where_used' in m.cache:
         return m.cache['where_used']
     src, e = m.src, _ext(m)
@@ -4270,7 +4270,7 @@ def where_used(m):
         for it, names in sorted(items.items()):
             tok = size(it, names)
             if not used.get(it) or used[it].get(g_):
-                continue                              # used nowhere (SV2's unused rows) or used in this very project
+                continue                              # used nowhere (SV3's unused rows) or used in this very project
             o = out.setdefault(it, dict(used=dict(used[it]), idle=collections.defaultdict(float), sessions=0, tok=[]))
             o['idle'][g_] += tok * rate
             o['sessions'] += 1
@@ -5164,13 +5164,14 @@ SECTIONS = [('OV', 'Overview & cost'), ('CX', 'Context & Caching'), ('SE', 'Sess
             ('OUT', 'Output & outcomes'), ('ME', 'Your working patterns'), ('SV', 'What would it have saved?'), ('TR', 'Trends')]
 
 
-CARDS = [ov1, ov2, ov3, ov4, ov5, ov6, ov7, ov8, sv1, sv2, sv3, sv4, sv5, sv6, sv7, sv8, sv9, cx1, cx2, cx3, cx4, cx5, cx6, cx7, cx8, cx9, cx10, cx11, cx12, ca_miss_cost, ca_miss_causes, ca_miss_traces,
+CARDS = [ov1, ov2, ov3, ov4, ov5, ov6, ov7, ov8, sv2, sv3, sv4, sv5, sv6, sv7, sv8, sv9, sv1,   # sv1 (the score) last: it reads SV2's levers
+         cx1, cx2, cx3, cx4, cx5, cx6, cx7, cx8, cx9, cx10, cx11, cx12, ca_miss_cost, ca_miss_causes, ca_miss_traces,
          se1, se2, se3, se4, se5, se6,
          ex1, ex2, ex3, ex4, ex5, ex6, ex7, ex8, ex9, ex10, ex11, ex12, ex13, ex14, ex15,
          out1, out2, out3, out4,
          me1, me2, me3, me4, me5, me6, me7, tr1, tr2]
 
-HEADLINE_ORDER = [('SV1', 'info'), ('OV3', 'info'), ('CX8', 'warn'), ('CX3', 'info'), ('OV5', 'info'), ('EX2', 'warn'),
+HEADLINE_ORDER = [('SV2', 'info'), ('OV3', 'info'), ('CX8', 'warn'), ('CX3', 'info'), ('OV5', 'info'), ('EX2', 'warn'),
                   ('EX5', 'warn'), ('OV8', 'warn'), ('CX10', 'info'), ('OV7', 'info'), ('CX4', 'info'),
                   ('EX9', 'info'), ('EX8', 'info'), ('CX9', 'info'), ('CX7', None), ('OV4', 'info')]
 
@@ -5208,7 +5209,7 @@ def headline(m, cards):
             break
     out = {'hero': hero, 'kpis': kpis, 'insights': ins, 'days': r2(span_days(m))}   # days: what “all time” covers (30-day projections)
     if f.get('score'):
-        out['score'] = f['score']                                       # SV9's score, beside the cost
+        out['score'] = f['score']                                       # SV1's score, beside the cost
     return out
 
 
@@ -5236,20 +5237,20 @@ def add_refs(results):
         rs = ref['headline'].get('score')
         if rs and res['headline'].get('score'):
             res['headline']['score'].update(ref=rs['value'], refGrade=rs['grade'], refLabel='All projects')
-            for b in (res['cards'].get('SV9') or {}).get('blocks', []):
+            for b in (res['cards'].get('SV1') or {}).get('blocks', []):
                 if b['kind'] == 'score':
                     b.update(ref=rs['value'], refGrade=rs['grade'], refLabel='All projects')
 
 
 def add_scores(scopes, results):
-    """All projects' SV9 gets every project's score (its group scope, largest spend first), to compare them."""
-    c = (results.get('all') or {}).get('cards', {}).get('SV9')
+    """All projects' SV1 gets every project's score (its group scope, largest spend first), to compare them."""
+    c = (results.get('all') or {}).get('cards', {}).get('SV1')
     if not c or c.get('empty'):
         return
     rows = []
     for sc in scopes:
         res = results.get(sc['id']) or {}
-        b = next((x for x in (res.get('cards', {}).get('SV9') or {}).get('blocks', []) if x['kind'] == 'score'), None)
+        b = next((x for x in (res.get('cards', {}).get('SV1') or {}).get('blocks', []) if x['kind'] == 'score'), None)
         if sc['kind'] != 'group' or not b:
             continue
         worst = max(b['areas'], key=lambda a: a['lost'])
@@ -5327,6 +5328,47 @@ def flat_blocks(c):
         if b.get('kind') == 'tabs':
             out += [x for t in b['tabs'] for x in ([t['block']] if 'block' in t else t.get('blocks', []))]
     return out
+
+
+OLD_SV = {'SV9': 'SV1', 'SV1': 'SV2', 'SV2': 'SV3', 'SV3': 'SV4', 'SV4': 'SV5', 'SV5': 'SV6', 'SV6': 'SV7', 'SV7': 'SV8',
+          'SV8': 'SV9'}   # before metrics version 2.1 → now
+
+
+def current_ids(metrics):
+    """A metrics.json from before version 2.1 with its SV cards under today's ids, in place (the score was SV9 and the
+    savings cards SV1–SV8), for the scripts that look cards up by id in someone's report: candidates, company, video. The
+    cards in every scope, the levers table's card column and the score's card link move; text keeps the ids it was
+    written with, as do insights.json and optimizations.json, so render and validate read a report as it was written."""
+    meta = metrics.get('meta') or {}
+    try:
+        old = tuple(int(x) for x in str(meta.get('version') or '0').split('.')[:2]) < (2, 1)
+    except ValueError:
+        old = False
+    if not old:
+        return metrics
+    for d in (metrics.get('data') or {}).values():
+        cards = (d or {}).get('cards')
+        if not isinstance(cards, dict):
+            continue
+        moved = {OLD_SV.get(cid, cid): c for cid, c in cards.items()}
+        cards.clear()
+        cards.update(moved)
+        for cid in OLD_SV.values():
+            c = cards.get(cid)
+            if not isinstance(c, dict):
+                continue
+            c['id'] = cid
+            for b in flat_blocks(c):
+                if b.get('card') in OLD_SV:
+                    b['card'] = OLD_SV[b['card']]
+                for r in b.get('rows') or []:
+                    if isinstance(r, dict) and r.get('c') in OLD_SV:
+                        r['c'] = OLD_SV[r['c']]
+        sc = ((d or {}).get('headline') or {}).get('score')
+        if isinstance(sc, dict) and sc.get('card') in OLD_SV:
+            sc['card'] = OLD_SV[sc['card']]
+    meta['version'] = VERSION
+    return metrics
 
 
 INTERNAL_IDS = {'ca_miss_cost': '_CA_COST', 'ca_miss_causes': '_CA_CAUSES', 'ca_miss_traces': '_CA_TRACE'}   # folded into CX8
@@ -5560,7 +5602,7 @@ def write_digest(report, config, out):
     L.append('- ' + ' · '.join(f"{i['label']}: {md_cell(i['value'], i.get('unit'))}" for i in hd['kpis']))
     if hd.get('score'):
         pv = hd['score'].get('prev') or {}
-        L.append(f"- [SV9] Efficiency score: {hd['score']['value']}/100 ({hd['score']['grade']})"
+        L.append(f"- [SV1] Efficiency score: {hd['score']['value']}/100 ({hd['score']['grade']})"
                  + (f", {hd['score']['value'] - pv['value']:+d} since the last report ({pv['date']})" if pv else '') + " · "
                  + ' · '.join(f"{x['label']} {x['score']} ({x['grade']})" for x in hd['score']['areas']))
     for i in hd['insights']:
@@ -5590,7 +5632,7 @@ def write_digest(report, config, out):
         cards = data.get(sc['id'], {}).get('cards', {})
         hero = data.get(sc['id'], {}).get('headline', {}).get('hero', {})
         L += [f"### Scope `{sc['id']}` — {sc['label']} ({f_usd(hero.get('value'))})", '']
-        for cid in ('SV9', 'OV2', 'OV3', 'SV1', 'CX7', 'CX8', 'CX1', 'EX2', 'EX5', 'OV8'):
+        for cid in ('SV1', 'OV2', 'OV3', 'SV2', 'CX7', 'CX8', 'CX1', 'EX2', 'EX5', 'OV8'):
             c = cards.get(cid)
             if c and not c.get('empty'):
                 kp = next((b for b in c['blocks'] if b['kind'] == 'kpis'), None)

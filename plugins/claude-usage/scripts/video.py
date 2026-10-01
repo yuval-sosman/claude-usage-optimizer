@@ -6,7 +6,7 @@
   python3 video.py check  [--out DIR]                 check the storyboard: schema, 30–60 s, ids, numbers, no names
   python3 video.py render [--out DIR] [--no-mp4] [--open] [--stills 3,20] [--fps 30] [--scale 2]
 
-The storyboard names what each scene shows (tiles, a miss trace, insight and optimization ids, SV1 levers); every figure
+The storyboard names what each scene shows (tiles, a miss trace, insight and optimization ids, SV2 levers); every figure
 comes from data/metrics.json, insights.json and optimizations.json, and a number typed into a headline must match one of
 them. render writes <out>/video/video.html (plays by itself, works offline) and, with a Chromium-based browser and ffmpeg
 installed, <out>/video/claude-usage-video.mp4 (1080 x 1080, H.264). Standard library only.
@@ -92,7 +92,7 @@ class Data:
         p = layout.data(out, 'metrics.json')
         if not os.path.exists(p):
             sys.exit(f'No report data in {UR.tilde(layout.data_dir(out))}: run /claude-usage:report first.')
-        self.metrics = read_json(p)
+        self.metrics = UR.current_ids(read_json(p))        # a report from before the SV renumbering, under today's ids
         meta = self.metrics.get('meta') or {}
         self.generated, self.range = meta.get('generated'), meta.get('range') or {}
         top = (self.metrics.get('data') or {}).get('all') or {}
@@ -162,11 +162,11 @@ class Data:
                 for lbl in ('Cache misses', 'Extra cost of misses', 'Share of spend') if lbl in k]
 
     def tip(self, cause):
-        row = next((r for r in self.table('SV3') if r.get('k') == cause and r.get('h')), None)
+        row = next((r for r in self.table('SV4') if r.get('k') == cause and r.get('h')), None)
         return (row['h'][0].upper() + row['h'][1:] + ('' if row['h'].endswith('.') else '.')) if row else None
 
     def levers(self):
-        rows = [r for r in self.table('SV1') if (r.get('u') or 0) > 0]
+        rows = [r for r in self.table('SV2') if (r.get('u') or 0) > 0]
         return [{'id': r['l'], 'usd': r['u'], 'month': r.get('mo') or r['u'] * 30 / max(self.days, 1), 'share': r.get('s')}
                 for r in sorted(rows, key=lambda r: -r['u'])]
 
@@ -295,7 +295,7 @@ def facts(D):
     for r in D.models():
         add(r['usd'], r['share'])
     add(*[t['pct'] for t in D.tokens()])
-    for cid in ('CX8', 'OV2', 'OV3', 'OV8', 'SV1', 'SV3', 'CX7'):
+    for cid in ('CX8', 'OV2', 'OV3', 'OV8', 'SV2', 'SV4', 'CX7'):
         add(*[k['value'] for k in D.kpis(cid).values()])
     for t in D.traces():
         v = trace_view(t)
@@ -305,7 +305,7 @@ def facts(D):
         clocks.update([v['prev_end'], v['expiry'], v['start']])
     for r in D.levers():
         add(r['usd'], r['month'], r['share'])
-    for r in D.table('SV3'):
+    for r in D.table('SV4'):
         add(r.get('u'), r.get('mo'), r.get('n'))
     for i in D.insight_items():
         sv = i['savings']
@@ -401,7 +401,7 @@ def resolve(s, D):
     elif t == 'levers':
         avail = D.levers()
         if len(avail) < 2:
-            raise ValueError('the report has fewer than 2 levers with a saving (SV1)')
+            raise ValueError('the report has fewer than 2 levers with a saving (SV2)')
         r['items'] = [{'title': x.get('title') or a['id'], 'usd': a['usd'], 'month': a['month']} for x, a in pick(avail, 'lever', default_n=4)]
     elif t == 'optimizations':
         if not D.opts:

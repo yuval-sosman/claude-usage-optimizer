@@ -137,7 +137,7 @@ The notes, for example:
     "mcp-off-where-unused": {"insights": ["tooling-unused-listings", "cache-tool-list-changes"]}
   },
   "add": [{"id": "compact-keep-list", "title": "Tell compaction what to keep", "category": "context", "kind": "claude_md",
-           "problem": "…", "what_it_does": "…", "questions": ["SV4", "CX4"], "effort": "one-click", "risk": "low",
+           "problem": "…", "what_it_does": "…", "questions": ["SV5", "CX4"], "effort": "one-click", "risk": "low",
            "apply": {"summary": "…", "steps": [{"action": "append_text", "path": "~/.claude/CLAUDE.md", "marker": "compact-keep",
                      "content": "- When compacting, keep the files changed, the test commands and the open decisions.\n"}]},
            "manual": ["…"], "undo": "…", "docs": [{"title": "Best practices", "url": "https://code.claude.com/docs/en/best-practices"}]}],
@@ -146,7 +146,7 @@ The notes, for example:
 }
 ```
 
-- `summary` (required): lead with the Start here items (those marked `first`: the cache-lifetime pin, whenever SV5 supports
+- `summary` (required): lead with the Start here items (those marked `first`: the cache-lifetime pin, whenever SV6 supports
   it), then name the choices ("X or Y: I'd pick X"), give overlapping savings as a range or the larger one, never a sum, and
   say which savings are upper bounds. Where a documented habit does the same job as
   a setting (/clear between unrelated tasks, /compact at natural breaks), say it next to the setting. The tab shows the first

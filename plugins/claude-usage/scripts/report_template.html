@@ -216,7 +216,7 @@ main { min-width: 0; }
 .kstrip.n4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .kstrip.n3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
-/* ---- Efficiency score (SV9, and its summary beside the cost): a 1–100 bar and a school grade, A+ down to C ---- */
+/* ---- Efficiency score (SV1, and its summary beside the cost): a 1–100 bar and a school grade, A+ down to C ---- */
 .g-a { --g: var(--status-good); --dc: var(--status-good); }
 .g-b { --g: var(--status-warning); --dc: var(--status-warning); }
 .g-c { --g: var(--status-serious); --dc: var(--status-serious); }
@@ -3473,7 +3473,7 @@ function scrollToCard(id) {
   closeToc();
 }
 
-/* ---- the efficiency score: SV9's block, and its summary in the headline ---- */
+/* ---- the efficiency score: SV1's block, and its summary in the headline ---- */
 function gradeCls(g) { var c = String(g || '').charAt(0).toLowerCase(); return 'g-' + (c === 'a' || c === 'b' ? c : 'c'); }
 function gradePill(g, big) { return h('span', { class: 'grade ' + gradeCls(g) + (big ? ' lg' : ''), text: g || '—' }); }
 function scoreNum(v) { return h('div', { class: 'sc-num' }, document.createTextNode(isNum(v) ? String(v) : '—'), h('small', { text: '/100' })); }
@@ -3524,7 +3524,7 @@ function scoreHelp(id, scale, grade, areas, right) {
   }, right ? 'pop-right' : null);
 }
 function scoreDelta(x) {
-  // how the score moved since the last report (SV9's progress), or nothing when there is no earlier report
+  // how the score moved since the last report (SV1's progress), or nothing when there is no earlier report
   var p = x && x.prev;
   if (!p || !isNum(p.value) || !isNum(x.value)) return null;
   var d = x.value - p.value;
@@ -3554,7 +3554,7 @@ function scoreBlock(b) {
   return root;
 }
 function scoreSummary(sc) {
-  // beside the cost: the score, its grade and bar, every area's grade, and the way to SV9
+  // beside the cost: the score, its grade and bar, every area's grade, and the way to SV1
   var box = h('div', { class: 'hscore' });
   box.append(h('div', { class: 'l' }, h('span', { text: 'Efficiency score' }), scoreHelp('score-help-head', sc.scale, sc.grade, sc.areas, true)),
     h('div', { class: 'sc-head' }, scoreNum(sc.value), gradePill(sc.grade, true)),
@@ -3565,7 +3565,7 @@ function scoreSummary(sc) {
   (sc.areas || []).forEach(function (a) {
     chips.append(h('span', { class: 'dot ' + gradeCls(a.grade), text: a.label + ' ' + a.grade, title: a.label + ': ' + a.score + '/100' }));
   });
-  box.append(chips, h('div', { class: 'foot' }, cardLinkEl(sc.card || 'SV9', 'Where the points went'), scoreRef(sc)));
+  box.append(chips, h('div', { class: 'foot' }, cardLinkEl(sc.card || 'SV1', 'Where the points went'), scoreRef(sc)));
   return box;
 }
 
