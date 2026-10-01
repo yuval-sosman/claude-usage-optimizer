@@ -9,6 +9,7 @@
   <out>/share/                 /claude-usage:share: the one-file copies of the report you made to send (share.py pack)
   <out>/received/<name>/       share files others sent you, unpacked into report folders (share.py unpack)
   <out>/company/               /claude-usage:company: many people's share files combined (company.py build): report.html, data/
+  <out>/history/scores.json    each report run's high-level scores (one entry a day): the next report shows your progress
 
 Older versions wrote everything flat into <out>; migrate() moves those files into place (once, on the next run).
 The folder holds private data (prompt snippets, paths, your setup): prepare() refuses one that isn't this plugin's (home,
@@ -26,6 +27,7 @@ VIDEO = 'video'
 SHARE = 'share'
 RECEIVED = 'received'
 COMPANY = 'company'
+HISTORY = 'history'
 DATA_FILES = ('metrics.json', 'digest.md', 'config.json',
               'calls.csv', 'tool_calls.csv', 'sessions.csv', 'subagents.csv', 'cache_misses.csv')
 MARKER = '.claude-usage'         # in every folder this plugin writes a report into: it is safe to write and tidy there
@@ -119,6 +121,10 @@ def received(out, name):
 
 def company(out):
     return os.path.join(out, COMPANY)
+
+
+def history(out):
+    return os.path.join(out, HISTORY, 'scores.json')
 
 
 def require_report(out):

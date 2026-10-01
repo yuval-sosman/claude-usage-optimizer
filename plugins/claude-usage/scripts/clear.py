@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Remove this plugin's files from the report folder, to start from scratch.
 
-  python3 clear.py [--out DIR] [--claude-dir DIR] [--keep video,share,received,company]    show what would go (changes nothing)
+  python3 clear.py [--out DIR] [--claude-dir DIR] [--keep video,share,received,company,history]    show what would go
   python3 clear.py --yes [the same options]                                                  remove it
 
 It removes only what this plugin writes, by name, and only in a claude-usage report folder (layout.is_report_dir, never
 home, the filesystem root or the Claude folder): report.html, insights.json and optimizations.json, data/ (the numbers,
 CSVs and the notes Claude wrote), video/, share/ (the share files you made), received/ (reports others sent you),
-company/ (the company report), and the files an older version left flat in the folder. Anything else there stays. When
+company/ (the company report), history/ (your scores from earlier reports, which the next report's progress compares
+against), and the files an older version left flat in the folder. Anything else there stays. When
 nothing is left but the folder's marker, the folder goes too, and the next report starts a new one.
 
 applied/ (apply.py's record and backups) stays while any optimization is applied, so `apply.py undo <id>` keeps working:
@@ -31,8 +32,8 @@ FILES = {'report.html': 'the report page', 'insights.json': 'the Insights tab (w
          'optimizations.json': 'the Optimizations tab (written by Claude)'}
 FOLDERS = {layout.DATA: 'the numbers, CSVs and notes the report is built from', layout.VIDEO: 'your highlights video',
            layout.SHARE: 'the share files you made', layout.RECEIVED: 'reports others sent you',
-           layout.COMPANY: 'the company report'}
-KEEPABLE = (layout.VIDEO, layout.SHARE, layout.RECEIVED, layout.COMPANY)       # what --keep can spare
+           layout.COMPANY: 'the company report', layout.HISTORY: 'your scores from earlier reports (your progress)'}
+KEEPABLE = (layout.VIDEO, layout.SHARE, layout.RECEIVED, layout.COMPANY, layout.HISTORY)       # what --keep can spare
 LEGACY = layout.DATA_FILES + ('candidates.json', 'notes-insights.json', 'notes-optimizations.json')   # flat, from older versions
 APPLIED = (layout.APPLIED, 'applied.json', 'backups')      # apply.py's record: applied/, or flat from an older version
 JUNK = ('.DS_Store', 'Thumbs.db', 'desktop.ini')           # a file manager's own files: they go with the folder

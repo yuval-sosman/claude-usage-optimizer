@@ -19,7 +19,7 @@ dollars each change would have saved so far. Nothing leaves your machine.
 
 - **Report:** 63 questions, each answered with numbers and charts: cost by model, project and day, cache hits and misses,
   context growth, sessions, subagents, tools, hooks, and a step-by-step timeline of every costly cache miss.
-- **Efficiency score:** one number from 1 to 100 beside your cost, with a school grade (A+ down to C) for it and for each
+- **Efficiency score:** one number from 1 to 100 beside your cost, with a school grade (A+ down to C-) for it and for each
   area: context, caching, subagents, hooks and setup. Every point lost is 1% of spend that Claude Code's documented
   practices would have saved, overlaps removed, so the grades show where to start; All projects compares your projects.
 - **Insights:** Claude reads the numbers and writes the bottom lines, cost first. Each one links to the charts behind it
@@ -30,6 +30,17 @@ dollars each change would have saved so far. Nothing leaves your machine.
   sized with your numbers, so a replay's saving never talks it into something the docs advise against (such as compacting
   every few turns: a 1M-context cap stays at 400K). The ones a script can make apply with one command you run yourself, with
   a diff preview, a backup and an undo. Claude never changes your setup.
+
+## Watch your progress
+
+**Every report remembers your scores, so the next one shows how much you improved.** Each `/claude-usage:report` run
+saves your high-level numbers: the efficiency score and its grade, each area's score, spend per 30 days and the cache hit
+rate. The next report shows the change beside your score ("+4 points since your last report") and charts every report in
+the efficiency score card, with a table of each run. Apply a change, keep working, run the report again in a week or two,
+and see whether it paid off.
+
+The history stays on your machine, in `~/.claude-usage/history/`: one entry a day (a second run the same day replaces it),
+and a report of a past period (`--until`) isn't saved. `/claude-usage:clear` starts it over; add `--keep history` to keep it.
 
 ## Install
 
@@ -97,9 +108,9 @@ Undo:  python3 …/claude-usage/scripts/apply.py undo subagents-on-sonnet --dir 
 ## A look inside
 
 <details open>
-<summary><b>Efficiency score</b>: 1 to 100, with a grade for each area</summary>
+<summary><b>Efficiency score</b>: 1 to 100, a grade for each area, and your progress</summary>
 
-![The efficiency score: the overall score and grade on a bar with the grade bands, and each area's score, grade and the change that would have saved its points](plugins/claude-usage/docs/images/score.png)
+![The efficiency score: the overall score and grade on a bar with the grade bands, each area's score, grade and the change that would have saved its points, and your progress report by report](plugins/claude-usage/docs/images/score.png)
 </details>
 
 <details open>
@@ -171,7 +182,7 @@ Each question, how it's counted and how to check it: [docs/QUESTIONS.md](plugins
 | `/claude-usage:video` | what to highlight, e.g. `cache misses and savings` · `--seconds 30-60` · `--no-mp4` |
 | `/claude-usage:share` | `--name NAME` · `--team TEAM` · `--no-open` · `open FILE`: open a share file someone sent you |
 | `/claude-usage:company` | `<folder of share files>` · `--since YYYY-MM-DD` · `--until YYYY-MM-DD` · `--no-open` |
-| `/claude-usage:clear` | `--yes` (skip the question) · `--keep video,share,received,company` · `--out DIR` |
+| `/claude-usage:clear` | `--yes` (skip the question) · `--keep video,share,received,company,history` · `--out DIR` |
 
 ```text
 /claude-usage:report --days 30
@@ -218,7 +229,7 @@ opens the report you already have (or the company report, or one someone sent yo
 says when its numbers were counted and whether its insights and optimizations are current. A page older than the files
 it is built from (or than the plugin's page, after an update) is built again from them first; the numbers stay the same.
 
-**Starting from scratch**: `python3 $S/clear.py [--yes] [--keep video,share,received,company] [--out DIR]` shows what it
+**Starting from scratch**: `python3 $S/clear.py [--yes] [--keep video,share,received,company,history] [--out DIR]` shows what it
 would remove from the report folder, and removes it with `--yes`: only this plugin's own files, never your settings or
 transcripts. `applied/` stays while an optimization is applied, so `apply.py undo` keeps working.
 
@@ -364,6 +375,7 @@ where Claude Code guards every write. To change it, pass `--out DIR`, or set `CL
 ├── share/               /claude-usage:share: the one-file copies of your report you made to send
 ├── received/            share files others sent you, each unpacked into its own report folder
 ├── company/             /claude-usage:company: many people's share files combined (report.html, data/)
+├── history/             scores.json: each report's high-level scores, which the next report's progress compares against
 └── applied/             once you apply something: applied.json and backups/
 ```
 </details>

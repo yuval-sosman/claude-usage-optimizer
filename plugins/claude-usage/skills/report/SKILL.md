@@ -126,7 +126,8 @@ The notes, for example:
 }
 ```
 
-- `summary` (required): 3–5 sentences, cost first: total spend, the efficiency score and grade (SV9), the two or three
+- `summary` (required): 3–5 sentences, cost first: total spend, the efficiency score and grade (SV9) and, when SV9 shows
+  one, its change since the last report, the two or three
   biggest levers with their savings (all time and per 30 days), one sentence on what already works well, and that dollars
   are list-price equivalents. At most 900
   characters (the schema's limit; aim for ~600).

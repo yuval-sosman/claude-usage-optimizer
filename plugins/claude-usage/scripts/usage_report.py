@@ -1621,6 +1621,7 @@ class G:
         self.src, self.prices, self.scope, self.model_slots = src, prices, scope, model_slots
         self.is_all = scope['kind'] == 'all'
         self.where = {}
+        self.history = []                # earlier runs' scores (read_history), all projects only: SV9's progress
 
     def slot(self, model):
         return self.model_slots.get(model)
@@ -3359,7 +3360,8 @@ SCORE_AREAS = [   # (id, name, points, SV1 levers, what it grades): an area's le
     ('hooks', 'Hooks', 15, ('stop_hook',), 'Stop hooks that send Claude back to work'),
     ('setup', 'Setup', 10, ('unused',), 'loading only the skills, MCP servers and agent types you use'),
 ]
-GRADES = (('A+', 95), ('A', 90), ('A-', 85), ('B+', 80), ('B', 75), ('B-', 70), ('C+', 65), ('C', 0))   # like school: A+ down to C
+GRADES = (('A+', 88), ('A', 82), ('A-', 76), ('B+', 70), ('B', 64), ('B-', 58), ('C+', 50), ('C', 40), ('C-', 0))   # like school,
+# A+ down to C-, and generous: a C grade means more than 42% of spend was avoidable
 
 
 def grade_of(score):
@@ -3402,13 +3404,33 @@ def sv9(m, g):
         return card('SV9', q, 'T P', [], empty='No API calls in this scope.')
     e = efficiency(m)
     areas = e['areas']
-    m.facts['score'] = dict(value=e['score'], grade=e['grade'], card='SV9',
-                            areas=[dict(label=a['label'], score=a['score'], grade=a['grade']) for a in areas])
+    m.facts['score'] = dict(value=e['score'], grade=e['grade'], card='SV9', scale=[[g_, lo] for g_, lo in GRADES],
+                            areas=[dict(label=a['label'], score=a['score'], grade=a['grade'], points=a['points']) for a in areas])
     worst = max(areas, key=lambda a: a['lost'])
     rows = [dict(a=a['label'], s=a['score'], g=a['grade'], l=r1(a['lost']), p=a['points'],
                  u=r2(a['lever']['usd']) if a['lever'] else 0.0, mo=r2(per_month(m, a['lever']['usd'])) if a['lever'] else 0.0,
                  sh=r1(100 * a['share']), v=a['lever']['label'] if a['lever'] else 'nothing to save', c=a['lever']['card'] if a['lever'] else '',
                  w=a['what'], id=a['id']) for a in areas]
+    today = dt.datetime.now().strftime('%Y-%m-%d')
+    prev = [r for r in g.history if r['generated'][:10] < today]       # earlier days: a run again today replaces today's entry
+    progress = []
+    if prev:
+        last = prev[-1]
+        m.facts['score']['prev'] = dict(value=last['score'], grade=last.get('grade'), date=last['generated'][:10])
+        now_ = dict(generated=today, start=day(min(c['t0'] for c in m.real)), end=day(max(c['t1'] for c in m.real)),
+                    days=r2(span_days(m)), score=e['score'], grade=e['grade'], spend_30d=r2(per_month(m, m.usd)),
+                    hit_rate=r1(hit_rate(m.real)))                  # CX7 sets the fact later: computed the same way
+        runs = prev[-11:] + [now_]
+        rows = []
+        for i, r in enumerate(runs):
+            ch = r['score'] - runs[i - 1]['score'] if i else None
+            rows.append(dict(d=r['generated'][:10], p=f"{r.get('start') or '?'} → {r.get('end') or '?'}", s=r['score'], g=r.get('grade') or '',
+                             c='' if ch is None else 'no change' if not ch else f'{ch:+d}', u=r.get('spend_30d'), h=r.get('hit_rate')))
+        progress = [LINE([r['d'] for r in rows], [S('Efficiency score', [r['s'] for r in rows], 1)], 'count',
+                         title='Your efficiency score, report by report'),
+                    TABLE([('d', 'Report', 'date'), ('p', 'Period', None), ('s', 'Score', 'count'), ('g', 'Grade', None),
+                           ('c', 'Change', None), ('u', 'Spend per 30 days', 'usd'), ('h', 'Cache hit rate', 'pct')],
+                          rows[::-1], 'Your progress, newest first', limit=6)]
     blk = {'kind': 'score', 'label': 'Efficiency score', 'value': e['score'], 'grade': e['grade'],
            'sub': (f"Claude Code's documented practices would have saved {f_pct(e['lost'])} of spend, overlaps removed"
                    if e['lost'] >= 0.5 else "No documented practice would have saved anything here"),
@@ -3417,23 +3439,69 @@ def sv9(m, g):
                           points=a['points'], lever=a['lever']['label'] if a['lever'] else None,
                           card=a['lever']['card'] if a['lever'] else None, usd=r2(a['lever']['usd']) if a['lever'] else 0.0,
                           share=r1(100 * a['share'])) for a in areas]}
+    if prev:
+        blk['prev'] = dict(m.facts['score']['prev'])
     return card('SV9', q, 'T P', [
-        blk,
+        blk, *progress,
         dict(TABLE([('a', 'Area', None), ('s', 'Score', 'count'), ('g', 'Grade', None), ('l', 'Points lost', 'count'),
                     ('p', 'Of', 'count'), ('u', 'Saved, all time', 'usd'), ('mo', 'Per 30 days', 'usd'), ('sh', 'Share of spend', 'pct'),
                     ('v', 'Lever', None), ('c', 'Details', None), ('w', 'What it grades', None)], rows, 'By area'), hidden=True)],
         why='One number for how close your use came to Claude Code\'s documented practices: at 100 none of them would have saved '
             'anything, and every point below is 1% of spend they would have saved.',
-        insight=(f"Efficiency score {e['score']}/100 ({e['grade']}): the documented practices would have saved {f_pct(e['lost'])} of "
+        insight=((f"Efficiency score {e['score']}/100 ({e['grade']}): the documented practices would have saved {f_pct(e['lost'])} of "
                  f"spend, overlaps removed. Most points went to {worst['label']} ({worst['grade']}): "
                  f"{worst['lever']['label']}, about {f_save(m, worst['lever']['usd'])} ({worst['lever']['card']}).")
-                if worst['lever'] and e['lost'] >= 0.5 else f"Efficiency score {e['score']}/100 ({e['grade']}).",
+                if worst['lever'] and e['lost'] >= 0.5 else f"Efficiency score {e['score']}/100 ({e['grade']}).")
+                + (f" Since your last report ({prev[-1]['generated'][:10]}) it went from {prev[-1]['score']} to {e['score']}"
+                   f" ({e['score'] - prev[-1]['score']:+d})." if prev else ''),
         note='Each area loses points for the share of spend its largest lever would have saved (SV1, each priced on its own, as if '
              'applied from the first day). The areas combine as the changes would: each saves its share of what the others leave, '
              'so overlaps count once and the points lost add up to 100 minus the score. An area\'s score is the points it kept, out '
              'of its points (Context 35, Caching 25, Subagents 15, Hooks 15, Setup 10). The main-thread model is not graded: the right '
-             'model depends on the work, and SV6 compares models. Stop-hook work is an upper bound. Grades: A+ 95–100, A 90–94, '
-             'A- 85–89, B+ 80–84, B 75–79, B- 70–74, C+ 65–69, C below 65.')
+             'model depends on the work, and SV6 compares models. Stop-hook work is an upper bound. Grades: A+ 88–100, A 82–87, '
+             'A- 76–81, B+ 70–75, B 64–69, B- 58–63, C+ 50–57, C 40–49, C- below 40.')
+
+
+HISTORY_KEEP = 200       # report runs kept in <OUT>/history/scores.json, one a day
+
+
+def read_history(out):
+    """The earlier runs' high-level scores (layout.history), oldest first; [] when there are none or the file can't be read."""
+    try:
+        with open(layout.history(out), encoding='utf-8') as fh:
+            runs = json.load(fh)
+    except (OSError, ValueError):
+        return []
+    if not isinstance(runs, list):
+        return []
+    return [dict(r, score=half_up(r['score'])) for r in runs if isinstance(r, dict) and isinstance(r.get('generated'), str)
+            and isinstance(r.get('score'), (int, float)) and not isinstance(r.get('score'), bool)]
+
+
+def run_snapshot(report):
+    """This run's high-level scores, all projects: what the next run's progress compares against."""
+    hd = (report['data'].get('all') or {}).get('headline') or {}
+    sc, hero, days = hd.get('score') or {}, hd.get('hero') or {}, hd.get('days') or 0
+    k = {i['label']: i['value'] for i in hd.get('kpis') or []}
+    spend = hero.get('value')
+    return {'generated': report['meta']['generated'], 'start': report['meta']['range']['start'], 'end': report['meta']['range']['end'],
+            'days': days, 'score': sc.get('value'), 'grade': sc.get('grade'),
+            'areas': {a['label']: a['score'] for a in sc.get('areas') or []},
+            'spend': spend, 'spend_30d': r2(spend * 30 / days) if days and isinstance(spend, (int, float)) else None,
+            'hit_rate': k.get('Cache hit rate'), 'peak_context': k.get('Median peak context')}
+
+
+def save_history(out, runs, snap):
+    """Add this run to the history; a run on a day that already has one replaces it. Written whole, atomically."""
+    if not isinstance(snap.get('score'), (int, float)):
+        return
+    runs = sorted([r for r in runs if r['generated'][:10] != snap['generated'][:10]] + [snap], key=lambda r: r['generated'])
+    p = layout.history(out)
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    tmp = p + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as fh:
+        json.dump(runs[-HISTORY_KEEP:], fh, indent=1, ensure_ascii=False)
+    os.replace(tmp, p)
 
 
 # ------------------------------------------------------------------------------------------ CX: context & caching
@@ -5206,7 +5274,7 @@ def clean(x):
     return x
 
 
-def build(src, prices, log):
+def build(src, prices, log, history=None):
     scopes = src.scopes()
     TRACES.clear()
     all_m = Model(src, src.recs, prices)
@@ -5229,6 +5297,7 @@ def build(src, prices, log):
         g = G(src, prices, sc, slots)
         g.snaps = snaps                  # prompt snapshots from every project: a scope may have none of its own
         g.where = where                  # what is used in some projects and only loaded in others (all projects)
+        g.history = (history or []) if g.is_all else []
         cards = {}
         for f in CARDS:
             try:
@@ -5361,7 +5430,10 @@ def md_card(c, full=True, rows=6):
     for b in blocks:
         k = b.get('kind')
         if k == 'score':
-            out.append(f"- {b['label']}: {b['value']}/100 ({b['grade']}); {b['sub']}. By area (score, grade, points lost of its points): "
+            p_ = b.get('prev') or {}
+            out.append(f"- {b['label']}: {b['value']}/100 ({b['grade']})"
+                       + (f", {b['value'] - p_['value']:+d} since the last report ({p_['date']}: {p_['value']}, {p_.get('grade')})" if p_ else '')
+                       + f"; {b['sub']}. By area (score, grade, points lost of its points): "
                        + '; '.join(f"{a['label']} {a['score']} ({a['grade']}, {a['lost']:.1f} of {a['points']}"
                                    + (f": {a['lever']}, {md_cell(a['usd'], 'usd')} = {md_cell(a['share'], 'pct')} of spend, {a['card']}"
                                       if a.get('lever') else '') + ')' for a in b['areas']))
@@ -5487,7 +5559,9 @@ def write_digest(report, config, out):
     hd = data['all']['headline']
     L.append('- ' + ' · '.join(f"{i['label']}: {md_cell(i['value'], i.get('unit'))}" for i in hd['kpis']))
     if hd.get('score'):
-        L.append(f"- [SV9] Efficiency score: {hd['score']['value']}/100 ({hd['score']['grade']}) · "
+        pv = hd['score'].get('prev') or {}
+        L.append(f"- [SV9] Efficiency score: {hd['score']['value']}/100 ({hd['score']['grade']})"
+                 + (f", {hd['score']['value'] - pv['value']:+d} since the last report ({pv['date']})" if pv else '') + " · "
                  + ' · '.join(f"{x['label']} {x['score']} ({x['grade']})" for x in hd['score']['areas']))
     for i in hd['insights']:
         L.append(f"- [{i['card']}] {i['text']}")
@@ -5660,7 +5734,8 @@ def main(argv=None):
     ALIASES.update(model_aliases(prices, [src.settings, src.local_settings]
                                  + [js for f in src.project_settings.values() for js in f.values()]))
     log('Computing…')
-    scopes, results, all_m = build(src, prices, log)
+    history = [] if a.until else read_history(a.out)      # a past period (--until) is no part of your progress
+    scopes, results, all_m = build(src, prices, log, history)
     rng = (min(c['t0'] for c in all_m.real), max(c['t1'] for c in all_m.real)) if all_m.real else (None, None)
     notes = ['Every number comes from counting your local transcripts — no LLM was involved.',
              'Dollars are API list-price equivalents (tokens × prices.json). ' + (prices.source or '')]
@@ -5718,6 +5793,11 @@ def main(argv=None):
     with open(layout.data(a.out, 'config.json'), 'w', encoding='utf-8') as fh:
         json.dump(config, fh, indent=1, ensure_ascii=False)
     write_digest(report, config, a.out)
+    if not a.until:
+        try:    # this run's scores, for the next report's progress; a failure here must not sink the report
+            save_history(a.out, history, run_snapshot(report))
+        except (OSError, KeyError, TypeError) as e:
+            log(f'  ! the score history was not saved ({e})')
     try:        # the catalog's drafts for the report and optimize skills; a failure there must not sink the report
         sys.modules.setdefault('usage_report', sys.modules[__name__])      # candidates.py imports this module: reuse it
         import candidates

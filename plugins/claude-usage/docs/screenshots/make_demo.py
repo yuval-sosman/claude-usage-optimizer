@@ -442,6 +442,23 @@ def main():
                               'linear': {'type': 'http', 'url': 'https://mcp.linear.app/mcp'}}, 'projects': {}},
               open(os.path.join(CLAUDE, '.claude.json'), 'w'), indent=2)
     print('%d sessions written under %s' % (n, CLAUDE))
+    history()
+
+
+def history():
+    """Three made-up earlier reports in the report folder's score history, so the next report shows progress (SV9)."""
+    out = os.path.join(HOME, '.claude-usage')
+    os.makedirs(os.path.join(out, 'history'), exist_ok=True)
+    with open(os.path.join(out, '.claude-usage'), 'w') as fh:            # the report folder's marker (layout.MARKER)
+        fh.write('This folder holds claude-usage reports (private data: prompt snippets, paths, your setup).\n')
+    runs = []
+    for end, score, grade, spend, hit in (('2026-09-07', 72, 'B+', 275.0, 91.5), ('2026-09-14', 77, 'A-', 262.0, 92.2),
+                                          ('2026-09-21', 81, 'A-', 255.0, 92.6)):
+        start = (dt.date.fromisoformat(end) - dt.timedelta(days=DAYS - 1)).isoformat()
+        runs.append({'generated': end + ' 09:30:00', 'start': max(start, FIRST.date().isoformat()), 'end': end, 'days': 60,
+                     'score': score, 'grade': grade, 'spend_30d': spend, 'hit_rate': hit})
+    with open(os.path.join(out, 'history', 'scores.json'), 'w') as fh:
+        json.dump(runs, fh, indent=1)
 
 
 main()

@@ -7,7 +7,7 @@
 <sub>Demo data. Watch as video: [25-second cut](../../promo/claude-usage-short.mp4) · [full 53-second tour](../../promo/claude-usage-video.mp4).</sub>
 
 Reads your local Claude Code transcripts, answers 63 questions about cost, caching, context and habits, scores how
-efficiently you work (1 to 100, with a grade from A+ to C for each area), and has Claude
+efficiently you work (1 to 100, with a grade from A+ to C- for each area, and your progress since the last report), and has Claude
 write what to change, with the dollars each change would have saved so far. The changes follow Claude Code's documented best
 practice; your numbers decide which apply and how much they are worth. Nothing leaves your machine.
 
