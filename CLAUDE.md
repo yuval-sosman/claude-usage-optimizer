@@ -20,9 +20,12 @@ A third skill, `/claude-usage:brainstorm`, talks the data through with the user 
 `/claude-usage:video`, turns the report into a 30–60 s video of the user's highlights to share (an MP4 and a self-playing
 HTML page, in the promo videos' style). A fifth, `/claude-usage:share`, packs the whole report folder into one JSON file
 to send to whoever collects and compares usage, and (`open FILE`) unpacks one someone sent back into a report folder. A
-sixth, `/claude-usage:company <folder>`, combines many people's share files into one company report and summarises it.
-`optimize`, `brainstorm`, `video`, `share` and `company` are manual-only (`disable-model-invocation: true`); `report` can
-also be triggered by the model.
+sixth, `/claude-usage:company <folder>`, combines many people's share files into one company report and summarises it. A
+seventh, `/claude-usage:clear`, removes the plugin's files from the report folder to start from scratch (the setup stays).
+An eighth, `/claude-usage:open`, opens a report that already exists (yours, the company report, or a received one) without
+counting again. `optimize`, `brainstorm`, `video`, `share`, `company`, `clear` and `open` are manual-only
+(`disable-model-invocation: true`); `report` can also be triggered by the model, and when it is asked in words only to
+open the report, it runs open.py instead of building.
 
 `docs/CATALOG.md` and `docs/lib.sh` hold the original jq extraction commands; QUESTIONS.md cites them by catalog id (e.g. `[B06]`).
 The engine doesn't use them. The gotchas table at the top of CATALOG.md (G1–G9) still applies to any new counting. The main one:
@@ -79,6 +82,17 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
                       rendered with meta.shared set, so render() leaves out the apply commands. Refuses a folder
                       holding the user's own report.
 
+  open.py           opens <OUT>/report.html (or company/, or a received/<name>/ by part of its name or the sender's) in
+                    the browser, at --tab or --show ID (a card: #q=, an insight or optimization: #tab=…&focus=), and prints
+                    when the numbers were counted and whether insights/optimizations are current (their source stamps).
+                    Writes nothing, except report.html rebuilt by render() when it is older than metrics.json,
+                    insights.json, optimizations.json or the template (a plugin update), in a folder unsafe_out() accepts.
+
+  clear.py          removes <OUT>'s own files by name (FILES/FOLDERS/LEGACY: report.html, insights.json, optimizations.json,
+                    data/, video/, share/, received/, company/, flat files from older versions), then the folder when only
+                    its marker is left. A preview by default; --yes removes; --keep spares video/share/received/company.
+                    applied/ stays while apply.py has any optimization on record. skills/clear previews, asks once, removes.
+
   company.py build <folder>  → <OUT>/company/ (or --to): report.html (report_template.html with company cards: CO company,
                       PE people, LV levers; scopes = Company + one per person; meta.views ['report'], scope_label, and
                       shared.company, so no apply commands and apply.py refuses it), data/metrics.json, data/digest.md
@@ -102,6 +116,12 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
     policy files and restores only from `<OUT>/applied/backups/` (applied.json is a plain file). validate.py applies the
     same checks at assemble time. A new catalog entry that needs another key or file: widen policy.py deliberately, never
     around it.
+- **clear.py removes only this plugin's own files.** By name (FILES/FOLDERS/LEGACY), only in a folder that
+  `layout.unsafe_out()` and `is_report_dir()` accept (never home, the root or the Claude folder), links removed as links
+  and never followed, anything unknown left in place. `applied/` stays while any optimization is applied (or its record
+  can't be read), so undo keeps working. It previews unless `--yes`, and it never touches the setup, installed hooks or
+  transcripts; a legacy report inside the Claude folder is only pointed out. A new file or folder in `<OUT>` goes into
+  clear.py's lists too.
 - **Least privilege for skills.** `allowed-tools` pre-approves each script by its full path
   (`Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/x.py" *)`; `${CLAUDE_PLUGIN_ROOT}` expands only in Bash rules), reads only
   `~/.claude-usage/**` (and the plugin's installed reference files), and edits only the one file the skill owns. Never add
@@ -135,7 +155,18 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
   - apply steps pass scripts/policy.py (the same check apply.py makes);
   - optimizations' `related` links are two-sided (except `requires`). Two optimizations that change the same settings key,
     or act on the same cost (`SAME_LEVER`: the main-thread cache lifetime vs the stale-cache guard, auto-compact vs the
-    context guard), must be linked.
+    context guard), must be linked;
+  - no change that Claude Code's best practice rules out (`practice_errs()`): an auto-compact window under 200K (setting or
+    env), a saved `low` effort, thinking off, a context notice under 100K.
+- **Recommendations follow Claude Code's documented best practice; the data aims and sizes them.** A replay's saving never
+  makes a change good practice (the case that started this: SV4's replay started at 60K, so the catalog could propose a 60K
+  context notice and an 80K auto-compact window, below what Claude Code even accepts).
+  `skills/optimize/reference/best-practices.md` holds the verbatim guidance, the "never recommend" list and the digest
+  signals that point to a documented practice; the report, optimize and brainstorm skills read it, and catalog entries
+  encode it (auto-compact only caps a 1M model and never below 200K; effort goes back to the model's documented default,
+  not below; a rarely used skill is listed `name-only`; SV4's thresholds start at 100K). Keep code guards, not prompts,
+  for the hard lines (`practice_errs()`, and policy.py's bounds, which match what Claude Code accepts). When the docs or
+  Claude Code change, update best-practices.md, `claude-code.md`, the catalog and these guards together.
 - **A share file round-trips.** `share.py unpack` of a `pack` gives back metrics.json, insights, optimizations,
   candidates and config equal, and the CSVs byte-identical. It never reads transcripts, and a received report never shows
   apply commands (`meta.shared`; `apply.py apply` refuses one too).
@@ -159,13 +190,15 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
   - `TABLE`.
   - `TABS([(label, block or [blocks])], title, sub, desc, collapsed)`: a collapsible section, one tab shown at a time. With a single tab it is just a collapsible section.
   - `{'kind': 'traces'}`: the step-by-step miss timelines.
+  - `{'kind': 'score'}`: SV9's efficiency score (value, grade, `scale`, `areas`), drawn by the template's `scoreBlock()`;
+    `md_card()` writes it as one line even in a short digest.
 - **Layout flags on a block:**
   - `width: 'half'|'third'` puts consecutive blocks side by side, with dividers.
   - `hidden: True` keeps a block in metrics/digest but doesn't draw it.
   - Chart options: `minBand` + `scrollX` (scrollable bars), `labelUnit`. The template also honours `pointColors`, which it sets itself on the insights chart.
 - **Card-level switches:**
   - `HIDDEN_CARDS` (currently OV6, ME4, ME5, EX10–EX15): computed and kept in the data/digest, not shown, can't be cited.
-  - `CARD_ORDER`: a display position that differs from the id.
+  - `CARD_ORDER`: a display position that differs from the id (SV9 leads its section at 0.5).
   - `CARD_SECTION`: the section a card shows in when it differs from its id's letters (the page's `sectionOf()` and the
     digest's `section_of()` read the card's `section`).
   - `alias`: a hidden card with `alias: '<ID>'` opens that card when it is cited or linked. The template, `validate.py`
@@ -177,6 +210,15 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
   - Most tiles come from `m.facts`, which cards fill in as a side effect (OV1, OV7, CX1, CX7, CX8, CX9…), so a card that sets a fact must run.
   - The two median tiles are read by label from the KPI block of hidden OV6, so renaming those labels blanks the tiles.
   - The headline insights come from the cards listed in `HEADLINE_ORDER`.
+  - Its `score` is SV9's (`m.facts['score']`), drawn beside the cost by `scoreSummary()`; `add_refs()` gives each scope's
+    score (headline and SV9 block) the all-projects value, and `add_scores()` adds All projects' "By project" table after
+    every scope has run.
+- **Efficiency score (SV9):** `efficiency()` combines SV1's levers (`sv_levers()`, by id) into a 1–100 score. `SCORE_AREAS`
+  maps each area to its levers (the largest counts: they act on the same cost) and its points; areas combine as
+  Π(1 − share), like the tabs and the video combine savings; `GRADES` holds the cut-offs (A+ 95 … C below 65). The
+  main-thread model lever is left out on purpose (it compares with the model in use now, so moving to a cheaper model would
+  lower the score). A new SV1 lever goes into an area, or is left out, deliberately: update `SCORE_AREAS`, SV9's note and
+  QUESTIONS.md's SV9 together.
 - **Across scopes:** `where_used()` runs once on all projects in `build()` and reaches every scope as `g.where`: what a
   user-level setting loads everywhere but only some projects use (SV2's "used in some projects" table, `item_origin()`'s
   advice, which never says "switch it off in each project").
@@ -233,7 +275,7 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
 5. The examples in `skills/report/SKILL.md` and `skills/brainstorm/SKILL.md`, and the video: `scripts/video.py` reads OV2
    (the "By model" chart), OV3, CX8 (its KPI labels and traces), SV1, SV3 and the headline tiles by label. And
    `scripts/candidates.py`: its catalog entries and lever bundles cite and read cards by id.
-6. The question count ("62 questions" = every card id in metrics.json, hidden ones included) in the root `README.md`, the plugin's `README.md`, `.claude-plugin/plugin.json`, QUESTIONS.md and the promo videos (`promo/*.html`; re-render their MP4s with `promo/render.mjs`, then the GIFs in both READMEs as its header says). Keep it out of the skills: the report skill's description loads in every session.
+6. The question count ("63 questions" = every card id in metrics.json, hidden ones included) in the root `README.md`, the plugin's `README.md`, `.claude-plugin/plugin.json`, QUESTIONS.md and the promo videos (`promo/*.html`; re-render their MP4s with `promo/render.mjs`, then the GIFs in both READMEs as its header says). Keep it out of the skills: the report skill's description loads in every session.
 7. The user's existing `<OUT>/insights.json` and `optimizations.json`: remap cited ids (`questions`, `evidence[].question`, ids inside text), or regenerate them.
 8. Ids are link targets, so renumbering breaks old links. Prefer hiding (`HIDDEN_CARDS`), folding (`alias`), `CARD_ORDER`
    or, to move a card to another section, `CARD_SECTION` when a stable id matters.
@@ -247,7 +289,9 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
 - `apply.py` and `policy.py` if you add or change a step action, a target file or a settings key (see Invariants).
 - A catalog entry lives in two places that change together: its description in `skills/optimize/reference/catalog.md`
   and its rule, figures, apply template and links in `scripts/candidates.py`. Entries marked (judgment) there are left to
-  Claude with their facts.
+  Claude with their facts. Every entry follows `skills/optimize/reference/best-practices.md` (the report and brainstorm
+  skills link to it there, so moving it means updating their links): the data decides whether it applies and how much it
+  saves, the guidance what the change is. Quote the docs only verbatim, and check the quote against the page.
 - A catalog entry that goes after a cost another entry already targets: give both a **Related** line in
   `skills/optimize/reference/catalog.md` (and the link in candidates.py). If the pair is a setting or bundled hook the
   validator can see, add it to `SAME_LEVER` in validate.py.
@@ -266,6 +310,10 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
   so a pinned native model (`ANTHROPIC_DEFAULT_OPUS_MODEL=claude-opus-4-8`) is never re-priced. Test with a fake Claude
   folder whose transcripts use those ids, and with those variables set to native ids.
 - Installed hooks carry their own copy of prices.json and `_session.py`. They pick up changes only when re-applied (`apply.py undo <id>` then `apply <id>`).
+- A new model or a change in the docs' model tables: `candidates.EFFORT_DEFAULT` (each model's default effort, from
+  model-config), `EFFORT_NOTE`, `EFFORT_CACHE_SAFE` (models whose effort changes keep the cache), `LSP_PLUGINS` (the official
+  code intelligence plugins), the engine's `SUBAGENT_DEFAULT_TYPES` (built-in agent types with no model of their own), and
+  best-practices.md's effort table.
 
 **The video (`skills/video`, `scripts/video.py`, `video_capture.py`, `video_template.html`, `scripts/fonts/`):**
 - A scene type lives in four places: `SECONDS`/`FIELDS`/`resolve()`/`plan()` in video.py, `BUILD` in the template, the
@@ -280,8 +328,8 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
 
 **The share file (`skills/share`, `scripts/share.py`, `schemas/share.schema.json`):**
 - It embeds the report folder's files as they are, so a new card, field or CSV column needs nothing here. A new file in
-  `<OUT>` that the report depends on goes into `pack`, `unpack` and the schema together; a new CSV only into
-  `layout.DATA_FILES` (share.py reads its table list from there).
+  `<OUT>` that the report depends on goes into `pack`, `unpack` and the schema together (and clear.py's lists); a new CSV
+  only into `layout.DATA_FILES` (share.py and clear.py read it from there).
 - Changing the share file's own shape (top-level fields, status values, how tables are stored) raises `format_version`
   (`VERSION` in share.py and the schema's `const`); `unpack` must keep reading older versions and refuses newer ones.
 - Check a change with the round trip: `share.py pack --out <copy of OUT>`, then `unpack` it, compare the files, and
@@ -342,7 +390,10 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
   so with a scratch `<OUT>` add the same rules for it, and for the working copy the rule an installed plugin gets for its
   own reference files (`~/.claude/plugins/cache/claude-usage-optimizer/claude-usage/**`):
   `--allowedTools "Edit(//<scratch>/data/notes-insights.json)" "Read(//<scratch>/**)" "Read(//<repo>/plugins/claude-usage/**)"`.
-  Check `permission_denials` in the result: only what the skill shouldn't do on its own may be there.
+  Check `permission_denials` in the result: only what the skill shouldn't do on its own may be there. A skill the model
+  starts itself (from plain words, not a typed slash command) gets no pre-approval from its `allowed-tools` in a headless
+  run (2.1.286: even `usage_report.py --where` is denied, and the Skill call needs `--allowedTools "Skill(claude-usage:report)"`),
+  so test a skill's commands through its slash command, and a plain-words route only for which command it picks.
 
 ## Staleness rules
 
@@ -369,6 +420,8 @@ python3 $S/video.py render --out /tmp/usage-check --stills 3,12,20   # PNG frame
 python3 $S/share.py pack --out /tmp/usage-check                   # the share file; then unpack it:
 python3 $S/share.py unpack /tmp/usage-check/share/<file>.json --out /tmp/usage-check   # → received/<file>/report.html
 python3 $S/company.py build /tmp/usage-check/share --to /tmp/usage-company   # a company of one: must equal your report
+BROWSER=true python3 $S/open.py --out /tmp/usage-check --tab insights   # status and the page it opens (no browser window)
+python3 $S/clear.py --out /tmp/usage-check                        # what it would remove (preview); --yes removes it
 ```
 
 - A full run on `<OUT>` itself changes the `generated` stamp. After that, both `validate.py` commands fail on

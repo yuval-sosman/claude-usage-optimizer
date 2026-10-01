@@ -623,7 +623,7 @@ def LIST(items, title=None):
 HIDDEN_CARDS = {'OV6', 'ME4', 'ME5', 'EX10', 'EX11', 'EX12', 'EX13', 'EX14', 'EX15'}   # computed and kept in metrics.json / digest.md, not shown (OV6's medians sit in the headline)
 
 
-CARD_ORDER = {}   # display position when it should differ from the number (e.g. {'CX9': 1.5}); ids stay stable for links
+CARD_ORDER = {'SV9': 0.5}   # display position when it differs from the number (the score leads its section); ids stay stable for links
 
 
 CARD_SECTION = {}   # section when it differs from the id's letters (e.g. {'TL1': 'EX'}), so moving a card between sections keeps its id and links
@@ -1478,6 +1478,7 @@ class Model:
             models = collections.Counter(c['model'] for c in t)
             self.subs[aid] = dict(
                 aid=aid, sid=key[0], proj=t[0]['proj'], type=typ, desc=scrub(meta.get('description') or linp.get('description') or ''),
+                call_model=linp.get('model') if isinstance(linp.get('model'), str) else None,      # a model passed for this one call
                 model=models.most_common(1)[0][0], calls=t, n_calls=len(t), start=t[0]['start'], end=t[-1]['t1'],
                 usd=sum(c['usd'] for c in t), peak=max(c['ctx'] for c in t), cold=t[0]['ctx'],
                 ctx_sum=sum(c['ctx'] for c in t), out=sum(c['out'] for c in t), is_async=is_async,
@@ -2651,7 +2652,9 @@ REREAD_TOK = 10_000      # detail re-read after a compaction or a fresh start
 BRIEF_TOK = 5_000        # a short summary pasted into a fresh session
 RANGE_KEEP = 0.5         # share of a large file that a targeted read would still load
 BIG_READ = 8_000         # tokens: a large Read result
-COMPACT_AT = [60e3, 80e3, 100e3, 125e3, 150e3, 200e3, 250e3, 300e3, 400e3]
+# Thresholds SV4 replays. They start at 100K, the smallest auto-compact window Claude Code accepts (/autocompact takes
+# 100K–1M): below it you would compact every few turns and lose the thread, whatever the replay's dollars say.
+COMPACT_AT = [100e3, 125e3, 150e3, 200e3, 250e3, 300e3, 400e3, 500e3]
 PROMPT_CHANGED = {'Subagent resumed via SendMessage', 'Tool list changed (MCP/tools)', 'Model switch', 'Effort changed',
                   'Earlier messages changed'}          # these miss whatever the cache lifetime
 FIX = {  # cause -> (who can fix it, how)
@@ -2876,6 +2879,47 @@ def _sv_ttl(m):
     return out
 
 
+SUBAGENT_DEFAULT_TYPES = ('general-purpose', 'claude')     # built-in agent types that name no model of their own
+# Explore and Plan are defined with model: inherit (the main model) and a fork runs on its parent's model, so
+# CLAUDE_CODE_SUBAGENT_MODEL alone moves none of them (code.claude.com/docs/en/sub-agents, "Choose a model").
+
+
+@functools.lru_cache(maxsize=None)
+def agent_file_model(path):
+    """The model field in an agent file's frontmatter: its value, '' when the file names none, None when there is no file."""
+    try:
+        with open(path, encoding='utf-8', errors='replace') as fh:
+            head = [fh.readline() for _ in range(80)]
+    except OSError:
+        return None
+    if not head or head[0].strip() != '---':
+        return ''
+    for line in head[1:]:
+        if line.strip() == '---':
+            break
+        mm = re.match(r'\s*model\s*:\s*(.*?)\s*$', line)
+        if mm:
+            return mm.group(1).strip('\'"')
+    return ''
+
+
+def follows_subagent_default(m, sub):
+    """Whether CLAUDE_CODE_SUBAGENT_MODEL alone decides a subagent's model. Claude Code takes the model passed for the call
+    first, then the agent definition's model field (inherit = the main model), then the variable, then the main model. A
+    user or project agent file named like the type overrides the built-in agent of that name; a plugin's agent (a type
+    with a colon) is left out, since its model can't be read here."""
+    if not sub or sub.get('call_model'):
+        return False
+    typ = sub.get('type') or ''
+    if re.fullmatch(r'[A-Za-z0-9_.-]{1,100}', typ):
+        cwd = m.src.cwd.get(sub.get('proj'))
+        for base in ([os.path.join(cwd, '.claude')] if cwd else []) + [m.src.home]:
+            own = agent_file_model(os.path.join(base, 'agents', typ + '.md'))
+            if own is not None:
+                return own == ''
+    return typ in SUBAGENT_DEFAULT_TYPES
+
+
 def _sv_models(m):
     """The same calls at another model's list prices."""
     if 'sv_models' in m.cache:
@@ -2902,11 +2946,14 @@ def _sv_models(m):
         return sum(c['usd'] - sum(m.prices.cost(mdl, c['u'], m.prices.mult(mdl, c['where'])).values()) for c in calls
                    if (m.prices.rate(c['model']) or {}).get('out', 0) > top)
     sonnet = m.prices.pick('sonnet')
+    sub_calls = [c for c in m.real if c['agent']]
+    moved = {aid for aid, s in m.subs.items() if follows_subagent_default(m, s)}       # what CLAUDE_CODE_SUBAGENT_MODEL reaches
     m.cache['sv_models'] = out = dict(rows=rows, act_main=act_main, act_sub=act_sub, explore=sum(c['usd'] for c in explore),
                                       explore_haiku=sum(sum(m.prices.cost(haiku, c['u'], m.prices.mult(haiku, c['where'])).values()) for c in explore)
                                       if haiku else None,
                                       current=current, sonnet=sonnet, haiku=haiku, main_saving=cheaper(main_calls, current),
-                                      sub_saving=cheaper([c for c in m.real if c['agent']], sonnet))
+                                      sub_saving=cheaper(sub_calls, sonnet),
+                                      sub_default=cheaper([c for c in sub_calls if c['agent'] in moved], sonnet))
     return out
 
 
@@ -2964,7 +3011,8 @@ def sv_levers(m):
         dict(id='compact', label=f"/compact at about {f_tok(best['T'])} tokens" if best else '/compact earlier', usd=max(0.0, best['net']) if best else 0.0,
              card='SV4'),
         dict(id='ttl', label='Cache lifetime that fits each thread kind', usd=ttl_gain, card='SV5'),
-        dict(id='sub_model', label=f"Run subagents on {model_name(mod['sonnet'])}" if mod['sonnet'] else 'Run subagents on a cheaper model', usd=mod['sub_saving'], card='SV6'),
+        dict(id='sub_model', label=f"Run subagents on {model_name(mod['sonnet'])} by default" if mod['sonnet'] else 'Run subagents on a cheaper model',
+             usd=mod['sub_default'], card='SV6'),        # what CLAUDE_CODE_SUBAGENT_MODEL moves; Explore and Plan keep the main model
         dict(id='main_model', label=f"Main threads on {(model_name(mod['current']) if mod['current'] else 'one model')} (your current model)", usd=mod['main_saving'], card='SV6'),
         dict(id='fresh', label='Start fresh after long breaks', usd=fr['usd'], card='SV7'),
         dict(id='reads', label='Read large files in ranges', usd=rd['usd'], card='SV8'),
@@ -3144,7 +3192,9 @@ def sv4(m, g):
                  if best['net'] > 0 else 'Compacting earlier would not have paid off for your sessions.'),
         note=f'Replays every main thread: when the context would pass the threshold, it drops to the start-up size + {f_tok(SUMMARY_TOK)} '
              f'summary + {f_tok(REREAD_TOK)} re-read detail, and the compaction costs one full read plus {f_tok(SUMMARY_OUT)} output tokens. '
-             'Detail lost in a summary can cost extra work that this does not see.')
+             f'Thresholds start at {f_tok(COMPACT_AT[0])}, the smallest auto-compact window Claude Code accepts. '
+             'Detail lost in a summary can cost extra work that this does not see, so the threshold is a guide for compacting at a natural '
+             'break between tasks, not mid-task.')
 
 
 def sv5(m, g):
@@ -3244,10 +3294,13 @@ def sv6(m, g):
     ins = None
     if d['main_saving'] > 0.01 or d['sub_saving'] > 0.01:
         ins = (f"At list prices, the same main-thread work on {(model_name(d['current']) if d['current'] else 'one model')} (the model you use now) would have saved "
-               f"{f_save(m, d['main_saving'])}" + (f", and subagents on {model_name(d['sonnet'])} {f_save(m, d['sub_saving'])}." if d['sonnet'] else '.'))
+               f"{f_save(m, d['main_saving'])}" + (f", and subagents on {model_name(d['sonnet'])} {f_save(m, d['sub_saving'])}, "
+                                                   f"{f_usd(d['sub_default'])} of it from the subagents CLAUDE_CODE_SUBAGENT_MODEL moves." if d['sonnet'] else '.'))
     return card('SV6', 'What if another model had done the same work?', 'T P A', [
         K(kpi_save(m, f"Main threads on {(model_name(d['current']) if d['current'] else 'one model')}", d['main_saving'], 'your current model; pricier calls only'),
-          kpi_save(m, f"Subagents on {model_name(d['sonnet'])}", d['sub_saving'], 'pricier calls only') if d['sonnet'] else None,
+          kpi_save(m, f"Subagents on {model_name(d['sonnet'])}", d['sub_saving'], 'every subagent; pricier calls only') if d['sonnet'] else None,
+          kpi_save(m, 'Via CLAUDE_CODE_SUBAGENT_MODEL', d['sub_default'], 'the subagents it moves: general-purpose and agents naming no model; '
+                                                                         'Explore and Plan keep the main model') if d['sonnet'] else None,
           kpi_save(m, f"Explore subagents on {model_name(d['haiku'])}", max(0.0, d['explore'] - d['explore_haiku']) if d['explore_haiku'] is not None else None,
                    f"of {f_usd(d['explore'])} they cost") if d['haiku'] else None),
         BAR([r['k'] for r in rows], [S('Main threads', [r['mn'] for r in rows], 1), S('Subagents', [r['sb'] for r in rows], 2)], 'usd',
@@ -3257,7 +3310,9 @@ def sv6(m, g):
         why='Model choice multiplies everything else. This shows the price side only.',
         insight=ins,
         note='Same token counts at each model’s list price. A different model would use a different number of tokens and may do '
-             'the work better or worse; treat this as the price ceiling of switching, not a forecast.')
+             'the work better or worse; treat this as the price ceiling of switching, not a forecast. A subagent runs on the model '
+             'passed for its call, else its definition’s model (Explore and Plan: inherit, the main model), else '
+             'CLAUDE_CODE_SUBAGENT_MODEL, else the main model; the “Via” figure counts only the subagents that variable decides.')
 
 
 def sv7(m, g):
@@ -3293,6 +3348,92 @@ def sv8(m, g):
         insight=f"Reading large files in ranges could have saved about {f_save(m, r['usd'])}.",
         note='Counts Read calls without offset/limit whose result was at least ' + f_tok(BIG_READ) + ' tokens. The saving assumes a targeted read '
              f'(or a grep first) would have loaded {int(RANGE_KEEP * 100)}% of the file.')
+
+
+# ------------------------------------------------------------------------------------------ SV9: the efficiency score
+
+SCORE_AREAS = [   # (id, name, points, SV1 levers, what it grades): an area's levers act on the same cost, so the largest counts
+    ('context', 'Context', 35, ('compact', 'reads'), '/compact at a natural break, large files read in ranges'),
+    ('caching', 'Caching', 25, ('misses', 'ttl', 'fresh'), 'avoidable cache misses, cache lifetimes, fresh starts after long breaks'),
+    ('subagents', 'Subagents', 15, ('sub_model',), 'subagents on a cheaper model by default'),
+    ('hooks', 'Hooks', 15, ('stop_hook',), 'Stop hooks that send Claude back to work'),
+    ('setup', 'Setup', 10, ('unused',), 'loading only the skills, MCP servers and agent types you use'),
+]
+GRADES = (('A+', 95), ('A', 90), ('A-', 85), ('B+', 80), ('B', 75), ('B-', 70), ('C+', 65), ('C', 0))   # like school: A+ down to C
+
+
+def grade_of(score):
+    return next(g_ for g_, lo in GRADES if score >= lo)
+
+
+def half_up(x):
+    return int(math.floor(x + 0.5))
+
+
+def efficiency(m):
+    """The efficiency score, 1–100, from SV1's levers. Each area's share of spend is what its largest lever would have saved;
+    together the areas keep Π(1 − share) of the spend (each change saves its share of what the others leave, as the video
+    and the tabs combine savings), and the score is that kept share out of 100. The combined loss is split between the
+    areas in proportion to their shares, so the points lost add up to 100 − score, and an area's own score is the points it
+    kept out of its points (the points-weighted average of the area scores is the score, unless an area lost more than all
+    its points). The main-thread model is not graded: see sv9's note."""
+    if 'efficiency' in m.cache:
+        return m.cache['efficiency']
+    lv = {x['id']: x for x in sv_levers(m)}
+    areas = []
+    for aid, name, pts, ids, what in SCORE_AREAS:
+        best = max((lv[i] for i in ids if i in lv and lv[i]['usd'] > 0.005), key=lambda x: x['usd'], default=None)
+        areas.append(dict(id=aid, label=name, points=pts, what=what, lever=best,
+                          share=min(0.99, best['usd'] / m.usd) if best and m.usd else 0.0))
+    lost = 100 * (1 - math.prod(1 - a['share'] for a in areas))
+    total = sum(a['share'] for a in areas)
+    for a in areas:
+        a['lost'] = lost * a['share'] / total if total else 0.0
+        a['score'] = max(1, half_up(100 * (1 - min(a['lost'], a['points']) / a['points'])))
+        a['grade'] = grade_of(a['score'])
+    score = max(1, min(100, half_up(100 - lost)))
+    m.cache['efficiency'] = out = dict(score=score, grade=grade_of(score), lost=lost, areas=areas)
+    return out
+
+
+def sv9(m, g):
+    q = 'What is my efficiency score, and where did the points go?'
+    if not m.real or not m.usd:
+        return card('SV9', q, 'T P', [], empty='No API calls in this scope.')
+    e = efficiency(m)
+    areas = e['areas']
+    m.facts['score'] = dict(value=e['score'], grade=e['grade'], card='SV9',
+                            areas=[dict(label=a['label'], score=a['score'], grade=a['grade']) for a in areas])
+    worst = max(areas, key=lambda a: a['lost'])
+    rows = [dict(a=a['label'], s=a['score'], g=a['grade'], l=r1(a['lost']), p=a['points'],
+                 u=r2(a['lever']['usd']) if a['lever'] else 0.0, mo=r2(per_month(m, a['lever']['usd'])) if a['lever'] else 0.0,
+                 sh=r1(100 * a['share']), v=a['lever']['label'] if a['lever'] else 'nothing to save', c=a['lever']['card'] if a['lever'] else '',
+                 w=a['what'], id=a['id']) for a in areas]
+    blk = {'kind': 'score', 'label': 'Efficiency score', 'value': e['score'], 'grade': e['grade'],
+           'sub': (f"Claude Code's documented practices would have saved {f_pct(e['lost'])} of spend, overlaps removed"
+                   if e['lost'] >= 0.5 else "No documented practice would have saved anything here"),
+           'scale': [[g_, lo] for g_, lo in GRADES],
+           'areas': [dict(id=a['id'], label=a['label'], what=a['what'], score=a['score'], grade=a['grade'], lost=r1(a['lost']),
+                          points=a['points'], lever=a['lever']['label'] if a['lever'] else None,
+                          card=a['lever']['card'] if a['lever'] else None, usd=r2(a['lever']['usd']) if a['lever'] else 0.0,
+                          share=r1(100 * a['share'])) for a in areas]}
+    return card('SV9', q, 'T P', [
+        blk,
+        dict(TABLE([('a', 'Area', None), ('s', 'Score', 'count'), ('g', 'Grade', None), ('l', 'Points lost', 'count'),
+                    ('p', 'Of', 'count'), ('u', 'Saved, all time', 'usd'), ('mo', 'Per 30 days', 'usd'), ('sh', 'Share of spend', 'pct'),
+                    ('v', 'Lever', None), ('c', 'Details', None), ('w', 'What it grades', None)], rows, 'By area'), hidden=True)],
+        why='One number for how close your use came to Claude Code\'s documented practices: at 100 none of them would have saved '
+            'anything, and every point below is 1% of spend they would have saved.',
+        insight=(f"Efficiency score {e['score']}/100 ({e['grade']}): the documented practices would have saved {f_pct(e['lost'])} of "
+                 f"spend, overlaps removed. Most points went to {worst['label']} ({worst['grade']}): "
+                 f"{worst['lever']['label']}, about {f_save(m, worst['lever']['usd'])} ({worst['lever']['card']}).")
+                if worst['lever'] and e['lost'] >= 0.5 else f"Efficiency score {e['score']}/100 ({e['grade']}).",
+        note='Each area loses points for the share of spend its largest lever would have saved (SV1, each priced on its own, as if '
+             'applied from the first day). The areas combine as the changes would: each saves its share of what the others leave, '
+             'so overlaps count once and the points lost add up to 100 minus the score. An area\'s score is the points it kept, out '
+             'of its points (Context 35, Caching 25, Subagents 15, Hooks 15, Setup 10). The main-thread model is not graded: the right '
+             'model depends on the work, and SV6 compares models. Stop-hook work is an upper bound. Grades: A+ 95–100, A 90–94, '
+             'A- 85–89, B+ 80–84, B 75–79, B- 70–74, C+ 65–69, C below 65.')
 
 
 # ------------------------------------------------------------------------------------------ CX: context & caching
@@ -3433,7 +3574,7 @@ START_GROUP = {
 
 
 def memory_files(src, cwd, proj):
-    """The memory files a session in `cwd` loads at start, as they are on disk now: (path, tokens)."""
+    """The memory files a session in `cwd` loads at start, as they are on disk now: (path, tokens, lines)."""
     out, seen = [], set()
 
     def add(path, max_lines=None):
@@ -3446,7 +3587,7 @@ def memory_files(src, cwd, proj):
                 text = ''.join(fh.readlines()[:max_lines]) if max_lines else fh.read()
         except OSError:
             return
-        out.append((tilde(path), len(text) / 4))
+        out.append((tilde(path), len(text) / 4, text.count('\n') + (1 if text and not text.endswith('\n') else 0)))
     add(os.path.join(src.home, 'CLAUDE.md'))
     for p in sorted(glob.glob(os.path.join(src.home, 'rules', '*.md'))):
         add(p)
@@ -3489,7 +3630,7 @@ def cx5(m, g):
     tool_tok = [(t.get('name') or '?', len(json.dumps(t, ensure_ascii=False)) / 4) for t in tools if isinstance(t, dict)]
     mem = memory_files(g.src, s.get('cwd_first') or s['cwd_main'], s['proj'])
     est = {'Claude Code system prompt': sp, 'Built-in tools': sum(v for k, v in tool_tok if not k.startswith('mcp__')),
-           'MCP tools': sum(v for k, v in tool_tok if k.startswith('mcp__')), 'Memory files': sum(v for _, v in mem)}
+           'MCP tools': sum(v for k, v in tool_tok if k.startswith('mcp__')), 'Memory files': sum(v for _, v, _ in mem)}
     scale = min(1.0, rest / sum(est.values())) if sum(est.values()) else 1.0       # estimates never exceed what was measured
     for k, v in est.items():
         parts[k] += v * scale
@@ -3531,8 +3672,8 @@ def cx5(m, g):
                ('h', 'How to make it smaller', None)], rows, 'In plain words', width='half'),
         TABS([('Tools by size', TABLE([('n', 'Tool', None), ('t', 'Tokens', 'tokens')],
                                       [dict(n=k, t=round(v * scale)) for k, v in sorted(tool_tok, key=lambda x: -x[1])])),
-              ('Memory files', TABLE([('f', 'File', None), ('t', 'Tokens', 'tokens')],
-                                     [dict(f=p, t=round(v * scale)) for p, v in mem]))], title='Details')],
+              ('Memory files', TABLE([('f', 'File', None), ('t', 'Tokens', 'tokens'), ('l', 'Lines', 'count')],
+                                     [dict(f=p, t=round(v * scale), l=n) for p, v, n in mem]))], title='Details')],
         why='This is paid on every session before you type anything, and re-read on every call after.',
         insight=ins,
         note=f'From the first request of your latest session in this scope ({clip(s["label"], 50)}, {when}). Logged parts are measured. '
@@ -4955,7 +5096,7 @@ SECTIONS = [('OV', 'Overview & cost'), ('CX', 'Context & Caching'), ('SE', 'Sess
             ('OUT', 'Output & outcomes'), ('ME', 'Your working patterns'), ('SV', 'What would it have saved?'), ('TR', 'Trends')]
 
 
-CARDS = [ov1, ov2, ov3, ov4, ov5, ov6, ov7, ov8, sv1, sv2, sv3, sv4, sv5, sv6, sv7, sv8, cx1, cx2, cx3, cx4, cx5, cx6, cx7, cx8, cx9, cx10, cx11, cx12, ca_miss_cost, ca_miss_causes, ca_miss_traces,
+CARDS = [ov1, ov2, ov3, ov4, ov5, ov6, ov7, ov8, sv1, sv2, sv3, sv4, sv5, sv6, sv7, sv8, sv9, cx1, cx2, cx3, cx4, cx5, cx6, cx7, cx8, cx9, cx10, cx11, cx12, ca_miss_cost, ca_miss_causes, ca_miss_traces,
          se1, se2, se3, se4, se5, se6,
          ex1, ex2, ex3, ex4, ex5, ex6, ex7, ex8, ex9, ex10, ex11, ex12, ex13, ex14, ex15,
          out1, out2, out3, out4,
@@ -4997,7 +5138,10 @@ def headline(m, cards):
         ins.append({'text': c['insight'], 'card': cid, 'level': lv})
         if len(ins) >= 10:
             break
-    return {'hero': hero, 'kpis': kpis, 'insights': ins, 'days': r2(span_days(m))}   # days: what “all time” covers (30-day projections)
+    out = {'hero': hero, 'kpis': kpis, 'insights': ins, 'days': r2(span_days(m))}   # days: what “all time” covers (30-day projections)
+    if f.get('score'):
+        out['score'] = f['score']                                       # SV9's score, beside the cost
+    return out
 
 
 def add_refs(results):
@@ -5021,6 +5165,32 @@ def add_refs(results):
         for i in res['headline']['kpis']:
             if hk.get(i['label']) is not None:
                 i['ref'], i['refLabel'] = hk[i['label']], 'All projects'
+        rs = ref['headline'].get('score')
+        if rs and res['headline'].get('score'):
+            res['headline']['score'].update(ref=rs['value'], refGrade=rs['grade'], refLabel='All projects')
+            for b in (res['cards'].get('SV9') or {}).get('blocks', []):
+                if b['kind'] == 'score':
+                    b.update(ref=rs['value'], refGrade=rs['grade'], refLabel='All projects')
+
+
+def add_scores(scopes, results):
+    """All projects' SV9 gets every project's score (its group scope, largest spend first), to compare them."""
+    c = (results.get('all') or {}).get('cards', {}).get('SV9')
+    if not c or c.get('empty'):
+        return
+    rows = []
+    for sc in scopes:
+        res = results.get(sc['id']) or {}
+        b = next((x for x in (res.get('cards', {}).get('SV9') or {}).get('blocks', []) if x['kind'] == 'score'), None)
+        if sc['kind'] != 'group' or not b:
+            continue
+        worst = max(b['areas'], key=lambda a: a['lost'])
+        rows.append(dict(p=sc['label'], s=b['value'], g=b['grade'], u=res['headline']['hero']['value'],
+                         w=f"{worst['label']} ({worst['grade']}): {worst['lost']} points" if worst['lost'] else 'none', id=sc['id']))
+    if len(rows) > 1:
+        rows.sort(key=lambda r: (-(r['u'] or 0), r['p']))
+        c['blocks'].append(TABLE([('p', 'Project', None), ('s', 'Score', 'count'), ('g', 'Grade', None), ('u', 'Spend', 'usd'),
+                                  ('w', 'Most points lost in', None)], rows, 'By project', limit=10))
 
 
 def clean(x):
@@ -5076,6 +5246,7 @@ def build(src, prices, log):
         log(f'  {sc["label"]}: {len(m.real):,} calls, {f_usd(m.usd)} ({time.time() - t0:.1f}s)')
         del m                       # freed before the next scope's model is built, not while it is (peak memory)
     add_refs(results)
+    add_scores(scopes, results)
     return scopes, results, all_m
 
 
@@ -5189,7 +5360,12 @@ def md_card(c, full=True, rows=6):
                       if b.get('kind') == 'tabs' else [b])
     for b in blocks:
         k = b.get('kind')
-        if k == 'kpis':
+        if k == 'score':
+            out.append(f"- {b['label']}: {b['value']}/100 ({b['grade']}); {b['sub']}. By area (score, grade, points lost of its points): "
+                       + '; '.join(f"{a['label']} {a['score']} ({a['grade']}, {a['lost']:.1f} of {a['points']}"
+                                   + (f": {a['lever']}, {md_cell(a['usd'], 'usd')} = {md_cell(a['share'], 'pct')} of spend, {a['card']}"
+                                      if a.get('lever') else '') + ')' for a in b['areas']))
+        elif k == 'kpis':
             out.append('- ' + ' · '.join(f"{i['label']}: {md_cell(i['value'], i.get('unit'))}"
                                           + (f" all time, ≈ {md_cell(i['month'], 'usd')} per 30 days" if i.get('month') is not None else '')
                                           + (f" ({i['sub']})".replace('\n', ' · ') if i.get('sub') else '') for i in b['items']))
@@ -5310,6 +5486,9 @@ def write_digest(report, config, out):
     L += ['', '## Headline (all projects)', '']
     hd = data['all']['headline']
     L.append('- ' + ' · '.join(f"{i['label']}: {md_cell(i['value'], i.get('unit'))}" for i in hd['kpis']))
+    if hd.get('score'):
+        L.append(f"- [SV9] Efficiency score: {hd['score']['value']}/100 ({hd['score']['grade']}) · "
+                 + ' · '.join(f"{x['label']} {x['score']} ({x['grade']})" for x in hd['score']['areas']))
     for i in hd['insights']:
         L.append(f"- [{i['card']}] {i['text']}")
     L += ['', '## Every question, all projects', '']
@@ -5337,13 +5516,13 @@ def write_digest(report, config, out):
         cards = data.get(sc['id'], {}).get('cards', {})
         hero = data.get(sc['id'], {}).get('headline', {}).get('hero', {})
         L += [f"### Scope `{sc['id']}` — {sc['label']} ({f_usd(hero.get('value'))})", '']
-        for cid in ('OV2', 'OV3', 'SV1', 'CX7', 'CX8', 'CX1', 'EX2', 'EX5', 'OV8'):
+        for cid in ('SV9', 'OV2', 'OV3', 'SV1', 'CX7', 'CX8', 'CX1', 'EX2', 'EX5', 'OV8'):
             c = cards.get(cid)
             if c and not c.get('empty'):
                 kp = next((b for b in c['blocks'] if b['kind'] == 'kpis'), None)
                 line = f"- {cid}: " + (' · '.join(f"{i['label']}: {md_cell(i['value'], i.get('unit'))}" for i in kp['items']) if kp else '')
                 if c.get('insight'):
-                    line += f" — {c['insight']}"
+                    line += (' — ' if kp else '') + c['insight']
                 L.append(line)
         L.append('')
     L += ['## Current setup (secrets removed; every detail is in config.json)', ''] + md_config(config) + ['']

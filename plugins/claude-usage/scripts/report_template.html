@@ -216,6 +216,46 @@ main { min-width: 0; }
 .kstrip.n4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .kstrip.n3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
+/* ---- Efficiency score (SV9, and its summary beside the cost): a 1–100 bar and a school grade, A+ down to C ---- */
+.g-a { --g: var(--status-good); --dc: var(--status-good); }
+.g-b { --g: var(--status-warning); --dc: var(--status-warning); }
+.g-c { --g: var(--status-serious); --dc: var(--status-serious); }
+.grade { display: inline-flex; align-items: center; gap: 8px; height: 24px; padding: 0 8px; border: 1px solid var(--border); border-radius: 999px; font-size: 13px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.grade::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--g, var(--text-muted)); flex-shrink: 0; }
+.grade.lg { height: 32px; padding: 0 12px; font-size: 16px; }
+.sc-bar { position: relative; height: 8px; border-radius: 999px; background: var(--wash-strong); }
+.sc-bar.lg { height: 12px; }
+.sc-bar .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: inherit; background: var(--g, var(--text-muted)); }
+.sc-bar .tick { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--surface-1); }
+.sc-scale { position: relative; height: 16px; margin-top: 4px; font-size: 12px; line-height: 16px; color: var(--text-muted); }
+.sc-scale span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.sc-scale span.on { color: var(--text-primary); font-weight: 600; }
+.sc-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.sc-num { font-size: 48px; font-weight: 600; line-height: 1.1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.sc-num small { margin-left: 4px; font-size: 16px; font-weight: 500; letter-spacing: 0; color: var(--text-muted); }
+.sc-sub { margin-top: 4px; font-size: 14px; color: var(--text-secondary); }
+.sc-ref { font-size: 13px; color: var(--text-muted); }
+.score .sc-track { margin-top: 16px; }
+.sc-areas { display: grid; grid-template-columns: max-content minmax(96px, 1fr) 28px max-content minmax(0, 2fr); align-items: center; gap: 12px 16px; margin-top: 24px; }
+.sc-areas .nm { font-size: 14px; font-weight: 500; }
+.sc-areas .n { font-size: 14px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+.sc-areas .d { font-size: 13px; line-height: 1.5; color: var(--text-secondary); min-width: 0; }
+.sc-link { color: inherit; text-decoration: underline; text-decoration-color: var(--baseline); text-underline-offset: 2px; }
+.sc-link:hover { color: var(--text-primary); }
+.hrow { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 16px 48px; }
+.hrow > .hero { flex: 1 1 420px; min-width: 0; }
+.hscore { flex: 0 1 360px; min-width: 260px; margin-bottom: 16px; padding: 16px 20px; background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r-card); box-shadow: var(--shadow-card); }
+.hscore .l { font-size: 13px; color: var(--text-secondary); }
+.hscore .sc-head { margin: 4px 0 12px; }
+.hscore .chips { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 12px; font-size: 13px; color: var(--text-secondary); }
+.hscore .foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; margin-top: 12px; font-size: 13px; }
+@media (max-width: 720px) {
+  .sc-areas { grid-template-columns: max-content minmax(64px, 1fr) 28px max-content; gap: 8px 12px; }
+  .sc-areas .d { grid-column: 1 / -1; margin-bottom: 8px; }
+  .sc-scale span:not(.on) { display: none; }             /* 5-point bands are too narrow to label them all */
+  .hscore { flex-basis: 100%; }
+}
+
 /* ---- Sections & cards ---- */
 .sec > h2 { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; margin: 40px 0 12px; scroll-margin-top: calc(var(--topbar-h) + 16px); }
 .card {
@@ -473,11 +513,6 @@ table.t { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-
 .vsum-block .lab { display: block; font-size: 13px; font-weight: 500; color: var(--text-muted); margin-bottom: 4px; }
 .vsum-lead { margin: 0; font-size: 16px; font-weight: 500; line-height: 1.5; color: var(--text-primary); }
 .vsum { margin: 8px 0 0; font-size: 14px; line-height: 1.6; color: var(--text-secondary); }
-.progress { margin-top: 16px; max-width: 480px; }
-.progress .pl { display: flex; justify-content: space-between; font-size: 13px; color: var(--text-secondary); }
-.progress .pl b { color: var(--text-primary); font-weight: 600; }
-.progress .track { height: 4px; border-radius: 999px; background: var(--wash-strong); margin-top: 8px; overflow: hidden; }
-.progress .fill { height: 100%; background: var(--save); border-radius: 999px; transition: width 200ms ease; }
 .vtools { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-top: 20px; }
 .vtools .grow { flex: 1; }
 .vtools .lbl { font-size: 13px; color: var(--text-secondary); display: inline-flex; align-items: center; gap: 8px; }
@@ -495,7 +530,6 @@ table.t { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-
 .nw-top { display: flow-root; cursor: pointer; transition: background-color var(--fast); }   /* the collapsed card: one click target */
 .nw-top:hover { background: var(--wash); }
 .nw-head { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 4px 16px; padding: 16px 12px 12px 20px; }
-.ocard .nw-head { grid-template-columns: auto minmax(0, 1fr) auto auto; padding-left: 16px; }
 .term { cursor: auto; }
 .nw-main { min-width: 0; }
 .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 13px; color: var(--text-muted); }
@@ -519,16 +553,7 @@ table.t { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-
 .nw-chev { align-self: start; margin-top: 12px; color: var(--text-muted); }
 .nw-chev .ico { transition: transform 160ms ease; }
 .icard.open .nw-chev .ico { transform: rotate(180deg); }
-.chk {
-  width: 20px; height: 20px; margin-top: 4px; border-radius: 50%; border: 1.5px solid var(--baseline); background: transparent; padding: 0;
-  display: inline-flex; align-items: center; justify-content: center; cursor: pointer; color: transparent;
-  transition: background-color var(--fast), border-color var(--fast), color var(--fast);
-}
-.chk:hover { border-color: var(--text-secondary); color: var(--text-muted); }
-.chk[aria-checked="true"] { background: var(--save); border-color: var(--save); color: #ffffff; }
-.chk .ico { width: 12px; height: 12px; }
 .nw-act { margin: 0 20px 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.ocard .nw-act { margin-left: 52px; }
 .nw-act .lbl { font-size: 13px; color: var(--text-muted); margin-right: 4px; }
 .nw-act .mtxt { font-size: 13px; color: var(--text-primary); min-width: 0; flex: 1; }
 .nw-act .mtxt small { color: var(--text-muted); font-size: 12px; margin-left: 8px; }
@@ -543,10 +568,8 @@ table.t { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-
 .term .btn { margin: 3px 4px; flex-shrink: 0; }
 .term .btn.ok { color: var(--save); }
 .nw-rel { margin: -4px 20px 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; font-size: 13px; color: var(--text-secondary); }
-.ocard .nw-rel { margin-left: 52px; }
 .nw-rel .ritem { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
 .nw-body { padding: 4px 20px 20px; border-top: 1px solid var(--border); animation: reveal 160ms ease-out; }
-.ocard .nw-body { padding-left: 52px; }
 .nw-body .ic-detail { color: var(--text-primary); font-size: 14px; line-height: 1.6; white-space: pre-line; margin: 16px 0 0; max-width: 72ch; }
 .drow { display: grid; grid-template-columns: 168px minmax(0, 1fr); gap: 4px 16px; padding: 12px 0; border-top: 1px solid var(--grid); font-size: 14px; }
 .nw-body > .drow:first-child { border-top: 0; }
@@ -584,18 +607,7 @@ details.more-d > summary .ico { transition: transform 160ms ease; }
 details.more-d[open] > summary .ico { transform: rotate(90deg); }
 details.more-d[open] > :not(summary) { animation: reveal 160ms ease-out; }
 .ofoot { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
-.ocard.done .nw-head { padding-top: 12px; padding-bottom: 12px; align-items: center; }
-.ocard.done .meta, .ocard.done .nw-dek, .ocard.done .nw-act, .ocard.done .nw-rel, .ocard.done .why-pick, .ocard.done .nw-save .s { display: none; }
-.ocard.done.skipped .nw-head h4 { text-decoration: none; }
-.ocard.skipped .chk { border-style: dashed; }
-.instead { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
-.ocard.done .nw-chev { margin-top: 0; }
-.ocard.done .nw-head h4 { margin: 0; font-size: 14px; font-weight: 500; color: var(--text-muted); text-decoration: line-through; }
-.ocard.done .chk { margin-top: 0; }
-.ocard.done .nw-save { padding-top: 0; }
-.ocard.done .nw-save .v { font-size: 14px; color: var(--text-muted); }
 .rtag { flex-shrink: 0; font-size: 13px; font-weight: 500; color: var(--text-primary); white-space: nowrap; }
-.rwith { font-size: 13px; color: var(--text-secondary); }
 .rjoin { font-size: 13px; color: var(--text-muted); }
 .rnote { font-size: 13px; line-height: 1.5; color: var(--text-secondary); margin-top: 4px; }
 .rel-list, .drow .rel-list { list-style: none; margin: 0; padding: 0; }
@@ -608,7 +620,7 @@ details.more-d[open] > :not(summary) { animation: reveal 160ms ease-out; }
 .ogroup > .icard:first-of-type { margin-top: 8px; }
 .or-sep { display: flex; align-items: center; gap: 12px; margin: 8px 0 -4px; font-size: 12px; color: var(--text-muted); }
 .or-sep::before, .or-sep::after { content: ""; flex: 1; height: 1px; background: var(--border); }
-.why-pick { margin: -4px 20px 12px 52px; font-size: 13px; color: var(--text-secondary); }
+.why-pick { margin: -4px 20px 12px; font-size: 13px; color: var(--text-secondary); }
 .why-pick .lbl { color: var(--text-muted); margin-right: 8px; }
 .combined { margin: 16px 0 0; max-width: 72ch; font-size: 14px; color: var(--text-secondary); }
 .combined b { color: var(--save); font-weight: 600; }
@@ -660,22 +672,19 @@ footer.foot ul { margin: 8px 0; padding-left: 20px; }
   .scopes { margin-left: 0; flex-basis: 100%; }
   .hero .v { font-size: 48px; }
   .kstrip.n3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .nw-head, .ocard .nw-head { grid-template-columns: minmax(0, 1fr) auto; padding: 16px 8px 12px 16px; }
-  .ocard .nw-head { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .nw-head { grid-template-columns: minmax(0, 1fr) auto; padding: 16px 8px 12px 16px; }
   .nw-save { grid-column: 1 / -1; grid-row: 2; text-align: left; padding-top: 4px; display: flex; align-items: baseline; gap: 8px; }
-  .ocard .nw-save { grid-column: 2 / -1; }
   .nw-save .s { margin-top: 0; }
   .nw-chev { grid-column: -2; grid-row: 1; }
   .nw-act, .nw-rel { margin-left: 16px; margin-right: 16px; }
-  .ocard .nw-act, .ocard .nw-rel, .ocard .nw-body, .why-pick { margin-left: 16px; padding-left: 16px; }
+  .why-pick { margin-left: 16px; margin-right: 16px; }
   .ogroup { padding-left: 8px; }
-  .ocard .nw-body { margin-left: 0; }
   .nw-body { padding-left: 16px; padding-right: 16px; }
   .drow, .rel-list li { grid-template-columns: minmax(0, 1fr); }
   .kpi-pop { position: fixed; left: 16px; right: 16px; top: auto; bottom: 16px; width: auto; max-height: 70vh; overflow: auto; }
 }
 @media print {
-  .tabbar, .controls, .toc, .menu-btn, .filterbar, .vtools, .chk, .term .btn, .chart-head .btn { display: none !important; }
+  .tabbar, .controls, .toc, .menu-btn, .filterbar, .vtools, .term .btn, .chart-head .btn { display: none !important; }
   .layout { display: block; padding: 0; }
   body { background: #ffffff; }
   .card, .kpi, .icard { break-inside: avoid; }
@@ -1887,6 +1896,8 @@ function blockEl(b) {
     box.append(h('p', { class: 'blk-text', text: b.text || '' }));
   } else if (b.kind === 'traces') {
     box.append(tracesBlock(b));
+  } else if (b.kind === 'score') {
+    box.append(scoreBlock(b));
   } else if (b.kind === 'list') {
     var d = h('div', { class: 'blk-list' });
     if (b.title) d.append(h('h4', { text: b.title }));
@@ -2964,13 +2975,6 @@ function stepView(st) {
   if (body) li.append(h('pre', { class: 'code', text: body }));
   return li;
 }
-function doneKey(id) {                                   // per report folder, without its path (other local pages share storage)
-  var s = String((REPORT.meta || {}).out || ''), x = 5381;
-  for (var i = 0; i < s.length; i++) x = ((x * 33) ^ s.charCodeAt(i)) >>> 0;
-  return 'ccu-done:' + x.toString(36) + ':' + id;
-}
-function isDone(id) { try { return localStorage.getItem(doneKey(id)) === '1'; } catch (e) { return false; } }
-function setDone(id, on) { try { if (on) localStorage.setItem(doneKey(id), '1'); else localStorage.removeItem(doneKey(id)); } catch (e) { /* storage unavailable */ } }
 function optRelations(o) {
   // this optimization's own links, plus the reverse side of "requires" (listed only by the one that needs the other)
   var out = (o.related || []).filter(function (r) { return REL[r.relation] && findOpt(r.id); })
@@ -2993,7 +2997,7 @@ function goOpt(id) {
 }
 function optLink(id) {
   var x = findOpt(id);
-  var b = btn((x ? x.title : id) + (isDone(id) ? ' ✓' : ''), 'sm link', null);
+  var b = btn(x ? x.title : id, 'sm link', null);
   b.append(icon('arrow'));
   b.addEventListener('click', function (e) { e.stopPropagation(); goOpt(id); });
   return b;
@@ -3038,16 +3042,13 @@ function relRows(rels) {
   return rows;
 }
 var EFFORT_ICON = { 'one-click': 'terminal', minutes: 'hand', habit: 'clock' };
-function optCard(o, onDone, ctx) {
-  // ctx.why: in a choice, when to pick this one; ctx.chosen: the choice's done member, shown on the others ("not needed")
+function optCard(o, ctx) {
+  // ctx.why: in a choice, when to pick this one
   ctx = ctx || {};
   var from = { kind: 'opt', id: o.id, title: o.title };
   var rels = optRelations(o);
   var sv = o.savings && isNum(o.savings.usd_so_far) ? o.savings : null;
-  var done = isDone(o.id), skipped = !done && !!ctx.chosen;
-  var art = h('article', { class: 'icard nw ocard' + (done || skipped ? ' done' : '') + (skipped ? ' skipped' : ''), id: 'opt-' + o.id });
-  var chk = h('button', { type: 'button', class: 'chk', role: 'checkbox', 'aria-checked': done ? 'true' : 'false', 'aria-label': 'Done: ' + o.title, title: done ? 'Mark as not done' : 'Mark as done' }, icon('check'));
-  chk.addEventListener('click', function (e) { e.stopPropagation(); setDone(o.id, !done); if (onDone) onDone(o.id); });
+  var art = h('article', { class: 'icard nw ocard', id: 'opt-' + o.id });
   var risk = o.risk || 'low';
   var meta = h('div', { class: 'meta' },
     h('span', { class: 'eff' }, icon(EFFORT_ICON[o.effort] || 'hand'), EFFORT[o.effort] || o.effort),
@@ -3055,8 +3056,7 @@ function optCard(o, onDone, ctx) {
   if (!(o.kind === 'habit' && o.effort === 'habit')) meta.append(h('span', { class: 'sep' }), h('span', { text: KIND[o.kind] || o.kind }));
   var chev = chevBtn('optb-' + o.id);
   var main = h('div', { class: 'nw-main' }, meta, h('h4', { text: o.title }), h('p', { class: 'nw-dek', text: o.problem }));
-  if (skipped) main.append(h('div', { class: 'instead', text: 'Not needed: you chose “' + findOpt(ctx.chosen).title + '”' }));
-  var head = h('div', { class: 'nw-head' }, chk, main, sv ? saveTile(sv, null) : h('span'), chev);
+  var head = h('div', { class: 'nw-head' }, main, sv ? saveTile(sv, null) : h('span'), chev);
   var top = h('div', { class: 'nw-top' }, head);
   art.append(top);
   if (ctx.why) top.append(h('div', { class: 'why-pick' }, h('span', { class: 'lbl', text: 'Why this one' }), h('span', { text: ctx.why })));
@@ -3068,10 +3068,10 @@ function optCard(o, onDone, ctx) {
       h('div', { class: 'mtxt' }, o.manual[0], o.manual.length > 1 ? h('small', { text: '+' + (o.manual.length - 1) + ' more step' + (o.manual.length > 2 ? 's' : '') }) : null)));
   }
   var first = rels.filter(function (r) { return r.relation === 'requires' && !r.rev; });
-  if (first.length) {                                  // what must come first, and whether it has
+  if (first.length) {                                  // what must come first
     var strip = h('div', { class: 'nw-rel' });
     first.forEach(function (r) {
-      strip.append(h('span', { class: 'ritem' }, relTag('requires'), optLink(r.id), h('span', { class: 'rwith', text: isDone(r.id) ? 'done' : 'not done yet' })));
+      strip.append(h('span', { class: 'ritem' }, relTag('requires'), optLink(r.id)));
     });
     top.append(strip);
   }
@@ -3138,7 +3138,7 @@ function renderOpts() {
   CATS.forEach(function (c) { CAT_TITLE[c.id] = c.title; });
   var list = doc.optimizations, cg = choiceGroups();
   var save = function (o) { return (o.savings && isNum(o.savings.usd_so_far)) ? o.savings.usd_so_far : 0; };
-  // a unit is one thing to do: a single optimization, or a choice between several (done when one of them is)
+  // a unit is one thing to do: a single optimization, or a choice between several
   var units = [], seen = {};
   list.forEach(function (o) {
     var g = cg.groupOf[o.id];
@@ -3149,12 +3149,9 @@ function renderOpts() {
     units.push({ items: items, cat: items[0].category, kind: cg.groups[g].kind });
   });
   units.forEach(function (u) { u.save = Math.max.apply(null, u.items.map(save)); });
-  var unitDone = function (u) { return u.items.some(function (o) { return isDone(o.id); }); };
   var head = h('header', { class: 'vhead' });
   head.append(h('h2', { text: 'Optimizations' }));
   head.append(h('div', { class: 'vsub', text: 'Prepared by ' + (doc.author || 'Claude') + ' from the insights and Claude Code’s documented settings · ' + (doc.generated || '') }));
-  var prog = h('div', { class: 'progress' });
-  head.append(prog);
   var stl = staleNote(doc, 'optimizations');
   if (stl) head.append(stl);
   if (doc.summary) head.append(summaryBlock(doc.summary));
@@ -3168,31 +3165,26 @@ function renderOpts() {
       (days ? ' (≈ ' + fmt(comb * 30 / days, 'usd') + ' per 30 days)' : '') + ', not the ' + fmt(plain, 'usd') + ' you get by adding up the cards: savings overlap' +
       (nChoice ? ', and each choice below counts once.' : '.')));
   }
-  var FILTERS = [['all', 'All'], ['one-click', 'One command'], ['manual', 'By hand'], ['todo', 'Not done']];
+  var FILTERS = [['all', 'All'], ['one-click', 'One command'], ['manual', 'By hand']];
   var cur = 'all';
   var filt = h('div', { class: 'seg', role: 'group', 'aria-label': 'Filter optimizations' });
   head.append(h('div', { class: 'vtools' }, filt));
   var listEl = h('div');
-  var match = function (o, f) { return f === 'all' || (f === 'one-click' && !!o.apply) || (f === 'manual' && !o.apply) || (f === 'todo' && !isDone(o.id)); };
-  var unitMatch = function (u, f) { return f === 'todo' ? !unitDone(u) : u.items.some(function (o) { return match(o, f); }); };
+  var match = function (o, f) { return f === 'all' || (f === 'one-click' && !!o.apply) || (f === 'manual' && !o.apply); };
+  var unitMatch = function (u, f) { return u.items.some(function (o) { return match(o, f); }); };
   function choiceEl(u) {
     var ids = u.items.map(function (o) { return o.id; });
     var box = h('div', { class: 'ogroup' });
     box.append(h('div', { class: 'ogroup-h' }, relTag(u.kind),
       h('span', { text: u.kind === 'conflicts' ? 'These work against each other: apply only one.' :
-        (u.items.length === 2 ? 'Two' : String(u.items.length)) + ' ways to cut the same cost. With one in place the other adds little, so choose one and mark it done.' })));
+        (u.items.length === 2 ? 'Two' : String(u.items.length)) + ' ways to cut the same cost. With one in place the other adds little, so choose one.' })));
     u.items.filter(function (o) { return match(o, cur); }).forEach(function (o, k) {
       if (k) box.append(h('div', { class: 'or-sep', text: 'or' }));
-      box.append(optCard(o, onDone, { why: whyPick(o, ids.filter(function (x) { return x !== o.id; })) }));
+      box.append(optCard(o, { why: whyPick(o, ids.filter(function (x) { return x !== o.id; })) }));
     });
     return box;
   }
   function build() {
-    var nDone = units.filter(unitDone).length, n = units.length;
-    prog.replaceChildren(h('div', { class: 'pl' }, h('span', null, h('b', { text: String(nDone) }), ' of ' + n + ' done'),
-      h('span', { text: nDone === n ? 'All done' : fmt(100 * nDone / n, 'pct') })),
-      h('div', { class: 'track', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': String(n), 'aria-valuenow': String(nDone), 'aria-label': 'Optimizations done' },
-        h('div', { class: 'fill', style: 'width:' + (100 * nDone / n) + '%' })));
     filt.replaceChildren.apply(filt, FILTERS.map(function (f) {
       var b = h('button', { type: 'button', 'aria-pressed': f[0] === cur ? 'true' : 'false' }, f[1], h('span', { class: 'n', text: String(units.filter(function (u) { return unitMatch(u, f[0]); }).length) }));
       b.addEventListener('click', function () { cur = f[0]; build(); });
@@ -3200,31 +3192,15 @@ function renderOpts() {
     }));
     var secs = [];
     CATS.forEach(function (c) {
-      var these = units.filter(function (u) { return u.cat === c.id && !unitDone(u) && unitMatch(u, cur); }).sort(function (a, b) { return b.save - a.save; });
+      var these = units.filter(function (u) { return u.cat === c.id && unitMatch(u, cur); }).sort(function (a, b) { return b.save - a.save; });
       if (!these.length) return;
       var sec = h('section', { class: 'vcat', id: 'ocat-' + c.id, 'data-toc': c.title }, h('h3', { text: c.title }));
-      these.forEach(function (u) { sec.append(u.items.length > 1 ? choiceEl(u) : optCard(u.items[0], onDone)); });
+      these.forEach(function (u) { sec.append(u.items.length > 1 ? choiceEl(u) : optCard(u.items[0])); });
       secs.push(sec);
     });
-    var done = units.filter(function (u) { return unitDone(u) && unitMatch(u, cur); }).sort(function (a, b) { return b.save - a.save; });
-    if (done.length) {
-      var ds = h('section', { class: 'vcat', id: 'ocat-done', 'data-toc': 'Done' }, h('h3', null, 'Done', h('span', { class: 'cnt', text: String(done.length) })));
-      done.forEach(function (u) {
-        var chosen = u.items.filter(function (o) { return isDone(o.id); })[0];
-        u.items.forEach(function (o) { ds.append(optCard(o, onDone, isDone(o.id) ? {} : { chosen: chosen.id })); });
-      });
-      secs.push(ds);
-    }
     if (!secs.length) secs.push(h('p', { class: 'hint', style: 'margin-top:24px', text: 'Nothing left in this filter.' }));
     listEl.replaceChildren.apply(listEl, secs);
     if (state.tab === 'optimizations') renderToc();
-  }
-  function onDone(id) {
-    var y = window.scrollY;
-    build();
-    window.scrollTo(0, y);
-    var c = document.querySelector('#opt-' + id + ' .chk');
-    if (c) c.focus({ preventScroll: true });
   }
   build();
   el.replaceChildren(head, listEl);
@@ -3270,6 +3246,7 @@ function estimateHeight(card) {
     else if (b.kind === 'tabs') hgt += b.collapsed === false ? 360 : 52;
     else if (b.kind === 'list') hgt += 30 + (b.items || []).length * 22;
     else if (b.kind === 'traces') hgt += 1200;
+    else if (b.kind === 'score') hgt += 170 + (b.areas || []).length * 40;
     else hgt += 40;
   });
   if (card.insight || (card.insights || []).length) hgt += 70;
@@ -3413,6 +3390,69 @@ function scrollToCard(id) {
   closeToc();
 }
 
+/* ---- the efficiency score: SV9's block, and its summary in the headline ---- */
+function gradeCls(g) { var c = String(g || '').charAt(0).toLowerCase(); return 'g-' + (c === 'a' || c === 'b' ? c : 'c'); }
+function gradePill(g, big) { return h('span', { class: 'grade ' + gradeCls(g) + (big ? ' lg' : ''), text: g || '—' }); }
+function scoreNum(v) { return h('div', { class: 'sc-num' }, document.createTextNode(isNum(v) ? String(v) : '—'), h('small', { text: '/100' })); }
+function scoreBar(value, grade, scale, big) {
+  var v = Math.max(0, Math.min(100, num(value)));
+  var bar = h('div', { class: 'sc-bar ' + gradeCls(grade) + (big ? ' lg' : ''), role: 'img', 'aria-label': v + ' out of 100, grade ' + (grade || '—') });
+  var fill = h('div', { class: 'fill' });
+  fill.style.width = v + '%';
+  bar.append(fill);
+  (scale || []).forEach(function (s) {                 // the grade cut-offs, as gaps in the bar
+    if (s[1] > 0 && s[1] < 100) { var t = h('div', { class: 'tick' }); t.style.left = s[1] + '%'; bar.append(t); }
+  });
+  return bar;
+}
+function scaleRow(scale, grade) {
+  // each grade under its band of the bar (C runs from 0 to the first cut-off), the one reached in bold
+  var row = h('div', { class: 'sc-scale', 'aria-hidden': 'true' });
+  (scale || []).forEach(function (s, i) {
+    var sp = h('span', { class: s[0] === grade ? 'on' : null, text: s[0] });
+    sp.style.left = ((s[1] + (i ? scale[i - 1][1] : 100)) / 2) + '%';
+    row.append(sp);
+  });
+  return row;
+}
+function gotoCard(id) { if (!id) return; if (state.filter) goToQuestions([id]); else scrollToCard(id); }
+function cardLinkEl(id, text) {
+  var a = h('a', { href: '#card-' + id, class: 'sc-link', text: text || id });
+  a.addEventListener('click', function (e) { e.preventDefault(); gotoCard(id); });
+  return a;
+}
+function scoreRef(x) { return x.ref != null ? h('span', { class: 'sc-ref', text: (x.refLabel || 'All projects') + ': ' + x.ref + (x.refGrade ? ' (' + x.refGrade + ')' : '') }) : null; }
+function scoreBlock(b) {
+  var root = h('div', { class: 'score' });
+  root.append(h('div', { class: 'sc-head' }, scoreNum(b.value), gradePill(b.grade, true), scoreRef(b)));
+  if (b.sub) root.append(h('div', { class: 'sc-sub', text: b.sub + '.' }));
+  root.append(h('div', { class: 'sc-track' }, scoreBar(b.value, b.grade, b.scale, true), scaleRow(b.scale, b.grade)));
+  var grid = h('div', { class: 'sc-areas' });
+  (b.areas || []).forEach(function (a) {
+    var d = h('div', { class: 'd' });
+    if (a.lever) {
+      d.append(document.createTextNode('−' + NF(1, 1).format(num(a.lost)) + ' points · ' + a.lever + ': ' + fmt(a.usd, 'usd') + ', '
+        + fmt(a.share, 'pct') + ' of spend · '), cardLinkEl(a.card));
+    } else d.append(document.createTextNode('Nothing to save here' + (a.what ? '. It grades ' + a.what + '.' : '.')));
+    grid.append(h('div', { class: 'nm', text: a.label, title: a.what || null }), scoreBar(a.score, a.grade),
+      h('div', { class: 'n', text: isNum(a.score) ? String(a.score) : '—' }), gradePill(a.grade), d);
+  });
+  root.append(grid);
+  return root;
+}
+function scoreSummary(sc) {
+  // beside the cost: the score, its grade and bar, every area's grade, and the way to SV9
+  var box = h('div', { class: 'hscore' });
+  box.append(h('div', { class: 'l', text: 'Efficiency score' }), h('div', { class: 'sc-head' }, scoreNum(sc.value), gradePill(sc.grade, true)),
+    scoreBar(sc.value, sc.grade));
+  var chips = h('div', { class: 'chips' });
+  (sc.areas || []).forEach(function (a) {
+    chips.append(h('span', { class: 'dot ' + gradeCls(a.grade), text: a.label + ' ' + a.grade, title: a.label + ': ' + a.score + '/100' }));
+  });
+  box.append(chips, h('div', { class: 'foot' }, cardLinkEl(sc.card || 'SV9', 'Where the points went'), scoreRef(sc)));
+  return box;
+}
+
 /* ---- headline ---- */
 function sparkline(el, sp, unit) {
   // The daily spend under the big number: a line with a light fill, the peak marked, a value per day on hover.
@@ -3467,7 +3507,7 @@ function renderHeadline() {
       sub += (sub ? ' · ' : '') + 'per day, highest ' + fmt(pv, hd.hero.unit) + ' on ' + fmtDate(sp.x[sp.values.map(num).indexOf(pv)]);
     }
     if (sub) hero.append(h('div', { class: 's', text: sub }));
-    nodes.push(hero);
+    nodes.push(hd.score ? h('div', { class: 'hrow' }, hero, scoreSummary(hd.score)) : hero);
     if (spEl) requestAnimationFrame(function () { sparkline(spEl, sp, hd.hero.unit); });
     headlineEl._spark = spEl ? function () { sparkline(spEl, sp, hd.hero.unit); } : null;
   }

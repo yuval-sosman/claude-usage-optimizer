@@ -13,7 +13,8 @@
 Older versions wrote everything flat into <out>; migrate() moves those files into place (once, on the next run).
 The folder holds private data (prompt snippets, paths, your setup): prepare() refuses one that isn't this plugin's (home,
 the Claude folder, a folder holding other things) and keeps it readable by you alone.
-Standard library only; shared by usage_report.py, apply.py, video.py, share.py and company.py.
+Standard library only; shared by usage_report.py, apply.py, video.py, share.py, company.py, open.py (which opens a report
+that is already here) and clear.py (which removes these files, by these names, to start from scratch).
 """
 import json
 import os

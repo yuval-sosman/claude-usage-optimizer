@@ -95,13 +95,13 @@ def file_ok(p, claude_dir, home):
 
 # ---- settings ----------------------------------------------------------------------------------------------------
 
-EFFORTS = ('low', 'medium', 'high', 'xhigh', 'max')
+EFFORTS = ('low', 'medium', 'high', 'xhigh')     # what effortLevel accepts ("max" is only a maxEffortLevel; Claude Code ignores it here)
 TTLS = ('5m', '1h')
 WORD = re.compile(r'[A-Za-z0-9][A-Za-z0-9._:@\[\]/-]{0,150}$')         # a model alias or id, a Bedrock profile id, a name
 NUMBER = re.compile(r'\d{1,9}[kKmM]?$')
 ENV = {          # the environment variables an optimization may set, and what their values may look like
     'CLAUDE_CODE_SUBAGENT_MODEL': WORD,
-    'CLAUDE_CODE_AUTO_COMPACT_WINDOW': NUMBER,
+    'CLAUDE_CODE_AUTO_COMPACT_WINDOW': re.compile(r'(?:[1-9]\d{5}|1000000)$'),   # a plain token count, 100K–1M
     'CLAUDE_CODE_PROMPT_CACHE_TTL': re.compile(r'(?:5m|1h)$'),
     'CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL': re.compile(r'(?:5m|1h)$'),
     'ENABLE_PROMPT_CACHING_1H': re.compile(r'[01]$'),
@@ -132,10 +132,10 @@ SETTINGS = {     # top-level key: a check of its new value (a removed key is all
     'promptCacheTtl': _in(*TTLS),
     'subagentPromptCacheTtl': _in(*TTLS),
     'autoCompactEnabled': _bool,
-    'autoCompactWindow': lambda v: _int(10000, 10000000)(v) or (isinstance(v, str) and bool(NUMBER.match(v))),
+    'autoCompactWindow': _int(100000, 1000000),        # Claude Code ignores anything but an integer from 100K to 1M
     'skillListingBudgetFraction': lambda v: isinstance(v, (int, float)) and not isinstance(v, bool) and 0 < v <= 1,
     'disableClaudeAiConnectors': _bool,
-    'bashOutputMaxChars': _int(1000, 1000000),
+    'bashOutputMaxChars': _int(4000, 128000),          # Claude Code clamps it to this range
 }
 REMOVABLE = set(SETTINGS)          # removing one of these goes back to Claude Code's default
 MAPS = {         # object keys whose entries are checked one by one: {name: check of the entry's new value}

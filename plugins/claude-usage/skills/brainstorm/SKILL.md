@@ -3,7 +3,7 @@ name: brainstorm
 description: Think through your Claude Code usage with Claude — explore the report's numbers, challenge or extend the insights, test what-if ideas on the extracted data, and turn what you agree on into updated insights or optimizations.
 disable-model-invocation: true
 argument-hint: "[a question or topic, e.g. \"why are subagents so expensive?\"]"
-allowed-tools: Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/usage_report.py" *), Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/candidates.py" *), Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/validate.py" *), Read(~/.claude-usage/**), Edit(~/.claude-usage/insights.json)
+allowed-tools: Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/usage_report.py" *), Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/candidates.py" *), Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/validate.py" *), Read(~/.claude-usage/**), Read(~/.claude/plugins/cache/claude-usage-optimizer/claude-usage/**), Edit(~/.claude-usage/insights.json)
 ---
 
 # Brainstorm on the usage data
@@ -24,6 +24,10 @@ to try, and what is worth changing.
   apart.
 - Dollars are API list-price equivalents.
 - Cite report question IDs (e.g. `CX8`) so the user can open them in the report.
+- A what-if saving is not a recommendation by itself. Before you suggest a change, check it against Claude Code's documented
+  best practice ([../optimize/reference/best-practices.md](../optimize/reference/best-practices.md)): e.g. a compaction
+  threshold under 100K, a saved `low` effort or thinking off are not practices to adopt, whatever they would have saved. Say
+  what the guidance recommends instead, with the numbers.
 
 ## Start
 
@@ -42,7 +46,7 @@ to try, and what is worth changing.
   `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/usage_report.py" --since … --until … --out /tmp/usage-a --no-csv`), main vs subagents,
   models.
 - **What-if**: re-price calls under another assumption (a model, a compaction threshold, a cache lifetime) the way the SV
-  questions do, and say how it differs from theirs.
+  questions do, and say how it differs from theirs, and whether the guidance supports acting on it.
 - **Explain a miss or a spike**: `cache_misses.csv` has every miss with its timestamps, cause, idle time, cache state, trigger
   and extra cost; the report's CX8 card shows the timeline of the costliest ones.
 - **Challenge an insight**: look for the counter-evidence; if it weakens, say so.
@@ -69,7 +73,7 @@ for r in csv.DictReader(open('<OUT>/data/tool_calls.csv')):
 When the conversation lands on something new or changes a conclusion:
 
 - **An insight**: offer to add or edit it in `insights.json` (same schema and rules as the report skill: cite questions,
-  savings with basis for cost insights). Then validate and re-render:
+  savings with basis for cost insights, actions the guidance recommends). Then validate and re-render:
   `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/validate.py" insights "<OUT>/insights.json" --metrics "<OUT>/data/metrics.json"`
   and `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/usage_report.py" --render --out "<OUT>"`.
 - **A change to try**: point to `/claude-usage:optimize` (it prepares changes you can apply one by one), or, if the user
