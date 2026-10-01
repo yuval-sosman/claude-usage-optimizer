@@ -5625,9 +5625,24 @@ def render(out, template, log=print):
     tilde = lambda p_: '~' + p_[len(home):] if p_.startswith(home + os.sep) and re.fullmatch(r'[\w./~-]+', p_) else shlex.quote(p_)
     cd_ = report['meta'].get('claude_dir')
     report['meta'].pop('apply', None)          # only ever this machine's own command, never one that came with the data
+    report['meta'].pop('prompt', None)
     if not report['meta'].get('shared'):       # someone else's report (share.py unpack): its optimizations are for their machine
         report['meta']['apply'] = (f"python3 {tilde(os.path.join(HERE, 'apply.py'))} --dir {tilde(out)}"
                                    + (f" --claude-dir {tilde(cd_)}" if cd_ and cd_ != os.path.join(home, '.claude') else ''))
+        # what the "Apply with prompt" text names: where the bundled files are, which hooks need _session.py and
+        # prices.json beside them (as apply.py installs them), and a Claude folder other than ~/.claude
+        plain = lambda p_: '~' + p_[len(home):] if p_.startswith(home + os.sep) else p_
+        hooks_dir = os.path.join(HERE, 'hooks')
+        helpers = []
+        for name in sorted(os.listdir(hooks_dir)) if os.path.isdir(hooks_dir) else []:
+            try:
+                with open(os.path.join(hooks_dir, name), encoding='utf-8') as fh:
+                    if name != '_session.py' and 'import _session' in fh.read():
+                        helpers.append('hooks/' + name)
+            except (OSError, ValueError):
+                continue
+        report['meta']['prompt'] = {'scripts': slash(plain(HERE)), 'helpers': helpers,
+                                    'claude_dir': slash(plain(cd_)) if cd_ and cd_ != os.path.join(home, '.claude') else None}
     with open(template, encoding='utf-8') as fh:
         tpl = fh.read()
     marker = '/*__REPORT_DATA__*/null'
