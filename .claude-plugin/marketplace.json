@@ -9,7 +9,7 @@
     {
       "name": "claude-usage",
       "source": "./plugins/claude-usage",
-      "description": "Analyze your Claude Code usage from local transcripts: an HTML report on cost, caching, context, sessions, tools, subagents and hooks, Claude-written insights with what each change would have saved, optimizations you can apply one by one, a short video of your highlights, the whole report as one file to send, and a company report combining many people's files.",
+      "description": "Analyze your Claude Code usage from local transcripts: an HTML report on cost, caching, context, sessions, tools, subagents and hooks with an efficiency score and a grade per area, Claude-written insights with what each change would have saved, optimizations you can apply one by one, a short video of your highlights, the whole report as one file to send, and a company report combining many people's files.",
       "author": {"name": "yuvalsosman"},
       "homepage": "https://github.com/yuval-sosman/claude-usage-optimizer",
       "repository": "https://github.com/yuval-sosman/claude-usage-optimizer",

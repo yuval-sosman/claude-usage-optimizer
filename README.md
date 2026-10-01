@@ -2,13 +2,13 @@
 
 **See where your Claude Code money goes, and what would have kept it.**
 
-[![A 53-second tour: what 62 days of Claude Code cost, the report command, the 62 questions, one costly cache miss traced step by step, Claude's insights with what each fix would have saved, applying a fix, the combined saving, and how to install](promo/claude-usage-video.gif)](promo/claude-usage-video.mp4)
+[![A 53-second tour: what 62 days of Claude Code cost, the report command, its questions, one costly cache miss traced step by step, Claude's insights with what each fix would have saved, applying a fix, the combined saving, and how to install](promo/claude-usage-video.gif)](promo/claude-usage-video.mp4)
 
 <sub>Demo data. Watch as video: [full 53-second tour](promo/claude-usage-video.mp4) · [25-second cut](promo/claude-usage-short.mp4).</sub>
 
-A Claude Code plugin marketplace with one plugin, **claude-usage**. It reads your local transcripts, answers 62 questions
-about cost, caching, context and habits, and has Claude write what to change, with the dollars each change would have
-saved so far. Nothing leaves your machine.
+A Claude Code plugin marketplace with one plugin, **claude-usage**. It reads your local transcripts, answers 63 questions
+about cost, caching, context and habits, scores how efficiently you work, and has Claude write what to change, with the
+dollars each change would have saved so far. Nothing leaves your machine.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="plugins/claude-usage/docs/images/report-dark.png">
@@ -17,8 +17,11 @@ saved so far. Nothing leaves your machine.
 
 <sub>All screenshots show generated demo data.</sub>
 
-- **Report:** 62 questions, each answered with numbers and charts: cost by model, project and day, cache hits and misses,
+- **Report:** 63 questions, each answered with numbers and charts: cost by model, project and day, cache hits and misses,
   context growth, sessions, subagents, tools, hooks, and a step-by-step timeline of every costly cache miss.
+- **Efficiency score:** one number from 1 to 100 beside your cost, with a school grade (A+ down to C) for it and for each
+  area: context, caching, subagents, hooks and setup. Every point lost is 1% of spend that Claude Code's documented
+  practices would have saved, overlaps removed, so the grades show where to start; All projects compares your projects.
 - **Insights:** Claude reads the numbers and writes the bottom lines, cost first. Each one links to the charts behind it
   and says what it would have saved, all time and per 30 days.
 - **Optimizations:** concrete changes: settings, hooks, a status line, CLAUDE.md notes, habits. Each is a way of working
@@ -92,6 +95,12 @@ Undo:  python3 …/claude-usage/scripts/apply.py undo subagents-on-sonnet --dir 
 ## A look inside
 
 <details open>
+<summary><b>Efficiency score</b>: 1 to 100, with a grade for each area</summary>
+
+![The efficiency score: the overall score and grade on a bar with the grade bands, and each area's score, grade and the change that would have saved its points](plugins/claude-usage/docs/images/score.png)
+</details>
+
+<details open>
 <summary><b>Insights</b>: the bottom lines, each with what it would have saved</summary>
 
 ![The Insights tab: a summary, the potential saving, and cost insights with their savings](plugins/claude-usage/docs/images/insights.png)
@@ -130,7 +139,7 @@ Undo:  python3 …/claude-usage/scripts/apply.py undo subagents-on-sonnet --dir 
 ## More
 
 <details>
-<summary><b>The 62 questions</b></summary>
+<summary><b>The 63 questions</b></summary>
 
 | Section | For example |
 |---|---|
@@ -140,7 +149,7 @@ Undo:  python3 …/claude-usage/scripts/apply.py undo subagents-on-sonnet --dir 
 | Plugins, MCP, tools & hooks | What loads into every session but never gets used? What do my hooks cost? Which files does Claude re-read? |
 | Output & outcomes | How much code did Claude change, and what do 100 changed lines cost? In which languages? |
 | Your working patterns | When do I work? How often do my pauses outlast the cache? |
-| What would it have saved? | Avoidable misses, when to /compact, another model, fresh sessions after breaks, reading files in ranges. |
+| What would it have saved? | My efficiency score, and where did the points go? Avoidable misses, when to /compact, another model, fresh sessions after breaks, reading files in ranges. |
 | Trends | What drove my cost week to week? What changed when my setup changed? |
 
 Each question, how it's counted and how to check it: [docs/QUESTIONS.md](plugins/claude-usage/docs/QUESTIONS.md).

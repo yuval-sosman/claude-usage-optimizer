@@ -216,6 +216,46 @@ main { min-width: 0; }
 .kstrip.n4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .kstrip.n3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
+/* ---- Efficiency score (SV9, and its summary beside the cost): a 1–100 bar and a school grade, A+ down to C ---- */
+.g-a { --g: var(--status-good); --dc: var(--status-good); }
+.g-b { --g: var(--status-warning); --dc: var(--status-warning); }
+.g-c { --g: var(--status-serious); --dc: var(--status-serious); }
+.grade { display: inline-flex; align-items: center; gap: 8px; height: 24px; padding: 0 8px; border: 1px solid var(--border); border-radius: 999px; font-size: 13px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.grade::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--g, var(--text-muted)); flex-shrink: 0; }
+.grade.lg { height: 32px; padding: 0 12px; font-size: 16px; }
+.sc-bar { position: relative; height: 8px; border-radius: 999px; background: var(--wash-strong); }
+.sc-bar.lg { height: 12px; }
+.sc-bar .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: inherit; background: var(--g, var(--text-muted)); }
+.sc-bar .tick { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--surface-1); }
+.sc-scale { position: relative; height: 16px; margin-top: 4px; font-size: 12px; line-height: 16px; color: var(--text-muted); }
+.sc-scale span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.sc-scale span.on { color: var(--text-primary); font-weight: 600; }
+.sc-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.sc-num { font-size: 48px; font-weight: 600; line-height: 1.1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.sc-num small { margin-left: 4px; font-size: 16px; font-weight: 500; letter-spacing: 0; color: var(--text-muted); }
+.sc-sub { margin-top: 4px; font-size: 14px; color: var(--text-secondary); }
+.sc-ref { font-size: 13px; color: var(--text-muted); }
+.score .sc-track { margin-top: 16px; }
+.sc-areas { display: grid; grid-template-columns: max-content minmax(96px, 1fr) 28px max-content minmax(0, 2fr); align-items: center; gap: 12px 16px; margin-top: 24px; }
+.sc-areas .nm { font-size: 14px; font-weight: 500; }
+.sc-areas .n { font-size: 14px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+.sc-areas .d { font-size: 13px; line-height: 1.5; color: var(--text-secondary); min-width: 0; }
+.sc-link { color: inherit; text-decoration: underline; text-decoration-color: var(--baseline); text-underline-offset: 2px; }
+.sc-link:hover { color: var(--text-primary); }
+.hrow { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 16px 48px; }
+.hrow > .hero { flex: 1 1 420px; min-width: 0; }
+.hscore { flex: 0 1 360px; min-width: 260px; margin-bottom: 16px; padding: 16px 20px; background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r-card); box-shadow: var(--shadow-card); }
+.hscore .l { font-size: 13px; color: var(--text-secondary); }
+.hscore .sc-head { margin: 4px 0 12px; }
+.hscore .chips { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 12px; font-size: 13px; color: var(--text-secondary); }
+.hscore .foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; margin-top: 12px; font-size: 13px; }
+@media (max-width: 720px) {
+  .sc-areas { grid-template-columns: max-content minmax(64px, 1fr) 28px max-content; gap: 8px 12px; }
+  .sc-areas .d { grid-column: 1 / -1; margin-bottom: 8px; }
+  .sc-scale span:not(.on) { display: none; }             /* 5-point bands are too narrow to label them all */
+  .hscore { flex-basis: 100%; }
+}
+
 /* ---- Sections & cards ---- */
 .sec > h2 { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; margin: 40px 0 12px; scroll-margin-top: calc(var(--topbar-h) + 16px); }
 .card {
@@ -1856,6 +1896,8 @@ function blockEl(b) {
     box.append(h('p', { class: 'blk-text', text: b.text || '' }));
   } else if (b.kind === 'traces') {
     box.append(tracesBlock(b));
+  } else if (b.kind === 'score') {
+    box.append(scoreBlock(b));
   } else if (b.kind === 'list') {
     var d = h('div', { class: 'blk-list' });
     if (b.title) d.append(h('h4', { text: b.title }));
@@ -3204,6 +3246,7 @@ function estimateHeight(card) {
     else if (b.kind === 'tabs') hgt += b.collapsed === false ? 360 : 52;
     else if (b.kind === 'list') hgt += 30 + (b.items || []).length * 22;
     else if (b.kind === 'traces') hgt += 1200;
+    else if (b.kind === 'score') hgt += 170 + (b.areas || []).length * 40;
     else hgt += 40;
   });
   if (card.insight || (card.insights || []).length) hgt += 70;
@@ -3347,6 +3390,69 @@ function scrollToCard(id) {
   closeToc();
 }
 
+/* ---- the efficiency score: SV9's block, and its summary in the headline ---- */
+function gradeCls(g) { var c = String(g || '').charAt(0).toLowerCase(); return 'g-' + (c === 'a' || c === 'b' ? c : 'c'); }
+function gradePill(g, big) { return h('span', { class: 'grade ' + gradeCls(g) + (big ? ' lg' : ''), text: g || '—' }); }
+function scoreNum(v) { return h('div', { class: 'sc-num' }, document.createTextNode(isNum(v) ? String(v) : '—'), h('small', { text: '/100' })); }
+function scoreBar(value, grade, scale, big) {
+  var v = Math.max(0, Math.min(100, num(value)));
+  var bar = h('div', { class: 'sc-bar ' + gradeCls(grade) + (big ? ' lg' : ''), role: 'img', 'aria-label': v + ' out of 100, grade ' + (grade || '—') });
+  var fill = h('div', { class: 'fill' });
+  fill.style.width = v + '%';
+  bar.append(fill);
+  (scale || []).forEach(function (s) {                 // the grade cut-offs, as gaps in the bar
+    if (s[1] > 0 && s[1] < 100) { var t = h('div', { class: 'tick' }); t.style.left = s[1] + '%'; bar.append(t); }
+  });
+  return bar;
+}
+function scaleRow(scale, grade) {
+  // each grade under its band of the bar (C runs from 0 to the first cut-off), the one reached in bold
+  var row = h('div', { class: 'sc-scale', 'aria-hidden': 'true' });
+  (scale || []).forEach(function (s, i) {
+    var sp = h('span', { class: s[0] === grade ? 'on' : null, text: s[0] });
+    sp.style.left = ((s[1] + (i ? scale[i - 1][1] : 100)) / 2) + '%';
+    row.append(sp);
+  });
+  return row;
+}
+function gotoCard(id) { if (!id) return; if (state.filter) goToQuestions([id]); else scrollToCard(id); }
+function cardLinkEl(id, text) {
+  var a = h('a', { href: '#card-' + id, class: 'sc-link', text: text || id });
+  a.addEventListener('click', function (e) { e.preventDefault(); gotoCard(id); });
+  return a;
+}
+function scoreRef(x) { return x.ref != null ? h('span', { class: 'sc-ref', text: (x.refLabel || 'All projects') + ': ' + x.ref + (x.refGrade ? ' (' + x.refGrade + ')' : '') }) : null; }
+function scoreBlock(b) {
+  var root = h('div', { class: 'score' });
+  root.append(h('div', { class: 'sc-head' }, scoreNum(b.value), gradePill(b.grade, true), scoreRef(b)));
+  if (b.sub) root.append(h('div', { class: 'sc-sub', text: b.sub + '.' }));
+  root.append(h('div', { class: 'sc-track' }, scoreBar(b.value, b.grade, b.scale, true), scaleRow(b.scale, b.grade)));
+  var grid = h('div', { class: 'sc-areas' });
+  (b.areas || []).forEach(function (a) {
+    var d = h('div', { class: 'd' });
+    if (a.lever) {
+      d.append(document.createTextNode('−' + NF(1, 1).format(num(a.lost)) + ' points · ' + a.lever + ': ' + fmt(a.usd, 'usd') + ', '
+        + fmt(a.share, 'pct') + ' of spend · '), cardLinkEl(a.card));
+    } else d.append(document.createTextNode('Nothing to save here' + (a.what ? '. It grades ' + a.what + '.' : '.')));
+    grid.append(h('div', { class: 'nm', text: a.label, title: a.what || null }), scoreBar(a.score, a.grade),
+      h('div', { class: 'n', text: isNum(a.score) ? String(a.score) : '—' }), gradePill(a.grade), d);
+  });
+  root.append(grid);
+  return root;
+}
+function scoreSummary(sc) {
+  // beside the cost: the score, its grade and bar, every area's grade, and the way to SV9
+  var box = h('div', { class: 'hscore' });
+  box.append(h('div', { class: 'l', text: 'Efficiency score' }), h('div', { class: 'sc-head' }, scoreNum(sc.value), gradePill(sc.grade, true)),
+    scoreBar(sc.value, sc.grade));
+  var chips = h('div', { class: 'chips' });
+  (sc.areas || []).forEach(function (a) {
+    chips.append(h('span', { class: 'dot ' + gradeCls(a.grade), text: a.label + ' ' + a.grade, title: a.label + ': ' + a.score + '/100' }));
+  });
+  box.append(chips, h('div', { class: 'foot' }, cardLinkEl(sc.card || 'SV9', 'Where the points went'), scoreRef(sc)));
+  return box;
+}
+
 /* ---- headline ---- */
 function sparkline(el, sp, unit) {
   // The daily spend under the big number: a line with a light fill, the peak marked, a value per day on hover.
@@ -3401,7 +3507,7 @@ function renderHeadline() {
       sub += (sub ? ' · ' : '') + 'per day, highest ' + fmt(pv, hd.hero.unit) + ' on ' + fmtDate(sp.x[sp.values.map(num).indexOf(pv)]);
     }
     if (sub) hero.append(h('div', { class: 's', text: sub }));
-    nodes.push(hero);
+    nodes.push(hd.score ? h('div', { class: 'hrow' }, hero, scoreSummary(hd.score)) : hero);
     if (spEl) requestAnimationFrame(function () { sparkline(spEl, sp, hd.hero.unit); });
     headlineEl._spark = spEl ? function () { sparkline(spEl, sp, hd.hero.unit); } : null;
   }

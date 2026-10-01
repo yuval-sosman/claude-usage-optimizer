@@ -1,6 +1,6 @@
 # Questions the usage script should answer
 
-62 questions about your Claude Code usage. The claude-usage plugin (`/claude-usage:report`, or `usage_report.py --open` for the numbers alone) answers all of them in an HTML report, one card per question with the same IDs. Claude then writes the report's Insights and Optimizations tabs from those answers. Each one was tested against your own logs (2026-09-06 → 09-24,
+63 questions about your Claude Code usage. The claude-usage plugin (`/claude-usage:report`, or `usage_report.py --open` for the numbers alone) answers all of them in an HTML report, one card per question with the same IDs. Claude then writes the report's Insights and Optimizations tabs from those answers. Each one was tested against your own logs (2026-09-06 → 09-24,
 91 main sessions, 64 subagent transcripts). Every question passed three tests:
 
 1. **It can be answered by counting.** Only `jq`, `awk`, `grep` or plain code, no LLM judgment.
@@ -46,16 +46,17 @@ These were settled while testing the questions. Several are traps if done naivel
 
 Of the questions below, these gave the biggest or most surprising answers on your data:
 
-0. **SV1** Which change would have saved the most? → main-thread work on Opus 5.5 (the current default) instead of Opus 5 / Fable 5: $230 (36% of spend).
-1. **OV3** What dominates the bill? → cache reads 55%, output only 17%.
-2. **CX9** Tokens re-read per token written → 163×.
-3. **CX8** Why the cache missed → resuming finished subagents with `SendMessage` and returning after long breaks re-wrote the most; its step-by-step section shows each costly miss on a timeline.
-4. **CX3** The costliest things to carry in context → the start-up baseline, Claude's own earlier output, then Bash output. The costliest single item was a 33K-token file read, re-read 96 times.
-5. **OV5** How concentrated spend is → the top 10% of sessions are 47% of spend.
-6. **EX2** Loaded but never used → 33 of 41 skills, and 2 MCP servers with zero calls.
-7. **CX4** Context size when you `/clear` → median 172k.
-8. **EX9** Exploring before the first edit → a median 31% of a session's cost.
-9. **OV8** Total waste budget.
+0. **SV9** How efficient was my use? → 70/100 (B-): the documented practices would have saved 30% of spend; Context lost the most points (C).
+1. **SV1** Which change would have saved the most? → main-thread work on Opus 5.5 (the current default) instead of Opus 5 / Fable 5: $230 (36% of spend).
+2. **OV3** What dominates the bill? → cache reads 55%, output only 17%.
+3. **CX9** Tokens re-read per token written → 163×.
+4. **CX8** Why the cache missed → resuming finished subagents with `SendMessage` and returning after long breaks re-wrote the most; its step-by-step section shows each costly miss on a timeline.
+5. **CX3** The costliest things to carry in context → the start-up baseline, Claude's own earlier output, then Bash output. The costliest single item was a 33K-token file read, re-read 96 times.
+6. **OV5** How concentrated spend is → the top 10% of sessions are 47% of spend.
+7. **EX2** Loaded but never used → 33 of 41 skills, and 2 MCP servers with zero calls.
+8. **CX4** Context size when you `/clear` → median 172k.
+9. **EX9** Exploring before the first edit → a median 31% of a session's cost.
+10. **OV8** Total waste budget.
 
 ---
 
@@ -394,6 +395,29 @@ Per item: tokens per session, its share of the saving, where it comes from (buil
 **SV8. What would reading large files in ranges have saved?** `T P S`
 - How: Read calls without offset/limit that returned ≥8K tokens; their cost to write and carry. Assumes a targeted read (or a grep first) keeps 50%.
 - Check: ✓ 75 reads (1.2M tokens) cost $25.36; about $12.68 saved.
+
+**SV9. What is my efficiency score, and where did the points go?** `T P`
+One number from 1 to 100 with a school grade, A+ down to C, and the same for five areas, so it says where the points went.
+The headline shows it beside the cost; the card leads the SV section.
+- How:
+  - Each area's share of spend is what the largest of its SV1 levers would have saved (they act on the same cost, so only
+    one counts). Context: SV4's /compact and SV8's ranged reads, 35 points. Caching: SV3's avoidable misses, SV5's cache
+    lifetime and SV7's fresh starts, 25. Subagents: SV6 via `CLAUDE_CODE_SUBAGENT_MODEL`, 15. Hooks: EX5's Stop-hook
+    follow-up work (an upper bound), 15. Setup: SV2's unused listings, 10.
+  - Together the areas keep Π(1 − share) of the spend, the way the tabs and the video combine savings (each change saves
+    its share of what the others leave). The score is that kept share out of 100: 100 minus the share of spend the
+    documented practices would have saved, overlaps removed, rounded half up and kept within 1–100.
+  - The combined loss is split between the areas in proportion to their shares, so the points they lose add up to
+    100 − score. An area's score is the points it kept out of its points; the points-weighted average of the area scores
+    is the overall score, unless an area lost more than all its points (its score is then 1).
+  - The main-thread model (SV1's model lever) is not graded: the right model depends on the work, and that lever compares
+    with the model you use now, so moving to a cheaper model would lower the score.
+  - Grades: A+ 95–100, A 90–94, A- 85–89, B+ 80–84, B 75–79, B- 70–74, C+ 65–69, C below 65.
+  - All projects adds a row per project (each group scope): its score, grade, spend, and the area that lost the most points.
+- Check: ✓ 2026-10-01 (Sep 6 → 30): 70/100 (B-), 30% of spend avoidable with overlaps removed. Context 53 (C, 16.4 points:
+  /compact at about 150K, $212 = 18% of spend), Caching 77 (B, 5.6: avoidable misses, $72.67), Subagents 80 (B+, 3.1),
+  Hooks 73 (B-, 4.0, upper bound), Setup 88 (A-, 1.2). The points lost add up to 30.3 = 100 − 69.7. Projects range from
+  44 (C) to 89 (A-). The engine's other cards, CSVs and drafts are unchanged by it (old and new engine on the same days).
 
 ## TR: Trends & change detection
 

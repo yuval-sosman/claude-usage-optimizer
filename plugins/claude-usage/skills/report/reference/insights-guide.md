@@ -18,7 +18,7 @@ Listed in display order. **Cost management comes first and matters most.**
 
 | id | Title | What belongs here | Usually cites |
 |---|---|---|---|
-| `cost` | Cost management | Every lever that would have saved real money, stated as "$X all time (≈ $Z per 30 days, Y% of spend)": model choice, compaction point, avoidable misses, fresh starts after breaks, unused context, large reads, automation that triggers extra work. Also where the money goes (token types, effort level, concentration) when that changes what to do. | SV1–SV8, OV2–OV5, CX8 |
+| `cost` | Cost management | Every lever that would have saved real money, stated as "$X all time (≈ $Z per 30 days, Y% of spend)": model choice, compaction point, avoidable misses, fresh starts after breaks, unused context, large reads, automation that triggers extra work. Also where the money goes (token types, effort level, concentration) when that changes what to do. | SV1–SV9, OV2–OV5, CX8 |
 | `context` | Token & context efficiency | What fills the context and what carrying it costs: start-up overhead, big tool outputs, re-reads, growth rate, context size at /clear, what a new session starts with. | CX1–CX6, EX6, EX8, OUT1 |
 | `cache` | Caching | Hit rate, misses and their causes, cache lifetime fit, cold starts. | CX6–CX12, SV3, SV5, ME3 |
 | `workflow` | Sessions & habits | Session length, prompting, reply times, parallel sessions, interruptions, when you work. | SE1–SE4, ME1–ME3, ME6, ME7 |
@@ -76,6 +76,9 @@ Non-cost insights may carry `savings` too when a number exists.
 
 ## What to look for (a checklist, not a template)
 
+0. **The efficiency score** (SV9): the overall score and grade, and the area that lost the most points. It is SV1's levers
+   combined with overlaps removed (the main-thread model is not graded), so it adds no saving of its own: cite it in the
+   summary or in the insight on that area's lever, not as a separate saving.
 1. **Model mix** (SV6, OV2): which model did most of the work; what the same tokens cost on the model the user uses now;
    subagents on a cheaper model (SV6's "Via" figure is what the default subagent model reaches: Explore and Plan follow the
    main model); Explore agents on Haiku. SV6 is a price ceiling: the docs' split is Sonnet for most coding, Opus for complex

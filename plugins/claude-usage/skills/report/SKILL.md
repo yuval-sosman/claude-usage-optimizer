@@ -125,8 +125,9 @@ The notes, for example:
 }
 ```
 
-- `summary` (required): 3–5 sentences, cost first: total spend, the two or three biggest levers with their savings (all time and
-  per 30 days), one sentence on what already works well, and that dollars are list-price equivalents. At most 900
+- `summary` (required): 3–5 sentences, cost first: total spend, the efficiency score and grade (SV9), the two or three
+  biggest levers with their savings (all time and per 30 days), one sentence on what already works well, and that dollars
+  are list-price equivalents. At most 900
   characters (the schema's limit; aim for ~600).
 - Length limits the schema enforces (characters): `title` 90, `bottom_line` 280, `detail` 1,400, an evidence `fact` 240,
   `savings.basis` 400, an action 240; at most 6 `questions`, 6 `evidence` and 4 `actions`.

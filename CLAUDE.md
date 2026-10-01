@@ -190,13 +190,15 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
   - `TABLE`.
   - `TABS([(label, block or [blocks])], title, sub, desc, collapsed)`: a collapsible section, one tab shown at a time. With a single tab it is just a collapsible section.
   - `{'kind': 'traces'}`: the step-by-step miss timelines.
+  - `{'kind': 'score'}`: SV9's efficiency score (value, grade, `scale`, `areas`), drawn by the template's `scoreBlock()`;
+    `md_card()` writes it as one line even in a short digest.
 - **Layout flags on a block:**
   - `width: 'half'|'third'` puts consecutive blocks side by side, with dividers.
   - `hidden: True` keeps a block in metrics/digest but doesn't draw it.
   - Chart options: `minBand` + `scrollX` (scrollable bars), `labelUnit`. The template also honours `pointColors`, which it sets itself on the insights chart.
 - **Card-level switches:**
   - `HIDDEN_CARDS` (currently OV6, ME4, ME5, EX10–EX15): computed and kept in the data/digest, not shown, can't be cited.
-  - `CARD_ORDER`: a display position that differs from the id.
+  - `CARD_ORDER`: a display position that differs from the id (SV9 leads its section at 0.5).
   - `CARD_SECTION`: the section a card shows in when it differs from its id's letters (the page's `sectionOf()` and the
     digest's `section_of()` read the card's `section`).
   - `alias`: a hidden card with `alias: '<ID>'` opens that card when it is cited or linked. The template, `validate.py`
@@ -208,6 +210,15 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
   - Most tiles come from `m.facts`, which cards fill in as a side effect (OV1, OV7, CX1, CX7, CX8, CX9…), so a card that sets a fact must run.
   - The two median tiles are read by label from the KPI block of hidden OV6, so renaming those labels blanks the tiles.
   - The headline insights come from the cards listed in `HEADLINE_ORDER`.
+  - Its `score` is SV9's (`m.facts['score']`), drawn beside the cost by `scoreSummary()`; `add_refs()` gives each scope's
+    score (headline and SV9 block) the all-projects value, and `add_scores()` adds All projects' "By project" table after
+    every scope has run.
+- **Efficiency score (SV9):** `efficiency()` combines SV1's levers (`sv_levers()`, by id) into a 1–100 score. `SCORE_AREAS`
+  maps each area to its levers (the largest counts: they act on the same cost) and its points; areas combine as
+  Π(1 − share), like the tabs and the video combine savings; `GRADES` holds the cut-offs (A+ 95 … C below 65). The
+  main-thread model lever is left out on purpose (it compares with the model in use now, so moving to a cheaper model would
+  lower the score). A new SV1 lever goes into an area, or is left out, deliberately: update `SCORE_AREAS`, SV9's note and
+  QUESTIONS.md's SV9 together.
 - **Across scopes:** `where_used()` runs once on all projects in `build()` and reaches every scope as `g.where`: what a
   user-level setting loads everywhere but only some projects use (SV2's "used in some projects" table, `item_origin()`'s
   advice, which never says "switch it off in each project").
@@ -264,7 +275,7 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
 5. The examples in `skills/report/SKILL.md` and `skills/brainstorm/SKILL.md`, and the video: `scripts/video.py` reads OV2
    (the "By model" chart), OV3, CX8 (its KPI labels and traces), SV1, SV3 and the headline tiles by label. And
    `scripts/candidates.py`: its catalog entries and lever bundles cite and read cards by id.
-6. The question count ("62 questions" = every card id in metrics.json, hidden ones included) in the root `README.md`, the plugin's `README.md`, `.claude-plugin/plugin.json`, QUESTIONS.md and the promo videos (`promo/*.html`; re-render their MP4s with `promo/render.mjs`, then the GIFs in both READMEs as its header says). Keep it out of the skills: the report skill's description loads in every session.
+6. The question count ("63 questions" = every card id in metrics.json, hidden ones included) in the root `README.md`, the plugin's `README.md`, `.claude-plugin/plugin.json`, QUESTIONS.md and the promo videos (`promo/*.html`; re-render their MP4s with `promo/render.mjs`, then the GIFs in both READMEs as its header says). Keep it out of the skills: the report skill's description loads in every session.
 7. The user's existing `<OUT>/insights.json` and `optimizations.json`: remap cited ids (`questions`, `evidence[].question`, ids inside text), or regenerate them.
 8. Ids are link targets, so renumbering breaks old links. Prefer hiding (`HIDDEN_CARDS`), folding (`alias`), `CARD_ORDER`
    or, to move a card to another section, `CARD_SECTION` when a stable id matters.
