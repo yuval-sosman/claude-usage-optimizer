@@ -1,8 +1,8 @@
 ---
 name: clear
-description: Remove this plugin's report files (the report and its data, the insights and optimizations, videos, share files, reports others sent you, the company report) to start from scratch. Your Claude Code setup and any applied optimizations stay as they are.
+description: Remove this plugin's report files (the report and its data, the insights and optimizations, your score history, videos, share files, reports others sent you, the company report) to start from scratch. Your Claude Code setup and any applied optimizations stay as they are.
 disable-model-invocation: true
-argument-hint: "[--yes] [--keep video,share,received,company] [--out DIR]"
+argument-hint: "[--yes] [--keep video,share,received,company,history] [--out DIR]"
 allowed-tools: Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/clear.py" *)
 ---
 
@@ -32,8 +32,8 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/clear.py"
 ```
 
 - Add `--out "DIR"` only when the user named another report folder, or `--claude-dir "DIR"` for another Claude folder.
-- Add `--keep` with any of `video`, `share`, `received`, `company` when the user wants those kept ("clear it but keep my
-  video": `--keep video`).
+- Add `--keep` with any of `video`, `share`, `received`, `company`, `history` when the user wants those kept ("clear it but
+  keep my video": `--keep video`; "start over but keep my progress": `--keep history`).
 
 It changes nothing. It prints what it would remove (each item and its size), what it keeps and why (optimizations still
 applied, files that aren't this plugin's, what `--keep` spared), and the command that removes it. If it finds nothing to
@@ -44,7 +44,8 @@ clear, or refuses the folder, tell the user what it said and stop.
 If `$ARGUMENTS` contains `--yes`, the user has confirmed already: go on to step 3.
 
 Otherwise ask once, with the AskUserQuestion tool: say how many items and how much will go, and, when the preview lists
-them, that `received/` holds reports other people sent (gone for good unless they still have the share files) and that
+them, that `received/` holds reports other people sent (gone for good unless they still have the share files), that
+`history/` holds the scores of earlier reports (the next report's progress starts over without it), and that
 `insights.json` and `optimizations.json` come back only when Claude writes them again. Options: remove them, or keep
 everything. If they choose to keep everything, or the tool isn't available (a non-interactive run), stop here and give the
 command the preview printed, for them to run when they want.

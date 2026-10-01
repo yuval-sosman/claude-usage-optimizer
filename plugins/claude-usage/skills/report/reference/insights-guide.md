@@ -76,7 +76,8 @@ Non-cost insights may carry `savings` too when a number exists.
 
 ## What to look for (a checklist, not a template)
 
-0. **The efficiency score** (SV9): the overall score and grade, and the area that lost the most points. It is SV1's levers
+0. **The efficiency score** (SV9): the overall score and grade, the area that lost the most points, and (when SV9 has a
+   progress table) how the score moved since the last report and which lever moved it. It is SV1's levers
    combined with overlaps removed (the main-thread model is not graded), so it adds no saving of its own: cite it in the
    summary or in the insight on that area's lever, not as a separate saving.
 1. **Model mix** (SV6, OV2): which model did most of the work; what the same tokens cost on the model the user uses now;

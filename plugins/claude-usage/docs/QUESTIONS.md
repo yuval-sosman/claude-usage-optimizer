@@ -46,7 +46,7 @@ These were settled while testing the questions. Several are traps if done naivel
 
 Of the questions below, these gave the biggest or most surprising answers on your data:
 
-0. **SV9** How efficient was my use? → 70/100 (B-): the documented practices would have saved 30% of spend; Context lost the most points (C).
+0. **SV9** How efficient was my use? → 70/100 (B+): the documented practices would have saved 30% of spend; Context lost the most points (C+).
 1. **SV1** Which change would have saved the most? → main-thread work on Opus 5.5 (the current default) instead of Opus 5 / Fable 5: $230 (36% of spend).
 2. **OV3** What dominates the bill? → cache reads 55%, output only 17%.
 3. **CX9** Tokens re-read per token written → 163×.
@@ -400,7 +400,7 @@ Per item: tokens per session, its share of the saving, where it comes from (buil
 - Check: ✓ 75 reads (1.2M tokens) cost $25.36; about $12.68 saved.
 
 **SV9. What is my efficiency score, and where did the points go?** `T P`
-One number from 1 to 100 with a school grade, A+ down to C, and the same for five areas, so it says where the points went.
+One number from 1 to 100 with a school grade, A+ down to C-, and the same for five areas, so it says where the points went.
 The headline shows it beside the cost; the card leads the SV section.
 - How:
   - Each area's share of spend is what the largest of its SV1 levers would have saved (they act on the same cost, so only
@@ -415,12 +415,18 @@ The headline shows it beside the cost; the card leads the SV section.
     is the overall score, unless an area lost more than all its points (its score is then 1).
   - The main-thread model (SV1's model lever) is not graded: the right model depends on the work, and that lever compares
     with the model you use now, so moving to a cheaper model would lower the score.
-  - Grades: A+ 95–100, A 90–94, A- 85–89, B+ 80–84, B 75–79, B- 70–74, C+ 65–69, C below 65.
+  - Grades, generous on purpose (a C means more than 42% of spend was avoidable): A+ 88–100, A 82–87, A- 76–81, B+ 70–75,
+    B 64–69, B- 58–63, C+ 50–57, C 40–49, C- below 40. An (i) beside the score shows this table.
   - All projects adds a row per project (each group scope): its score, grade, spend, and the area that lost the most points.
-- Check: ✓ 2026-10-01 (Sep 6 → 30): 70/100 (B-), 30% of spend avoidable with overlaps removed. Context 53 (C, 16.4 points:
-  /compact at about 150K, $212 = 18% of spend), Caching 77 (B, 5.6: avoidable misses, $72.67), Subagents 80 (B+, 3.1),
-  Hooks 73 (B-, 4.0, upper bound), Setup 88 (A-, 1.2). The points lost add up to 30.3 = 100 − 69.7. Projects range from
-  44 (C) to 89 (A-). The engine's other cards, CSVs and drafts are unchanged by it (old and new engine on the same days).
+  - Progress: every full run that ends now (not `--until`) saves its high-level scores (score, grade, area scores, spend
+    per 30 days, cache hit rate, median peak context) in `<OUT>/history/scores.json`, one entry a day (a second run the
+    same day replaces it). With an earlier day there, All projects charts the score over the last 12 reports, lists them
+    with the change from one to the next, and the headline shows the change since the last report beside the score.
+    `/claude-usage:clear` removes the history unless `--keep history`.
+- Check: ✓ 2026-10-01 (Sep 6 → 30): 70/100 (B+), 30% of spend avoidable with overlaps removed. Context 53 (C+, 16.4 points:
+  /compact at about 150K, $212 = 18% of spend), Caching 77 (A-, 5.6: avoidable misses, $72.67), Subagents 80 (A-, 3.1),
+  Hooks 73 (B+, 4.0, upper bound), Setup 88 (A+, 1.2). The points lost add up to 30.3 = 100 − 69.7. Projects range from
+  44 (C) to 89 (A+). The engine's other cards, CSVs and drafts are unchanged by it (old and new engine on the same days).
 
 ## TR: Trends & change detection
 

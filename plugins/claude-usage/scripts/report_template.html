@@ -249,6 +249,16 @@ main { min-width: 0; }
 .hscore .sc-head { margin: 4px 0 12px; }
 .hscore .chips { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 12px; font-size: 13px; color: var(--text-secondary); }
 .hscore .foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; margin-top: 12px; font-size: 13px; }
+.hscore .l { display: flex; align-items: center; gap: 4px; }
+.sc-delta { margin-top: 8px; font-size: 13px; color: var(--text-secondary); }
+.hscore .sc-delta { margin-top: 12px; }
+.pop-wrap.pop-right > .pop { left: auto; right: 0; }
+.pop .pbody { margin: 0; line-height: 1.5; color: var(--text-secondary); }
+.pop.score-pop { width: min(440px, calc(100vw - 32px)); max-width: none; }
+.gscale { display: grid; grid-template-columns: repeat(3, max-content); justify-content: space-between; gap: 8px 16px; margin-top: 12px; }
+.gscale .grow { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.gscale .grow.on { color: var(--text-primary); font-weight: 600; }
+.gscale .grade { min-width: 44px; justify-content: flex-start; }
 @media (max-width: 720px) {
   .sc-areas { grid-template-columns: max-content minmax(64px, 1fr) 28px max-content; gap: 8px 12px; }
   .sc-areas .d { grid-column: 1 / -1; margin-bottom: 8px; }
@@ -681,7 +691,7 @@ footer.foot ul { margin: 8px 0; padding-left: 20px; }
   .ogroup { padding-left: 8px; }
   .nw-body { padding-left: 16px; padding-right: 16px; }
   .drow, .rel-list li { grid-template-columns: minmax(0, 1fr); }
-  .kpi-pop { position: fixed; left: 16px; right: 16px; top: auto; bottom: 16px; width: auto; max-height: 70vh; overflow: auto; }
+  .kpi-pop, .pop.score-pop { position: fixed; left: 16px; right: 16px; top: auto; bottom: 16px; width: auto; max-height: 70vh; overflow: auto; }
 }
 @media print {
   .tabbar, .controls, .toc, .menu-btn, .filterbar, .vtools, .term .btn, .chart-head .btn { display: none !important; }
@@ -3430,11 +3440,41 @@ function cardLinkEl(id, text) {
   a.addEventListener('click', function (e) { e.preventDefault(); gotoCard(id); });
   return a;
 }
+function scoreHelp(id, scale, grade, areas, right) {
+  // the (i) beside the score: what the number means, the points each area carries, and the score every grade needs
+  return infoPop(id, 'How the efficiency score works', function (pop) {
+    pop.classList.add('score-pop');
+    var pts = (areas || []).filter(function (a) { return isNum(a.points); });
+    pop.append(h('p', { class: 'ptitle', text: 'How the efficiency score works' }),
+      h('p', { class: 'pbody', text: '100 minus the share of your spend that Claude Code’s documented practices would have saved, overlaps ' +
+        'removed: every point below 100 is 1% of spend. Each area is graded on the points it kept' +
+        (pts.length ? ' (' + pts.map(function (a) { return a.label + ' ' + a.points; }).join(', ') + ')' : '') + '.' }));
+    var t = h('div', { class: 'gscale', role: 'list', 'aria-label': 'Grades' });
+    (scale || []).forEach(function (s, i) {
+      var range = !i ? s[1] + '–100' : s[1] > 0 ? s[1] + '–' + (scale[i - 1][1] - 1) : 'below ' + scale[i - 1][1];
+      t.append(h('div', { class: 'grow' + (s[0] === grade ? ' on' : ''), role: 'listitem' },
+        h('span', { class: 'grade ' + gradeCls(s[0]), text: s[0] }), h('span', { text: range })));
+    });
+    pop.append(t, h('p', { class: 'pnote', text: 'A C grade means more than 42% of spend was avoidable. The main-thread model isn’t graded: ' +
+      'the right model depends on the work. Dollars are API list-price equivalents.' }));
+  }, right ? 'pop-right' : null);
+}
+function scoreDelta(x) {
+  // how the score moved since the last report (SV9's progress), or nothing when there is no earlier report
+  var p = x && x.prev;
+  if (!p || !isNum(p.value) || !isNum(x.value)) return null;
+  var d = x.value - p.value;
+  return h('div', { class: 'sc-delta dot ' + (d > 0 ? 'g-a' : d < 0 ? 'g-c' : ''),
+    text: (d > 0 ? '+' + d + ' points' : d < 0 ? '−' + (-d) + ' points' : 'No change') + ' since your last report (' +
+      fmtDate(p.date) + ': ' + p.value + (p.grade ? ', ' + p.grade : '') + ')' });
+}
 function scoreRef(x) { return x.ref != null ? h('span', { class: 'sc-ref', text: (x.refLabel || 'All projects') + ': ' + x.ref + (x.refGrade ? ' (' + x.refGrade + ')' : '') }) : null; }
 function scoreBlock(b) {
   var root = h('div', { class: 'score' });
-  root.append(h('div', { class: 'sc-head' }, scoreNum(b.value), gradePill(b.grade, true), scoreRef(b)));
+  root.append(h('div', { class: 'sc-head' }, scoreNum(b.value), gradePill(b.grade, true), scoreHelp('score-help-card', b.scale, b.grade, b.areas), scoreRef(b)));
   if (b.sub) root.append(h('div', { class: 'sc-sub', text: b.sub + '.' }));
+  var dl = scoreDelta(b);
+  if (dl) root.append(dl);
   root.append(h('div', { class: 'sc-track' }, scoreBar(b.value, b.grade, b.scale, true), scaleRow(b.scale, b.grade)));
   var grid = h('div', { class: 'sc-areas' });
   (b.areas || []).forEach(function (a) {
@@ -3452,8 +3492,11 @@ function scoreBlock(b) {
 function scoreSummary(sc) {
   // beside the cost: the score, its grade and bar, every area's grade, and the way to SV9
   var box = h('div', { class: 'hscore' });
-  box.append(h('div', { class: 'l', text: 'Efficiency score' }), h('div', { class: 'sc-head' }, scoreNum(sc.value), gradePill(sc.grade, true)),
+  box.append(h('div', { class: 'l' }, h('span', { text: 'Efficiency score' }), scoreHelp('score-help-head', sc.scale, sc.grade, sc.areas, true)),
+    h('div', { class: 'sc-head' }, scoreNum(sc.value), gradePill(sc.grade, true)),
     scoreBar(sc.value, sc.grade));
+  var dl = scoreDelta(sc);
+  if (dl) box.append(dl);
   var chips = h('div', { class: 'chips' });
   (sc.areas || []).forEach(function (a) {
     chips.append(h('span', { class: 'dot ' + gradeCls(a.grade), text: a.label + ' ' + a.grade, title: a.label + ': ' + a.score + '/100' }));

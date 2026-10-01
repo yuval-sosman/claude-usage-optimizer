@@ -90,9 +90,14 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
                     Writes nothing, except report.html rebuilt by render() when it is older than metrics.json,
                     insights.json, optimizations.json or the template (a plugin update), in a folder unsafe_out() accepts.
 
+  history/scores.json  usage_report.py's one memory between runs: each run's high-level scores (run_snapshot: score, grade,
+                    areas, spend per 30 days, hit rate, peak context), one entry a day (save_history replaces the same day;
+                    --until runs neither read nor save it). read_history feeds SV9's progress (all projects) and the
+                    headline's change since the last report. Not packed by share.py: the progress is already in metrics.json.
+
   clear.py          removes <OUT>'s own files by name (FILES/FOLDERS/LEGACY: report.html, insights.json, optimizations.json,
-                    data/, video/, share/, received/, company/, flat files from older versions), then the folder when only
-                    its marker is left. A preview by default; --yes removes; --keep spares video/share/received/company.
+                    data/, video/, share/, received/, company/, history/, flat files from older versions), then the folder when only
+                    its marker is left. A preview by default; --yes removes; --keep spares video/share/received/company/history.
                     applied/ stays while apply.py has any optimization on record. skills/clear previews, asks once, removes.
 
   company.py build <folder>  → <OUT>/company/ (or --to): report.html (report_template.html with company cards: CO company,
@@ -220,7 +225,8 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
     every scope has run.
 - **Efficiency score (SV9):** `efficiency()` combines SV1's levers (`sv_levers()`, by id) into a 1–100 score. `SCORE_AREAS`
   maps each area to its levers (the largest counts: they act on the same cost) and its points; areas combine as
-  Π(1 − share), like the tabs and the video combine savings; `GRADES` holds the cut-offs (A+ 95 … C below 65). The
+  Π(1 − share), like the tabs and the video combine savings; `GRADES` holds the cut-offs (A+ 88 … C- below 40; generous on purpose: a C means over 42% avoidable). The score block and the
+  headline carry them as `scale`, which the (i) beside the score (`scoreHelp()`) shows as a table, so it always matches. The
   main-thread model lever is left out on purpose (it compares with the model in use now, so moving to a cheaper model would
   lower the score). A new SV1 lever goes into an area, or is left out, deliberately: update `SCORE_AREAS`, SV9's note and
   QUESTIONS.md's SV9 together.
