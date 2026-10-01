@@ -14,7 +14,8 @@ A plugin, `claude-usage@claude-usage-optimizer` (users: `/plugin marketplace add
 `/plugin install claude-usage@claude-usage-optimizer`; a working copy: `claude --plugin-dir plugins/claude-usage`). A deterministic script counts
 the user's Claude Code transcripts and renders an HTML report. Claude then writes two tabs from what the script extracted:
 - **Insights**, written by `/claude-usage:report`.
-- **Optimizations**, written by `/claude-usage:optimize`.
+- **Optimizations**, written by `/claude-usage:report` too (its step 4 follows the optimize skill's SKILL.md, which it
+  reads), so the report opens complete; `/claude-usage:optimize` redoes them on its own.
 
 A third skill, `/claude-usage:brainstorm`, talks the data through with the user and can edit insights.json. A fourth,
 `/claude-usage:video`, turns the report into a 30–60 s video of the user's highlights to share (an MP4 and a self-playing
@@ -49,6 +50,7 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
   report.html         scripts/report_template.html with metrics + insights.json + optimizations.json embedded
         │  skills/report     → data/notes-insights.json      → assemble.py insights       → insights.json       (schemas/insights.schema.json)
         │  skills/optimize   → data/notes-optimizations.json → assemble.py optimizations  → optimizations.json  (schemas/optimizations.schema.json)
+        │      (skills/report runs both: insights, then the optimize steps; skills/optimize alone redoes the second)
         │      Claude writes only its picks, prose and extra items; assemble.py merges them with candidates.json, fills
         │      stamps, figures and two-sided links, keeps ids stable, and writes the file only when validate.py passes
         │  usage_report.py --render   re-embeds the two JSON files, no recomputing
@@ -124,7 +126,8 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
   clear.py's lists too.
 - **Least privilege for skills.** `allowed-tools` pre-approves each script by its full path
   (`Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/x.py" *)`; `${CLAUDE_PLUGIN_ROOT}` expands only in Bash rules), reads only
-  `~/.claude-usage/**` (and the plugin's installed reference files), and edits only the one file the skill owns. Never add
+  `~/.claude-usage/**` (and the plugin's installed reference files), and edits only the notes files the skill owns (report:
+  both, since it writes both tabs; optimize: its own). Never add
   bare `Read`, `Write`, `Edit`, `Bash(python3 *)`, `open`, `ls`, an install command or an unrestricted `WebFetch`:
   anything outside the list must reach the user as a permission prompt. Only `report` is model-invocable.
 - **Nothing is installed.** The plugin ships no hooks, MCP servers or background processes of its own, and no skill runs
@@ -156,14 +159,16 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
   - optimizations' `related` links are two-sided (except `requires`). Two optimizations that change the same settings key,
     or act on the same cost (`SAME_LEVER`: the main-thread cache lifetime vs the stale-cache guard, auto-compact vs the
     context guard), must be linked;
-  - no change that Claude Code's best practice rules out (`practice_errs()`): an auto-compact window under 200K (setting or
-    env), a saved `low` effort, thinking off, a context notice under 100K.
+  - no change that Claude Code's best practice rules out (`practice_errs()`): an auto-compact window under 300K (setting or
+    env), a saved `low` effort, thinking off, a context notice under 100K;
+  - at most 3 optimizations marked `first` (the tab's Start here section; the cache-lifetime pin comes with it).
 - **Recommendations follow Claude Code's documented best practice; the data aims and sizes them.** A replay's saving never
   makes a change good practice (the case that started this: SV4's replay started at 60K, so the catalog could propose a 60K
   context notice and an 80K auto-compact window, below what Claude Code even accepts).
   `skills/optimize/reference/best-practices.md` holds the verbatim guidance, the "never recommend" list and the digest
   signals that point to a documented practice; the report, optimize and brainstorm skills read it, and catalog entries
-  encode it (auto-compact only caps a 1M model and never below 200K; effort goes back to the model's documented default,
+  encode it (auto-compact only caps a 1M model, at 400K and never below 300K; the cache lifetimes are pinned at main 1 hour ·
+  subagents 5 minutes whenever SV5 favours that mix, as the first recommendation; effort goes back to the model's documented default,
   not below; a rarely used skill is listed `name-only`; SV4's thresholds start at 100K). Keep code guards, not prompts,
   for the hard lines (`practice_errs()`, and policy.py's bounds, which match what Claude Code accepts). When the docs or
   Claude Code change, update best-practices.md, `claude-code.md`, the catalog and these guards together.
@@ -389,7 +394,8 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
   run from a folder outside the repo so reads outside `<OUT>` are really refused). The Edit/Read rules name `~/.claude-usage`,
   so with a scratch `<OUT>` add the same rules for it, and for the working copy the rule an installed plugin gets for its
   own reference files (`~/.claude/plugins/cache/claude-usage-optimizer/claude-usage/**`):
-  `--allowedTools "Edit(//<scratch>/data/notes-insights.json)" "Read(//<scratch>/**)" "Read(//<repo>/plugins/claude-usage/**)"`.
+  `--allowedTools "Edit(//<scratch>/data/notes-insights.json)" "Edit(//<scratch>/data/notes-optimizations.json)" "Read(//<scratch>/**)" "Read(//<repo>/plugins/claude-usage/**)"`
+  (the report skill writes both notes files; it reads the optimize skill's SKILL.md and references from the plugin folder).
   Check `permission_denials` in the result: only what the skill shouldn't do on its own may be there. A skill the model
   starts itself (from plain words, not a typed slash command) gets no pre-approval from its `allowed-tools` in a headless
   run (2.1.286: even `usage_report.py --where` is denied, and the Skill call needs `--allowedTools "Skill(claude-usage:report)"`),

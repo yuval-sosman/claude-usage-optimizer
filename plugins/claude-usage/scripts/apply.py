@@ -243,8 +243,21 @@ def needs_helpers(src):
         return False
 
 
+def practice(opt):
+    """What Claude Code's best practice rules out in this optimization (validate.practice_errs, the check assemble makes), so
+    a file an older version wrote (e.g. an auto-compact window under today's 300K) is never applied as it stands."""
+    try:
+        import validate                                 # imported here: validate imports this module
+    except ImportError:
+        return []
+    return validate.practice_errs(opt, opt.get('id') or 'this optimization')
+
+
 def plan(opt, out):
     """[(step, path, before_text or None, after_text or None, note)] — what applying would do, computed in memory."""
+    bad = practice(opt)
+    if bad:
+        raise SystemExit('; '.join(bad) + '. Run /claude-usage:report again for a current list (undo still works).')
     steps, files = [], {}
     raw = []
     for st in (opt.get('apply') or {}).get('steps') or []:

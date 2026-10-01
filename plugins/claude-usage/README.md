@@ -12,9 +12,9 @@ write what to change, with the dollars each change would have saved so far. The 
 practice; your numbers decide which apply and how much they are worth. Nothing leaves your machine.
 
 ```text
-/claude-usage:report        build the report, write the Insights tab, open it
+/claude-usage:report        build the report, write the Insights and Optimizations tabs, open it
 /claude-usage:open          open the report you already have, without building it again
-/claude-usage:optimize      turn the insights into changes you can apply one by one
+/claude-usage:optimize      redo the optimizations (e.g. with a focus), or preview one to apply
 /claude-usage:brainstorm    dig into the numbers with Claude and test what-ifs
 /claude-usage:video         a 30–60 second video of your own highlights, to share
 /claude-usage:share         the whole report as one file, to send to whoever compares usage

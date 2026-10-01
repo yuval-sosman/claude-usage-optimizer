@@ -311,12 +311,14 @@ def hook_manual(script, event, cmd, matcher=None):
 
 
 def opt(oid, title, category, kind, problem, what, questions, effort, risk, manual, undo, docs_, sv=None, tradeoffs=None,
-        steps=None, apply_summary=None, verify=None, insights=None):
-    """One optimization, its keys in the order optimizations.json uses."""
+        steps=None, apply_summary=None, verify=None, insights=None, first=False):
+    """One optimization, its keys in the order optimizations.json uses. first: it leads the tab, in "Start here"."""
     if sv:
         sv['basis'] = clip(sv['basis'], 400)
-    o = {'id': oid, 'title': clip(title, 90), 'category': category, 'kind': kind, 'problem': clip(problem, 500),
-         'what_it_does': clip(what, 700)}
+    o = {'id': oid, 'title': clip(title, 90), 'category': category, 'kind': kind}
+    if first:
+        o['first'] = True
+    o.update(problem=clip(problem, 500), what_it_does=clip(what, 700))
     if insights:
         o['insights'] = list(insights)
     o['questions'] = questions
@@ -739,9 +741,11 @@ def stop_hook_followup(R, S, v):
 
 
 WINDOW_RANGE = (100_000, 1_000_000)   # what Claude Code accepts for autoCompactWindow (an integer; anything else is ignored)
-WINDOW_FLOOR = 200_000   # the smallest auto-compact window this plugin recommends: the classic 200K window. Claude Code's own
-                         # "auto" is "strongly recommended for the best cost and performance", and the docs' advice is to
-                         # compact at natural breaks between tasks, so a forced window only ever caps a 1M-context model.
+WINDOW_FLOOR = 300_000   # the smallest auto-compact window this plugin recommends. Claude Code's own "auto" is "strongly
+                         # recommended for the best cost and performance", and the docs' advice is to compact at natural breaks
+                         # between tasks, so a forced window only ever caps a 1M-context model, high enough that a long task
+                         # keeps its room: WINDOW_TARGET, or the floor when SV4 finds nothing to save past the target.
+WINDOW_TARGET = 400_000
 
 
 def configured_window(S):
@@ -763,13 +767,20 @@ def next_window(R, T, floor=0):
     return next((r for r in rows if r['t'] > T and r['t'] >= floor and (r.get('u') or 0) > 0), None)
 
 
+def cap_row(R):
+    """SV4's row for the window auto-compact gets: WINDOW_TARGET's, or WINDOW_FLOOR's when the target's saves nothing; None
+    when neither saves money."""
+    rows = {r['t']: r for r in R.table('SV4', 'mo') if isinstance(r.get('t'), (int, float))}
+    return next((rows[t] for t in (WINDOW_TARGET, WINDOW_FLOOR) if ((rows.get(t) or {}).get('u') or 0) > 0), None)
+
+
 @entry('auto-compact-window')
 def auto_compact_window(R, S, v):
-    """Only for a model whose window is over 200K (a 1M model, where auto compacts at about 967K): SV4's best net saving is
-    over $5, and a window of at least 200K (WINDOW_FLOOR) above SV4's best threshold still saves money. The window is that
-    SV4 row (compaction triggers as usage approaches it), with that row's saving. On a 200K model, auto already compacts
-    near 200K, the window Claude Code tunes and strongly recommends: SV4 is acted on with /compact at natural breaks and
-    the context notice instead."""
+    """Only for a model whose window is over WINDOW_FLOOR (a 1M model, where auto compacts at about 967K): SV4's best net
+    saving is over $5, and SV4's row for WINDOW_TARGET (400K) still saves money, else WINDOW_FLOOR's (300K): never lower,
+    whatever SV4's best threshold is, so a long task keeps its room. The window is that row (compaction triggers as usage
+    approaches it), with that row's saving. On a 200K model, auto already compacts near 200K, the window Claude Code tunes
+    and strongly recommends: SV4 is acted on with /compact at natural breaks and the context notice instead."""
     T, net = compact_best(R)
     if net['value'] <= 5:
         return skip(f"SV4: compacting at {size(T)} would have saved {usd(net['value'])}, under the $5 bar")
@@ -779,9 +790,9 @@ def auto_compact_window(R, S, v):
     if win <= WINDOW_FLOOR:
         return skip(f"{model}'s window is {size(win)}: auto-compact already runs near it, the window Claude Code tunes and strongly "
                     'recommends; compacting at natural breaks (and the context notice) is how to act on SV4 there')
-    row = next_window(R, T, WINDOW_FLOOR)
+    row = cap_row(R)
     if not row:
-        return skip(f'SV4: no threshold of {size(WINDOW_FLOOR)} or more above {size(T)} saves money')
+        return skip(f'SV4: compacting at {size(WINDOW_TARGET)} (or {size(WINDOW_FLOOR)}) would have saved nothing')
     W = int(row['t'])
     if W >= 0.75 * win:
         return skip(f"the model's window is {size(win)}: auto-compact already runs near {size(W)}")
@@ -803,9 +814,8 @@ def auto_compact_window(R, S, v):
                      f"The largest context reached {size(big['value'])} (CX1)." if big else '',
                      f"Compacting at {size(W)} would have saved {save(row['u'], row['mo'], 'SV4')}."),
             f'Sets autoCompactWindow to {W} in {SETTINGS} (what /autocompact {W // 1000}k saves). Claude Code then summarises the conversation as '
-            f'it approaches {size(W)}' + (', the classic window,' if W == WINDOW_FLOOR else '') + f' instead of near {size(win)}, so long sessions '
-            'stop re-reading huge contexts on every '
-            'call. Compacting yourself at a natural break, with what to keep, stays the better moment.',
+            f'it approaches {size(W)} instead of near {size(win)}, so long sessions stop re-reading huge contexts on every call, '
+            'while a long task still has room. Compacting yourself at a natural break, with what to keep, stays the better moment.',
             R.questions('SV4', 'CX1', 'CX6', 'OV5'), 'one-click', 'medium',
             [f'Run /autocompact {W // 1000}k (it saves "autoCompactWindow": {W} to {SETTINGS} and applies to the current session), or set it there by hand.',
              'Keep compacting yourself at natural breaks: /compact with what to keep when a task is done, /clear before unrelated work.',
@@ -821,9 +831,9 @@ def auto_compact_window(R, S, v):
             apply_summary=f'Set "autoCompactWindow": {W} in {SETTINGS}.',
             verify=f'/autocompact reports a {size(W)} window from settings, and a long session compacts before its context passes {size(W)}.',
             insights=['compact'])
-    return draft(f"SV4: best threshold {size(T)} (net {usd(net['value'])}, over $5); {model}'s window is {size(win)}; the first row of "
-                 f"{size(WINDOW_FLOOR)} or more above it, {size(W)}, saves {usd(row['u'])}; " + (f'{setting} is higher.' if have else
-                                                                                                "autoCompactWindow isn't set."), o, ['compact'])
+    return draft(f"SV4: best threshold {size(T)} (net {usd(net['value'])}, over $5); {model}'s window is {size(win)}; the cap is "
+                 f"{size(WINDOW_TARGET)} (never under {size(WINDOW_FLOOR)}), and SV4's {size(W)} row saves {usd(row['u'])}; "
+                 + (f'{setting} is higher.' if have else "autoCompactWindow isn't set."), o, ['compact'])
 
 
 @entry('context-guard')
@@ -1090,26 +1100,49 @@ def statusline_cache(R, S, v):
     return draft('No statusLine is configured in any settings file.', o, ['fresh', 'compact'])
 
 
+TTL_PIN = {'promptCacheTtl': '1h', 'subagentPromptCacheTtl': '5m'}     # the mix recommended whenever SV5 supports it
+TTL_ENV = {'promptCacheTtl': 'CLAUDE_CODE_PROMPT_CACHE_TTL', 'subagentPromptCacheTtl': 'CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL'}
+
+
+def ttl_rows(R):
+    """SV5's two thread kinds, each row with its actual lifetime (`cur`, '5m' or '1h': the replay its actual cost matches)
+    and the cheaper one (`best`)."""
+    out = {}
+    for r in R.table('SV5', 'c5', 'Cache read + write cost per thread kind'):
+        if r.get('k') in ('Main threads', 'Subagents'):
+            out[r['k']] = dict(r, cur='5m' if abs(r['a'] - r['c5']) < abs(r['a'] - r['c1']) else '1h',
+                               best='5m' if r.get('b') == '5 minutes' else '1h')
+    return out
+
+
 @entry('cache-ttl-fit')
 def cache_ttl_fit(R, S, v):
-    """SV5's cheapest mix differs from the actual one and saves over $3. A close call (under 5%) or a last week that favours the
-    other lifetime is left to Claude. Like unused-listings-off, a lifetime an applied earlier version set is carried."""
+    """When SV5 favours 1 hour for main threads and 5 minutes for subagents (the usual result for interactive work): pin that
+    mix in settings, as one of the first recommendations (first). Unset, the main lifetime is automatic: 1 hour only on a
+    subscription within its usage limits, 5 minutes on an API key, Bedrock, Vertex or Foundry; and ENABLE_PROMPT_CACHING_1H
+    moves subagents to 1 hour. It claims SV5's saving when the actual mix differs, none when the history already ran that way.
+    When SV5 favours another mix: that mix, if it differs from the actual one and saves over $3; a close call (under 5%) or
+    a last week that favours the other lifetime is left to Claude. Like unused-listings-off, a lifetime an applied earlier
+    version set is carried."""
     k = R.kpi('SV5', 'Cheapest mix saves')
-    rows = {r.get('k'): r for r in R.table('SV5', 'c5', 'Cache read + write cost per thread kind')}
+    rows = ttl_rows(R)
+    main, sub = rows.get('Main threads'), rows.get('Subagents')
+    if not main:
+        return skip('SV5 has no main-thread row')
+    if S.get('env', 'DISABLE_PROMPT_CACHING'):
+        return skip('DISABLE_PROMPT_CACHING is set, so no cache lifetime applies')
+    if main['best'] == '1h' and (not sub or sub['best'] == '5m'):
+        return ttl_pin(R, S, v, k, main, sub)
     recent = re.search(r'Last 7 days alone favour (.+?)\.(?:\s|$)', R.insights_text('SV5'))
     change, close, against = {}, [], []
     for kind, key in (('Main threads', 'promptCacheTtl'), ('Subagents', 'subagentPromptCacheTtl')):
         r = rows.get(kind)
-        if not r:
+        if not r or r['best'] == r['cur'] or S.get(key) == r['best']:
             continue
-        cur = '5m' if abs(r['a'] - r['c5']) < abs(r['a'] - r['c1']) else '1h'
-        best = '5m' if r.get('b') == '5 minutes' else '1h'
-        if best == cur or S.get(key) == best:
-            continue
-        change[key] = best
+        change[key] = r['best']
         if (r.get('d') or 0) / max(r['c5'], r['c1'], 1e-9) < 0.05:
             close.append(kind.lower())
-        other = '1 hour' if best == '5m' else '5 minutes'
+        other = '1 hour' if r['best'] == '5m' else '5 minutes'
         if recent and f'{kind.lower()} {other}' in recent.group(1):
             against.append(kind.lower())
     if not change or k['value'] <= 3:
@@ -1135,6 +1168,58 @@ def cache_ttl_fit(R, S, v):
                      "Propose the change, or say in an insight that it's too close to call?", [R.fact('SV5', 'Cheapest mix saves')], o, ['ttl'],
                      carry=TTL_KEYS)
     return draft(rule, o, ['ttl'], carry=TTL_KEYS)
+
+
+def ttl_pin(R, S, v, k, main, sub):
+    """cache-ttl-fit when SV5 favours main 1 hour · subagents 5 minutes: set whichever of the two isn't pinned yet."""
+    env = {key: S.get('env', name) for key, name in TTL_ENV.items()}
+    need = {key: val for key, val in TTL_PIN.items() if S.get(key) != val and env[key] != val}
+    if not need:
+        return skip('SV5 favours main 1 hour · subagents 5 minutes, and promptCacheTtl and subagentPromptCacheTtl already pin it')
+    moves = {key: val for key, val in need.items() if (main if key == 'promptCacheTtl' else sub or {}).get('cur') not in (None, val)}
+    v['ttl_main'], v['ttl_sub'] = moves.get('promptCacheTtl'), moves.get('subagentPromptCacheTtl')
+    v['ttl_pin'] = 'promptCacheTtl' in need and 'promptCacheTtl' not in moves       # main already ran 1 hour: pinned, not moved
+    v['ttl_need'] = list(need)                                                         # lifetimes_fit's insight says to pin them
+    notes = [f'env.{TTL_ENV[key]}={env[key]} wins over {key}: the manual steps say to remove it' for key in need if env[key]]
+    force = S.get('env', 'FORCE_PROMPT_CACHING_5M')
+    if force:
+        notes.append('FORCE_PROMPT_CACHING_5M is set: it keeps every cache at 5 minutes, so the 1-hour main lifetime needs it removed')
+    margins = ', and '.join(x for x in (f"a 1-hour main-thread cache cost {usd(main['d'])} less than 5 minutes" if main.get('d') else '',
+                                        f"a 5-minute subagent cache {usd(sub['d'])} less than 1 hour" if sub and sub.get('d') else '') if x)
+    auto = ('Unset, the main lifetime is automatic: 1 hour only on a subscription within its usage limits, 5 minutes on an API key, '
+            'Bedrock, Vertex or Foundry; and ENABLE_PROMPT_CACHING_1H would move subagents to 1 hour.')
+    if moves:
+        title = 'Use a 1-hour cache for the main thread and 5 minutes for subagents'
+        problem = (f"Replaying your whole history under each lifetime mix (SV5), main 1 hour · subagents 5 minutes would have "
+                   f"cost the least: {save(k['value'], k['month'])} less than your actual mix. " + auto)
+    else:
+        title = 'Pin the cache lifetimes: 1 hour for the main thread, 5 minutes for subagents'
+        problem = (f'SV5 replays your history under both lifetimes: {margins}. You run that mix today, but '
+                   f'{and_list(list(need))} {"isn’t" if len(need) == 1 else "aren’t"} set. ' + auto)
+    manual = [f'In {SETTINGS} add ' + ', '.join(f'"{x}": "{y}"' for x, y in need.items()) + '.']
+    manual += [f'Remove {TTL_ENV[key]} from your environment (or the env block of {SETTINGS}): it wins over the setting.' for key in need if env[key]]
+    if force:
+        manual.append('Remove FORCE_PROMPT_CACHING_5M from your environment: it keeps every cache at 5 minutes.')
+    manual.append('Start a new session: the lifetimes apply from its first request.')
+    o = opt('cache-ttl-fit', title, 'cache', 'setting', problem,
+            f'Sets {and_list([f"{x}={y}" for x, y in need.items()])} in {SETTINGS}, so the main conversation keeps its cache through '
+            'pauses of 5 to 60 minutes and subagents, which rarely pause, write the cheaper 5-minute entries, whatever the account '
+            'or usage state.',
+            R.questions('SV5', 'CX10'), 'one-click', 'low', manual,
+            f'apply.py undo cache-ttl-fit, or remove {and_list(list(need))} from {SETTINGS}: the automatic lifetimes come back.',
+            docs('prompt-caching', 'settings'),
+            sv=savings(k['value'], k['month'], 'theoretical',
+                       'SV5: the whole history re-priced under main 1 hour · subagents 5 minutes, against your actual total.') if moves else None,
+            tradeoffs='A 1-hour entry costs 2× input to write instead of 1.25×, so it pays only while pauses of 5 to 60 minutes keep '
+                      'happening (SV5 prices both on your own pauses). Pinned, the main thread writes 1-hour entries past a '
+                      "subscription's usage limits too, where they cost more per write.",
+            steps=[{'action': 'merge_json', 'path': SETTINGS, 'value': dict(need)}],
+            apply_summary=f'Add {and_list([f"{x}={y}" for x, y in need.items()])} to {SETTINGS}.',
+            verify="The next report's SV5 shows main 1 hour · subagents 5 min as your actual mix.", insights=['ttl'], first=True)
+    rule = (f"SV5 favours main 1 hour (by {usd(main['d'])})" + (f" and subagents 5 minutes (by {usd(sub['d'])})" if sub else '')
+            + f"; {and_list(list(need))} not pinned" + (f"; pinning moves {and_list(list(moves))}, saving {usd(k['value'])}" if moves else
+                                                      ': no saving against your actual mix, which already ran that way') + '.')
+    return draft(rule, o, ['ttl'], notes, carry=TTL_KEYS)
 
 
 @entry('keep-awake')
@@ -1483,10 +1568,11 @@ LINKS = [
     ('subagent-model', 'cache-ttl-fit', 'overlaps', lambda v: v.get('ttl_sub'),
      "SV5's subagent cache writes are priced at the model the subagents ran on; on {sub_target} the lifetime change is worth less.",
      'Its subagent saving is priced at the subagents\' current model; with subagents on {sub_target} it shrinks.'),
-    ('auto-compact-window', 'context-guard', 'alternative', None,
-     "The same SV4 saving, done for you. Pick this if you would rather not think about it; don't use both.",
-     'The same SV4 saving, but you decide when to compact. Pick this if you want that control; with both, the notice fires just before a '
-     'compaction that happens anyway.'),
+    ('auto-compact-window', 'context-guard', 'overlaps', None,
+     'A backstop for the runs that grow unattended (a long task, a /goal); the notice asks for a /compact at a natural break from '
+     '{threshold_t}. Both cut the same big-context re-reads, so their savings overlap: never add them.',
+     'It asks for a /compact at a natural break from {threshold_t}; the {window_t} cap catches the runs no one is watching. Both cut the '
+     'same big-context re-reads, so their savings overlap: never add them.'),
     ('auto-compact-window', 'stale-cache-guard', 'overlaps', None,
      "Smaller contexts also make each return after the cache expired cheaper, so part of the stale-cache guard's saving is the same money.",
      'Its saving is priced at the context sizes you had. Compacting at {window_t} keeps them smaller, so each expired return would cost '
@@ -1514,6 +1600,9 @@ LINKS = [
      'place it only fires after pauses over an hour.',
      'Both go after the returns after a break. Pick this if you mostly continue after pauses of 5–60 minutes (SV5\'s break-even); with it in '
      "place the guard's saving mostly goes."),
+    ('stale-cache-guard', 'cache-ttl-fit', 'complements', lambda v: v.get('ttl_pin'),
+     'The pinned 1-hour lifetime keeps the cache through pauses under an hour; this guard stops the costly first prompt after longer ones.',
+     'Pinning keeps the 1-hour cache for pauses under an hour; the stale-cache guard covers the returns after longer breaks.'),
     ('stale-cache-guard', 'cache-ttl-fit', 'complements', lambda v: v.get('ttl_main') == '5m',
      'The 5-minute lifetime lets more returns expire; the guard stops the costly ones.',
      'The stale-cache guard stops the costly returns that the shorter lifetime lets expire, which softens the switch.'),
@@ -1705,8 +1794,9 @@ def lever_bundle(R, key, row):
     return b
 
 
-def lifetimes_fit(R):
-    """SV5 finds the actual lifetime mix is already the cheapest: an insight about what not to change."""
+def lifetimes_fit(R, v):
+    """SV5 finds the actual lifetime mix is already the cheapest: an insight about what not to change, or, when that mix is
+    main 1 hour · subagents 5 minutes and isn't pinned in settings (v['ttl_need'], from cache-ttl-fit), to pin it."""
     k = R.kpi('SV5', 'Cheapest mix saves')
     if k['value'] > 0.005:
         return None
@@ -1715,16 +1805,24 @@ def lifetimes_fit(R):
         if R.has(cid, lb):
             facts.append(R.fact(cid, lb))
     mix = mix_of(k)
+    need = (v or {}).get('ttl_need') or []
+    pin = {'promptCacheTtl': '"promptCacheTtl": "1h"', 'subagentPromptCacheTtl': '"subagentPromptCacheTtl": "5m"'}
     return {'lever': 'ttl', 'label': 'Cache lifetime that fits each thread kind', 'id': 'cache-lifetimes-right', 'category': 'cache',
             'questions': R.questions('SV5', 'CX10', 'CX7'), 'evidence': facts[:3],
-            'title': 'Your cache lifetimes are already the cheapest mix',
-            'bottom_line': f'Replaying your whole history under every lifetime mix, your actual one ({mix}) costs the least (SV5): leave the '
-                           'cache lifetime settings as they are.',
-            'actions': ['Keep promptCacheTtl and subagentPromptCacheTtl as they are'], 'priority': 'low', 'confidence': 'high',
+            'title': 'Your cache lifetimes are the cheapest mix: pin them so they stay' if need else
+                     'Your cache lifetimes are already the cheapest mix',
+            'bottom_line': (f'Replaying your whole history under every lifetime mix, your actual one ({mix}) costs the least (SV5). It '
+                            'comes from the automatic setting, which gives the main thread 1 hour only on a subscription within its usage '
+                            'limits: pin it in settings.') if need else
+                           (f'Replaying your whole history under every lifetime mix, your actual one ({mix}) costs the least (SV5): leave '
+                            'the cache lifetime settings as they are.'),
+            'actions': [f"Set {' and '.join(pin[x] for x in need)} in ~/.claude/settings.json"] if need else
+                       ['Keep promptCacheTtl and subagentPromptCacheTtl as they are'],
+            'priority': 'medium' if need else 'low', 'confidence': 'high',
             **({'facts': facts[3:]} if facts[3:] else {})}
 
 
-def levers(R, by_lever):
+def levers(R, by_lever, v=None):
     out, errs = [], []
     rows = {k: lever_row(R, k) for k in LEVER_ROWS}
     for key, row in sorted(((k, r) for k, r in rows.items() if r and (r.get('u') or 0) > 0), key=lambda x: -x[1]['u']):
@@ -1734,7 +1832,7 @@ def levers(R, by_lever):
             errs.append({'lever': key, 'reason': str(e)})
     if not rows.get('ttl') or not (rows['ttl'].get('u') or 0) > 0:
         try:
-            b = lifetimes_fit(R)
+            b = lifetimes_fit(R, v)
             if b:
                 out.append(b)
         except Missing as e:
@@ -1769,7 +1867,7 @@ def build(metrics, config, out=None):
         for lv in r.get('levers') or []:
             if r.get('draft'):
                 lever_ids.setdefault(lv, []).append(r['draft']['id'])
-    bundles, lever_errs = levers(R, lever_ids)
+    bundles, lever_errs = levers(R, lever_ids, v)
     default_ins = {b['lever']: b['id'] for b in bundles}
     drafted = {r['draft']['id'] for r in results if r['kind'] == 'draft'}
     for r in results:

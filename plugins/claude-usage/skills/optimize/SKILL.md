@@ -1,6 +1,6 @@
 ---
 name: optimize
-description: Turn the usage report's insights into concrete Claude Code optimizations (settings, hooks, status line, CLAUDE.md, agent and habit changes), each with its theoretical saving (all time and per 30 days), a one-command apply (preview, backup, undo) where possible and exact manual steps otherwise, shown in the report's Optimizations tab. Run after /claude-usage:report.
+description: Turn the usage report's insights into concrete Claude Code optimizations (settings, hooks, status line, CLAUDE.md, agent and habit changes), each with its theoretical saving (all time and per 30 days), a one-command apply (preview, backup, undo) where possible and exact manual steps otherwise, shown in the report's Optimizations tab. /claude-usage:report writes them too; run this to redo them, with a focus, or to preview one to apply.
 disable-model-invocation: true
 argument-hint: "[focus: cost | cache | context | hooks | <anything>] | apply <id>"
 allowed-tools: Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/candidates.py" *), Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/assemble.py" *), Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/apply.py" check *), Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/apply.py" show *), Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/apply.py" list *), Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/usage_report.py" *), Bash(claude --version), WebFetch(domain:code.claude.com), Read(~/.claude-usage/**), Read(~/.claude/plugins/cache/claude-usage-optimizer/claude-usage/**), Edit(~/.claude-usage/data/notes-optimizations.json)
@@ -128,7 +128,7 @@ The notes, for example:
 
 ```json
 {
-  "summary": "Start with … For context size, /clear between unrelated tasks and pick one: auto-compact at 200K ($119 all time, ≈ $173 per 30 days) or a notice at 150K. …",
+  "summary": "Start with the cache lifetimes: pin 1 hour for the main thread and 5 minutes for subagents (one command). For context size, /clear between unrelated tasks and /compact at natural breaks past 150K (the notice, $212 all time); the 400K cap catches unattended runs ($120), and the two overlap. …",
   "claude_code_version": "2.1.285",
   "drop": {"keep-awake": "the user works on a desktop that never sleeps"},
   "edit": {
@@ -141,13 +141,14 @@ The notes, for example:
            "apply": {"summary": "…", "steps": [{"action": "append_text", "path": "~/.claude/CLAUDE.md", "marker": "compact-keep",
                      "content": "- When compacting, keep the files changed, the test commands and the open decisions.\n"}]},
            "manual": ["…"], "undo": "…", "docs": [{"title": "Best practices", "url": "https://code.claude.com/docs/en/best-practices"}]}],
-  "relate": [{"a": "compact-keep-list", "b": "auto-compact-200k", "relation": "complements",
-              "note_a": "…from this one's side", "note_b": "…from auto-compact-200k's side"}]
+  "relate": [{"a": "compact-keep-list", "b": "auto-compact-400k", "relation": "complements",
+              "note_a": "…from this one's side", "note_b": "…from auto-compact-400k's side"}]
 }
 ```
 
-- `summary` (required): name the choices ("pick one: auto-compact at 200K or a notice at 150K"), give overlapping savings as a
-  range or the larger one, never a sum, and say which savings are upper bounds. Where a documented habit does the same job as
+- `summary` (required): lead with the Start here items (those marked `first`: the cache-lifetime pin, whenever SV5 supports
+  it), then name the choices ("X or Y: I'd pick X"), give overlapping savings as a range or the larger one, never a sum, and
+  say which savings are upper bounds. Where a documented habit does the same job as
   a setting (/clear between unrelated tasks, /compact at natural breaks), say it next to the setting. The tab shows the first
   sentence larger, as the lead: make it short and the one to remember. At most 900 characters (the schema's limit; aim for ~600).
 - Length limits the schema enforces (characters): `title` 90, `problem` 500, `what_it_does` 700, `tradeoffs` 500, a
@@ -156,7 +157,8 @@ The notes, for example:
 - `drop`: candidates to leave out (by id, or by catalog entry name), with a reason for yourself; it isn't written anywhere.
   Every draft in `optimizations` is kept unless dropped.
 - `edit`: fields to change, per candidate id (or entry name). A value replaces the field, `null` removes it, `savings` is
-  merged key by key, `"id"` renames it. A `judgment` draft is included only when it appears here (`{}` keeps it as drafted).
+  merged key by key, `"id"` renames it. `"first": true` puts an item in the tab's Start here section, ahead of the
+  categories (at most 3 in all, validate.py checks): keep it for quick, low-risk changes worth making before the rest. A `judgment` draft is included only when it appears here (`{}` keeps it as drafted).
   `insights` replaces the links the script would add (the insights of the lever each draft acts on).
 - `add`: your own optimizations, whole. Every field the schema requires: `id`, `title` (the change, without its saving),
   `category`, `kind`, `problem` (what it fixes, with the report's numbers), `what_it_does`, `questions`, `effort`, `risk`,
@@ -176,7 +178,7 @@ Apply steps (for your own items) use only these actions. apply.py refuses anythi
   `set_json` / `unset_json` with a JSON `pointer`, on `~/.claude/settings.json` or a project's `.claude/settings.local.json`.
   Only these keys: `model`, `effortLevel` and `modelSettings.<model>.effortLevel` (`low` to `xhigh`; never a saved `low`),
   `alwaysThinkingEnabled` (never `false`), `promptCacheTtl`, `subagentPromptCacheTtl`, `autoCompactEnabled`,
-  `autoCompactWindow` (an integer, 200000 to 1000000), `skillOverrides`, `skillListingBudgetFraction`, `enabledPlugins` (only
+  `autoCompactWindow` (an integer, 300000 to 1000000; the catalog caps at 400000), `skillOverrides`, `skillListingBudgetFraction`, `enabledPlugins` (only
   `false`), `disabledMcpjsonServers` (only adding), `disableClaudeAiConnectors`, `bashOutputMaxChars` (4000–128000),
   `cleanupPeriodDays` (only raising), `env` for the model, cache, compaction and output-limit variables in claude-code.md, a
   `statusLine` running the bundled `statusline.py`, and new
@@ -210,7 +212,7 @@ because of them.
 
 ## 5. Reply
 
-List the optimizations by saving (title, saving all time and per 30 days, effort), say how to apply them (the tab's copy
+List the Start here items first, then the optimizations by saving (title, saving all time and per 30 days, effort), say how to apply them (the tab's copy
 button gives the apply.py command to run in a terminal: it previews, asks, backs up, and can be undone; or ask you to preview
 one with "apply <id>"), and that settings and hooks take effect in new sessions. Give
 alternatives and conflicts as one choice ("X or Y: I'd pick X because …"), not as two items, and say which savings overlap.

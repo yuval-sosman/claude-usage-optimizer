@@ -30,6 +30,7 @@
           "title": {"type": "string", "minLength": 5, "maxLength": 90},
           "category": {"enum": ["cost", "cache", "context", "workflow", "delegation", "tooling", "reliability"]},
           "kind": {"enum": ["hook", "setting", "statusline", "claude_md", "agent", "command", "habit"]},
+          "first": {"type": "boolean", "description": "Leads the Optimizations tab, in Start here (the cache-lifetime pin comes with it); at most 3"},
           "problem": {"type": "string", "minLength": 20, "maxLength": 500, "description": "What it fixes, with the numbers from the report"},
           "what_it_does": {"type": "string", "minLength": 20, "maxLength": 700},
           "insights": {"type": "array", "items": {"type": "string"}, "description": "Insight ids in insights.json"},
