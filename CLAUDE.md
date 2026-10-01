@@ -262,7 +262,7 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
   `docs/screenshots/make_demo.py` says; never screenshot a real report.
 
 **A card's numbers or blocks (usage_report.py):**
-- Run the full `usage_report.py`. This regenerates metrics.json with a new `generated` stamp, so insights.json/optimizations.json become **out of date** (the tabs show a banner) until `/claude-usage:report` (and `/claude-usage:optimize`) run again.
+- Run the full `usage_report.py`. This regenerates metrics.json with a new `generated` stamp, so insights.json/optimizations.json become **out of date** (the tabs show a banner) until `/claude-usage:report` runs again (it rewrites both).
 - Update the question's entry in `docs/QUESTIONS.md` ("How" / "Check").
 - If an SV card changed, the savings quoted in insights/optimizations change too: regenerate them rather than hand-editing.
 - `candidates.py` reads SV, CX, EX, OV and TR cards by id, label, table key and chart title (like video.py). After renaming
@@ -431,7 +431,7 @@ python3 $S/clear.py --out /tmp/usage-check                        # what it woul
 ```
 
 - A full run on `<OUT>` itself changes the `generated` stamp. After that, both `validate.py` commands fail on
-  `source.metrics_generated` until `/claude-usage:report` (and `/claude-usage:optimize`) run again. That is expected, so run
+  `source.metrics_generated` until `/claude-usage:report` runs again (it rewrites both). That is expected, so run
   it on `<OUT>` only when you mean to regenerate the insights.
 - Rendering (macOS): `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --virtual-time-budget=5000 --dump-dom "file://$O/report.html#tab=report" | grep -o '<body[^>]*>'`
   (also `tab=insights`, `tab=optimizations`, `q=<ID>`). Expect `data-render-status="ok"` and `data-render-errors="0"`.

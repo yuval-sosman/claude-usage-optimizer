@@ -2660,7 +2660,7 @@ function staleNote(doc, what) {
   return h('div', { class: 'stale' }, h('strong', { text: 'Out of date. ' }),
     'These ' + what + ' were written for the report generated ' + ((doc.source || {}).metrics_generated || 'earlier') +
     '; this report was generated ' + ((REPORT.meta || {}).generated || 'later') + '. Numbers may have moved: run ' +
-    (what === 'insights' ? '/claude-usage:report' : '/claude-usage:optimize') + ' again to refresh them.');
+    '/claude-usage:report again to refresh them (it rewrites both tabs).');
 }
 function emptyView(title, text, cmd) {
   return h('div', { class: 'vempty' }, h('h2', { text: title }), h('p', { text: text }), cmd ? h('code', { class: 'cmd', text: cmd }) : null);
@@ -3132,7 +3132,8 @@ function whyPick(o, others) {                           // what this option says
 function renderOpts() {
   var el = views.optimizations, doc = optsDoc();
   if (!doc || !(doc.optimizations || []).length) {
-    el.replaceChildren(emptyView('No optimizations yet', 'Claude turns the insights into concrete changes (hooks, settings, habits) you can apply one by one. In Claude Code, run:', '/claude-usage:optimize'));
+    var ins = insightsDoc(), cur = !!(ins && (ins.insights || []).length && !ins.stale);   // report writes both tabs; optimize, only these
+    el.replaceChildren(emptyView('No optimizations yet', 'Claude turns the insights into concrete changes (hooks, settings, habits) you can apply one by one. In Claude Code, run:', cur ? '/claude-usage:optimize' : '/claude-usage:report'));
     return;
   }
   CATS.forEach(function (c) { CAT_TITLE[c.id] = c.title; });
