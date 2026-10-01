@@ -577,6 +577,12 @@ table.t { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-
 .term code span { display: inline-block; max-width: 100%; }
 .term .btn { margin: 3px 4px; flex-shrink: 0; }
 .term .btn.ok { color: var(--save); }
+.pbox { margin-top: 8px; border-radius: var(--r-ctl); background: var(--wash); border: 1px solid var(--border); }
+.pbox-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 4px 4px 12px; border-bottom: 1px solid var(--border);
+  font-size: 12px; color: var(--text-muted); }
+.pbox-h .btn.ok { color: var(--save); }
+.pbox pre { margin: 0; padding: 8px 12px; max-height: 360px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere;
+  font: 12px/18px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text-primary); }
 .nw-rel { margin: -4px 20px 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; font-size: 13px; color: var(--text-secondary); }
 .nw-rel .ritem { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
 .nw-body { padding: 4px 20px 20px; border-top: 1px solid var(--border); animation: reveal 160ms ease-out; }
@@ -694,7 +700,7 @@ footer.foot ul { margin: 8px 0; padding-left: 20px; }
   .kpi-pop, .pop.score-pop { position: fixed; left: 16px; right: 16px; top: auto; bottom: 16px; width: auto; max-height: 70vh; overflow: auto; }
 }
 @media print {
-  .tabbar, .controls, .toc, .menu-btn, .filterbar, .vtools, .term .btn, .chart-head .btn { display: none !important; }
+  .tabbar, .controls, .toc, .menu-btn, .filterbar, .vtools, .term .btn, .pbox-h .btn, .chart-head .btn { display: none !important; }
   .layout { display: block; padding: 0; }
   body { background: #ffffff; }
   .card, .kpi, .icard { break-inside: avoid; }
@@ -3051,6 +3057,52 @@ function relRows(rels) {
   });
   return rows;
 }
+function ptrText(p) {                                   // a JSON pointer as the key path the manual steps write: a → b → c
+  return p.split('/').slice(1).map(function (k) { return k.replace(/~1/g, '/').replace(/~0/g, '~'); }).join(' → ');
+}
+function promptStep(st, P) {                             // one apply step as an instruction for Claude
+  var src = function (s) { return (P.scripts ? P.scripts + '/' : 'the claude-usage plugin’s scripts/') + s; };
+  if (st.action === 'write_file') {
+    var t = 'Copy ' + src(st.source) + ' to ' + st.path + (st.mode ? ' (mode ' + st.mode + ')' : '');
+    if ((P.helpers || []).indexOf(st.source) >= 0) t += ', with ' + src('hooks/_session.py') + ' and ' + src('prices.json') + ' beside it';
+    return t + '.';
+  }
+  if (st.action === 'merge_json') return 'Merge into ' + st.path + ', keeping what is there' + (st.value && st.value.hooks ? ' (add the hook group next to any existing ones)' : '') + ': ' + JSON.stringify(st.value);
+  if (st.action === 'set_json') return 'In ' + st.path + ', set ' + ptrText(st.pointer) + ' to ' + JSON.stringify(st.value) + '.';
+  if (st.action === 'unset_json') return 'In ' + st.path + ', remove ' + ptrText(st.pointer) + '.';
+  if (st.action === 'append_text') {
+    return 'Append to ' + st.path + ' (create it if missing), under the line <!-- claude-usage:' + st.marker + ' --> (skip this if that line is already there):\n' +
+      st.content.replace(/\n+$/, '').split('\n').map(function (l) { return '   ' + l; }).join('\n');
+  }
+  if (st.action === 'run') return 'Run in ' + (st.path || '~') + ': ' + st.command;
+  return null;
+}
+function optPrompt(o) {
+  // a short prompt to paste into Claude Code: Claude makes the change itself, asking before each write
+  var P = (REPORT.meta || {}).prompt || {};
+  var habit = o.kind === 'habit' && !o.apply;
+  var steps = o.apply ? o.apply.steps.map(function (st) { return promptStep(st, P); }).filter(Boolean) : (o.manual || []);
+  var L = [(habit ? 'Help me pick up this Claude Code habit from my claude-usage report: ' : 'Apply this optimization from my claude-usage report for me: ') + o.title + '.'];
+  if (o.what_it_does) L.push(o.what_it_does);
+  if (P.claude_dir) L.push('My Claude folder is ' + P.claude_dir + ': use it wherever ~/.claude or $HOME/.claude appears below.');
+  if (steps.length) {
+    L.push('');
+    L.push(o.apply ? 'Changes:' : 'Steps:');
+    steps.forEach(function (s, i) { L.push((i + 1) + '. ' + s); });
+  }
+  L.push('');
+  var check = o.verify ? ' Then tell me how to check it worked: ' + o.verify : '';
+  if (habit) L.push('It changes no files: in a few lines, tell me when and how to do each step in my day-to-day work.' + (o.verify ? ' How I’ll see it working: ' + o.verify : ''));
+  else L.push((o.apply ? '' : 'Do the steps you can, and for a slash command or anything else only I can do, tell me exactly what to run. ') +
+    'Before writing a file, show me the change and wait for my OK; back the file up first and change nothing else in it.' +
+    (o.apply ? ' It takes effect in a new session.' : '') + check);
+  return L.join('\n');
+}
+function promptBox(text) {                               // the prompt, with a copy button
+  var b = btn('Copy prompt', 'sm ghost', 'copy', { 'aria-label': 'Copy the prompt' });
+  b.addEventListener('click', function (e) { e.stopPropagation(); copyText(text, b); });
+  return h('div', { class: 'pbox' }, h('div', { class: 'pbox-h' }, h('span', { text: 'Prompt for Claude Code' }), b), h('pre', { text: text }));
+}
 var EFFORT_ICON = { 'one-click': 'terminal', minutes: 'hand', habit: 'clock' };
 function optCard(o, ctx) {
   // ctx.why: in a choice, when to pick this one
@@ -3106,12 +3158,24 @@ function optCard(o, ctx) {
     box.append(det, und);
     rowsEl.append(drow('Apply', box));
   }
+  var promptRow = null;
+  if (!(REPORT.meta || {}).shared && (o.apply || (o.manual || []).length)) {   // like the commands: never for a report someone sent you
+    var pb = h('div');
+    pb.append(h('p', { class: 'hint', style: 'margin-top:0', text: o.apply ?
+      'Or paste this into Claude Code: Claude makes the same changes itself, asking before each write. Unlike the command, it keeps no record for apply.py undo.' :
+      o.kind === 'habit' && !o.apply ? 'Paste this into Claude Code: Claude walks you through the habit.' :
+      'Paste this into Claude Code: Claude does the steps it can, asking before each write, and tells you the rest.' }));
+    pb.append(promptBox(optPrompt(o)));
+    promptRow = drow('Apply with prompt', pb);
+  }
+  if (o.apply && promptRow) rowsEl.append(promptRow);
   var mol = h('ol', { class: 'steps' });
   (o.manual || []).forEach(function (m) { mol.append(h('li', { text: m })); });
   var man = h('div', null, mol);
   if (o.verify) man.append(h('p', { class: 'hint' }, 'Check: ' + o.verify));
   if (!o.apply && o.undo) man.append(h('p', { class: 'hint' }, 'Undo: ' + o.undo));
   rowsEl.append(drow(o.apply ? 'Or by hand' : 'How to do it', man));
+  if (!o.apply && promptRow) rowsEl.append(promptRow);
   rowsEl.append(questionsRow(o.questions || [], null, from));
   var ins = (o.insights || []).map(findInsight).filter(Boolean);
   if (ins.length) {
