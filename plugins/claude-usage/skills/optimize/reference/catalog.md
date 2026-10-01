@@ -224,6 +224,8 @@ rules cover pairs the catalog doesn't list:
   ("a close call"), or the last 7 days favour the other lifetime, it is **(judgment)**: say so and don't push a change.
 - **Saving**: actual total − SV5's cheapest mix (`theoretical`) when the actual mix differs; none when the history already
   ran on the pinned mix (the problem gives SV5's per-kind margins instead).
+- **Tradeoff**: a 1-hour write costs 2× input instead of 1.25×, and pinned, the main thread writes 1-hour entries past a
+  subscription's usage limits too. Low risk, not free: never call it "no downside".
 - **Apply**: `merge_json` `~/.claude/settings.json` with the keys to set, plus (as in unused-listings-off) the other lifetime
   key when an applied earlier version set it; a single subagent type can differ with `experimental.cacheTtl` in its agent
   file (SV5 lists each type).
