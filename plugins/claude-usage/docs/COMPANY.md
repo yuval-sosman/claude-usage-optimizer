@@ -18,8 +18,8 @@ report's question count.
 - **Periods.** Each file covers the days its sender's report covered (`headline.days`, the basis of the report's "per 30
   days"). People are compared per 30 days: spend × 30 ÷ days. `--since`/`--until` keeps the calls inside the window and
   each person's days inside it; someone with no days inside is left out.
-- **Levers** come from each person's report: SV1's row for each lever (by `id`; older reports by card and label,
-  `candidates.lever_row`), except unused listings, which use SV2's "Of which you can switch off" (what the person can act
+- **Levers** come from each person's report: SV2's row for each lever (by `id`; older reports by card and label,
+  `candidates.lever_row`), except unused listings, which use SV3's "Of which you can switch off" (what the person can act
   on). They are scaled by the price check's ratio and capped at the person's spend. Levers overlap within a person (a
   smaller context also makes misses cheaper), so they are never added across levers; one lever added across people is
   fine. With a window, levers still cover each person's whole period.
@@ -80,7 +80,7 @@ median peak context over 2× the median; miss-cost share over 2× the median (an
 **LV1. Which savings levers are worth the most across everyone?** Per lever: saving per 30 days summed over people, the
 people it applies to (saves at least $1 or 1% of their spend per 30 days), the people for whom it is the biggest lever,
 the median saving among the people it applies to, and the all-time sum.
-- Check: a company of one person's LV1 equals their SV1's per-30-days figures (unused listings: their SV2's switch-off-able
+- Check: a company of one person's LV1 equals their SV2's per-30-days figures (unused listings: their SV3's switch-off-able
   part).
 
 **LV2. Who would gain the most from each lever?** Heatmap of the 20 people with the most spend per 30 days × levers, as

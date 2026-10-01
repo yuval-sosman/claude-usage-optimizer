@@ -92,7 +92,7 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
 
   history/scores.json  usage_report.py's one memory between runs: each run's high-level scores (run_snapshot: score, grade,
                     areas, spend per 30 days, hit rate, peak context), one entry a day (save_history replaces the same day;
-                    --until runs neither read nor save it). read_history feeds SV9's progress (all projects) and the
+                    --until runs neither read nor save it). read_history feeds SV1's progress (all projects) and the
                     headline's change since the last report. Not packed by share.py: the progress is already in metrics.json.
 
   clear.py          removes <OUT>'s own files by name (FILES/FOLDERS/LEGACY: report.html, insights.json, optimizations.json,
@@ -105,7 +105,7 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
                       shared.company, so no apply commands and apply.py refuses it), data/metrics.json, data/digest.md
                       (skills/company reads it), data/people.csv. It reads share files one at a time (share.load), re-prices
                       every calls.csv row at this prices.json (Prices.mult from its where/fast columns), takes levers from
-                      each report's SV1 (lever_row, by id) and SV2, and dedupes people by session ids. docs/COMPANY.md
+                      each report's SV2 (lever_row, by id) and SV3, and dedupes people by session ids. docs/COMPANY.md
                       documents every card.
 ```
 
@@ -154,7 +154,7 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
   - Python 3.8 syntax: no nested same-quote f-strings, no `str.removeprefix`, no `dict | dict`.
   - Works on macOS, Linux and Windows: paths go through `slash()`/`tilde()`, file URLs through `pathlib`, and stdout is safe via `safe_console()`.
 - **Any Claude model:** model ids go through `canon_model()`. Prices come from `scripts/prices.json`, with a nearest-family
-  fallback flagged as "estimated". SV6 compares against `_compare`. Never hardcode a model name in card text; use
+  fallback flagged as "estimated". SV7 compares against `_compare`. Never hardcode a model name in card text; use
   `model_name()` and `prices.pick(family)`.
 - **Dollars are list-price equivalents.** Every SV card is "if applied from day one, same work". Savings overlap; say so.
 - **Every figure in insights/optimizations is traceable** to the digest. `scripts/validate.py` enforces:
@@ -169,13 +169,13 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
     env), a saved `low` effort, thinking off, a context notice under 100K;
   - at most 3 optimizations marked `first` (the tab's Start here section; the cache-lifetime pin comes with it).
 - **Recommendations follow Claude Code's documented best practice; the data aims and sizes them.** A replay's saving never
-  makes a change good practice (the case that started this: SV4's replay started at 60K, so the catalog could propose a 60K
+  makes a change good practice (the case that started this: SV5's replay started at 60K, so the catalog could propose a 60K
   context notice and an 80K auto-compact window, below what Claude Code even accepts).
   `skills/optimize/reference/best-practices.md` holds the verbatim guidance, the "never recommend" list and the digest
   signals that point to a documented practice; the report, optimize and brainstorm skills read it, and catalog entries
   encode it (auto-compact only caps a 1M model, at 400K and never below 300K; the cache lifetimes are pinned at main 1 hour ·
-  subagents 5 minutes whenever SV5 favours that mix, as the first recommendation; effort goes back to the model's documented default,
-  not below; a rarely used skill is listed `name-only`; SV4's thresholds start at 100K). Keep code guards, not prompts,
+  subagents 5 minutes whenever SV6 favours that mix, as the first recommendation; effort goes back to the model's documented default,
+  not below; a rarely used skill is listed `name-only`; SV5's thresholds start at 100K). Keep code guards, not prompts,
   for the hard lines (`practice_errs()`, and policy.py's bounds, which match what Claude Code accepts). When the docs or
   Claude Code change, update best-practices.md, `claude-code.md`, the catalog and these guards together.
 - **A share file round-trips.** `share.py unpack` of a `pack` gives back metrics.json, insights, optimizations,
@@ -201,7 +201,7 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
   - `TABLE`.
   - `TABS([(label, block or [blocks])], title, sub, desc, collapsed)`: a collapsible section, one tab shown at a time. With a single tab it is just a collapsible section.
   - `{'kind': 'traces'}`: the step-by-step miss timelines.
-  - `{'kind': 'score'}`: SV9's efficiency score (value, grade, `scale`, `areas`), drawn by the template's `scoreBlock()`;
+  - `{'kind': 'score'}`: SV1's efficiency score (value, grade, `scale`, `areas`), drawn by the template's `scoreBlock()`;
     `md_card()` writes it as one line even in a short digest.
 - **Layout flags on a block:**
   - `width: 'half'|'third'` puts consecutive blocks side by side, with dividers.
@@ -209,7 +209,7 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
   - Chart options: `minBand` + `scrollX` (scrollable bars), `labelUnit`. The template also honours `pointColors`, which it sets itself on the insights chart.
 - **Card-level switches:**
   - `HIDDEN_CARDS` (currently OV6, ME4, ME5, EX10–EX15): computed and kept in the data/digest, not shown, can't be cited.
-  - `CARD_ORDER`: a display position that differs from the id (SV9 leads its section at 0.5).
+  - `CARD_ORDER`: a display position that differs from the id (empty at the moment).
   - `CARD_SECTION`: the section a card shows in when it differs from its id's letters (the page's `sectionOf()` and the
     digest's `section_of()` read the card's `section`).
   - `alias`: a hidden card with `alias: '<ID>'` opens that card when it is cited or linked. The template, `validate.py`
@@ -221,21 +221,21 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
   - Most tiles come from `m.facts`, which cards fill in as a side effect (OV1, OV7, CX1, CX7, CX8, CX9…), so a card that sets a fact must run.
   - The two median tiles are read by label from the KPI block of hidden OV6, so renaming those labels blanks the tiles.
   - The headline insights come from the cards listed in `HEADLINE_ORDER`.
-  - Its `score` is SV9's (`m.facts['score']`), drawn beside the cost by `scoreSummary()`; `add_refs()` gives each scope's
-    score (headline and SV9 block) the all-projects value, and `add_scores()` adds All projects' "By project" table after
+  - Its `score` is SV1's (`m.facts['score']`), drawn beside the cost by `scoreSummary()`; `add_refs()` gives each scope's
+    score (headline and SV1 block) the all-projects value, and `add_scores()` adds All projects' "By project" table after
     every scope has run.
-- **Efficiency score (SV9):** `efficiency()` combines SV1's levers (`sv_levers()`, by id) into a 1–100 score. `SCORE_AREAS`
+- **Efficiency score (SV1):** `efficiency()` combines SV2's levers (`sv_levers()`, by id) into a 1–100 score. `SCORE_AREAS`
   maps each area to its levers (the largest counts: they act on the same cost) and its points; areas combine as
   Π(1 − share), like the tabs and the video combine savings; `GRADES` holds the cut-offs (A+ 88 … C- below 40; generous on purpose: a C means over 42% avoidable). The score block and the
   headline carry them as `scale`, which the (i) beside the score (`scoreHelp()`) shows as a table, so it always matches. The
   main-thread model lever is left out on purpose (it compares with the model in use now, so moving to a cheaper model would
-  lower the score). A new SV1 lever goes into an area, or is left out, deliberately: update `SCORE_AREAS`, SV9's note and
-  QUESTIONS.md's SV9 together.
+  lower the score). A new SV2 lever goes into an area, or is left out, deliberately: update `SCORE_AREAS`, SV1's note and
+  QUESTIONS.md's SV1 together.
 - **Across scopes:** `where_used()` runs once on all projects in `build()` and reaches every scope as `g.where`: what a
-  user-level setting loads everywhere but only some projects use (SV2's "used in some projects" table, `item_origin()`'s
+  user-level setting loads everywhere but only some projects use (SV3's "used in some projects" table, `item_origin()`'s
   advice, which never says "switch it off in each project").
 - **Stop hooks:** `_post_stop()` charges a Stop hook only the calls that descend from its `stop_hook_summary` record
-  (`parentUuid`) before a `new_input()`; EX5's "What Stop hooks set off" and SV1's lever both read it. Don't go back to a
+  (`parentUuid`) before a `new_input()`; EX5's "What Stop hooks set off" and SV2's lever both read it. Don't go back to a
   time window: work started by another input (another session's message, a `/loop` wake-up) would be charged to the hook.
 - **Digest:** `md_card()` writes every card into digest.md, including hidden blocks and the blocks inside tabs.
 - **Loading and speed** (≈5 s and ≈320 MB for ~300 MB of transcripts; memory grows with the records kept):
@@ -285,7 +285,7 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
 3. `skills/report/reference/insights-guide.md`: the "Usually cites" column and the checklist.
 4. `skills/optimize/reference/catalog.md` and `skills/optimize/reference/claude-code.md`: the `When`/`Saving` rules cite ids.
 5. The examples in `skills/report/SKILL.md` and `skills/brainstorm/SKILL.md`, and the video: `scripts/video.py` reads OV2
-   (the "By model" chart), OV3, CX8 (its KPI labels and traces), SV1, SV3 and the headline tiles by label. And
+   (the "By model" chart), OV3, CX8 (its KPI labels and traces), SV2, SV4 and the headline tiles by label. And
    `scripts/candidates.py`: its catalog entries and lever bundles cite and read cards by id.
 6. The question count ("63 questions" = every card id in metrics.json, hidden ones included) in the root `README.md`, the plugin's `README.md`, `.claude-plugin/plugin.json`, QUESTIONS.md and the promo videos (`promo/*.html`; re-render their MP4s with `promo/render.mjs`, then the GIFs in both READMEs as its header says). Keep it out of the skills: the report skill's description loads in every session.
 7. The user's existing `<OUT>/insights.json` and `optimizations.json`: remap cited ids (`questions`, `evidence[].question`, ids inside text), or regenerate them.
@@ -309,12 +309,12 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
   validator can see, add it to `SAME_LEVER` in validate.py.
 
 **Prices or models:**
-- Edit `scripts/prices.json` (canonical ids; `_compare` sets SV6's comparison set).
+- Edit `scripts/prices.json` (canonical ids; `_compare` sets SV7's comparison set).
 - What a call paid over list price is its `pm` (`Prices.mult()`, set once per call from its raw model id and usage):
   `_modifiers` (`bedrock_regional`: any Bedrock inference profile but `global.`; `api_regional`: an `inference_geo` other
   than `"global"`; both from `where_of()`) from a model version on, times the model's own `"fast"` when `usage.speed` is `"fast"`. Everything that prices a call's own tokens
   passes it (`cost(model, u, c['pm'])`, `per_token(…, c['pm'])`, `w_rate`/`r_rate`, items carry `pm`); a what-if on another
-  model (SV6) passes `mult(other, c['where'])`, without fast mode. With every `pm` at 1 the numbers match the list-price
+  model (SV7) passes `mult(other, c['where'])`, without fast mode. With every `pm` at 1 the numbers match the list-price
   engine exactly: keep the arithmetic order (`… / 1e6 * mult`).
 - Ids that name no model (a Bedrock application inference profile ARN) resolve through `ALIASES` (`model_aliases()`:
   `_aliases`, then settings' `modelOverrides`, then `ANTHROPIC_DEFAULT_<FAMILY>_MODEL` as the family's comparison model,
@@ -348,8 +348,8 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
   render the received report.html (all three tabs).
 
 **The company report (`skills/company`, `scripts/company.py`, `docs/COMPANY.md`):**
-- It reads calls.csv, sessions.csv and cache_misses.csv by column name (`NEED` lists the calls columns it requires), SV1
-  rows by lever `id` (`candidates.lever_row`) and SV2's "Of which you can switch off". Renaming any of those, or a lever
+- It reads calls.csv, sessions.csv and cache_misses.csv by column name (`NEED` lists the calls columns it requires), SV2
+  rows by lever `id` (`candidates.lever_row`) and SV3's "Of which you can switch off". Renaming any of those, or a lever
   id, needs company.py (and `candidates.LEVER_TITLES`, one model-free title per lever) to follow. A new lever: add it to
   `LEVER_ROWS` and `LEVER_TITLES`; company.py picks it up.
 - Cards are built with the engine's block builders and rendered by `usage_report.render()`; the template needs only the

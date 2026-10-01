@@ -14,7 +14,7 @@ When you need something not covered here, fetch the page (`https://code.claude.c
 - **They agree**: say both. "Your sessions ran past 300K (CX1); the docs advise /clear between unrelated tasks" is stronger than
   either half.
 - **The data favours what the guidance warns against**: recommend what the guidance recommends instead, and say why in one
-  sentence with the numbers. Example: SV4 finds compacting at 150K pays; the fix is /compact at natural breaks once past about
+  sentence with the numbers. Example: SV5 finds compacting at 150K pays; the fix is /compact at natural breaks once past about
   150K (and, on a 1M model only, an auto-compact cap at 400K, never under 300K), never a low forced threshold.
 - **The guidance has a default the user overrode**: going back to the tuned default is a recommendation even without a
   measured saving (a persisted effort above the model's default; an auto-compact window below 300K).
@@ -50,10 +50,10 @@ tuned for your model and is strongly recommended for the best cost and performan
 auto may result in high token usage, especially when resuming long sessions."
 
 How the plugin applies it:
-- SV4's threshold is where compacting at a natural break pays off, not a switch to flip. Its replay starts at 100K; below that
+- SV5's threshold is where compacting at a natural break pays off, not a switch to flip. Its replay starts at 100K; below that
   you would compact every few turns.
 - A forced window (`autoCompactWindow`) only caps a model whose window is over 300K (a 1M model), at 400K: high enough that
-  a long task keeps its room, low enough to stop re-reading huge contexts. 300K at the lowest, when SV4 finds nothing to save
+  a long task keeps its room, low enough to stop re-reading huge contexts. 300K at the lowest, when SV5 finds nothing to save
   past 400K; never less (validate.py refuses it). It comes next to the context notice (the natural-break habit) and with
   Claude Code's own recommendation in the tradeoffs. On a 200K model the plugin never overrides auto.
 - After a break past the cache lifetime, cheapest first: `/clear` (free), `/compact` (reads the whole context once, uncached,
@@ -75,7 +75,7 @@ How the plugin applies it:
 > — [Prompt caching](https://code.claude.com/docs/en/prompt-caching)
 
 - `opusplan` runs Opus in plan mode and Sonnet otherwise; each plan-mode toggle is a model switch and starts a fresh cache.
-- SV6 re-prices the same tokens: a price ceiling, not a forecast. A cheaper main model is the user's call. Recommend it as a
+- SV7 re-prices the same tokens: a price ceiling, not a forecast. A cheaper main model is the user's call. Recommend it as a
   habit (the default for day-to-day work, the stronger model for the hard step) and switching at a natural break or a new
   session, since a switch re-writes the cache.
 
@@ -122,8 +122,8 @@ How the plugin applies it:
 
 - Main conversation: 1 hour on a subscription within its usage, else 5 minutes; subagents and helpers: 5 minutes unless set.
   "The longer TTL helps when you leave a session idle and come back to it … It costs more on short bursts of work that never
-  idle past five minutes." SV5 prices both on the user's own pauses: follow it.
-- The plugin's standing advice, whenever SV5 favours it (the usual result: people pause between prompts, subagents don't):
+  idle past five minutes." SV6 prices both on the user's own pauses: follow it.
+- The plugin's standing advice, whenever SV6 favours it (the usual result: people pause between prompts, subagents don't):
   1 hour for the main thread and 5 minutes for subagents, pinned in settings (`promptCacheTtl` `"1h"`,
   `subagentPromptCacheTtl` `"5m"`), even when the history already ran that way, since the automatic main lifetime is 1 hour
   only on a subscription within its usage limits. It leads the Optimizations tab (Start here). Moving to any other mix needs
@@ -168,13 +168,13 @@ validate.py refuses the first four in optimizations.json; the rest are rules for
 | What the digest shows | What the docs recommend | Page |
 |---|---|---|
 | Long sessions, /clear late (CX1, CX4), mixed work in one session (SE3) | /clear between unrelated tasks; /rename then /resume to come back | best-practices, costs |
-| Contexts past the SV4 threshold (CX1, CX6) | /compact with what to keep at natural breaks; CLAUDE.md compaction instructions | best-practices |
+| Contexts past the SV5 threshold (CX1, CX6) | /compact with what to keep at natural breaks; CLAUDE.md compaction instructions | best-practices |
 | A large share of cost before the first edit (EX9), many reads (EX6, EX8) | Subagents for investigation; plan mode for multi-file changes; specific prompts | best-practices, costs |
 | Files read again and again (EX8), a typed language (OUT4), no language server (EX4) | A code intelligence plugin | plugins/code-intelligence |
 | Large Bash output (CX3, EX6) | A hook that filters it; verbose runs in a subagent | costs |
 | CLAUDE.md over 200 lines (CX5's memory files) | Trim to essentials; workflows into skills; `/doctor` for a checked-in file | memory, best-practices |
 | Fix-and-retry loops, repeated corrections (EX7, the digest's EX15) | After two failed corrections, /clear and a better prompt; give Claude a check it can run | best-practices |
-| Opus or Fable doing routine work (OV2, SV6) | Sonnet for day-to-day, Opus for hard reasoning, or opusplan | costs, model-config |
+| Opus or Fable doing routine work (OV2, SV7) | Sonnet for day-to-day, Opus for hard reasoning, or opusplan | costs, model-config |
 | Effort above the model's default (OV4, config) | The model's default; /effort per task | model-config |
-| Explore or Plan on an expensive main model (SE5, SV6) | An Explore agent file with `model: haiku`, or a cheaper main model | sub-agents |
-| Unused MCP servers or skills (SV2, EX2) | Remove or scope them; CLI tools over MCP | costs, mcp |
+| Explore or Plan on an expensive main model (SE5, SV7) | An Explore agent file with `model: haiku`, or a cheaper main model | sub-agents |
+| Unused MCP servers or skills (SV3, EX2) | Remove or scope them; CLI tools over MCP | costs, mcp |

@@ -28,7 +28,7 @@
         "additionalProperties": false,
         "properties": {
           "type": {"enum": ["intro", "numbers", "models", "miss", "insights", "levers", "optimizations", "savings"],
-                   "description": "intro: total cost and daily spend. numbers: headline tiles. models: cost by model and by token type. miss: the timeline of one costly cache miss. insights: top insights with their savings. levers: what each lever would have saved (SV1). optimizations: the changes, applied or not. savings: what the changes together would have saved, overlaps removed."},
+                   "description": "intro: total cost and daily spend. numbers: headline tiles. models: cost by model and by token type. miss: the timeline of one costly cache miss. insights: top insights with their savings. levers: what each lever would have saved (SV2). optimizations: the changes, applied or not. savings: what the changes together would have saved, overlaps removed."},
           "seconds": {"type": "number", "minimum": 3.5, "maximum": 12},
           "eyebrow": {"type": "string", "maxLength": 48, "description": "Small label above the headline; defaults per scene type"},
           "headline": {"type": "string", "minLength": 3, "maxLength": 64},
@@ -38,7 +38,7 @@
             "type": "array",
             "minItems": 1,
             "maxItems": 5,
-            "description": "insights (1-3): insight ids with a saving; optimizations (1-4): optimization ids; levers (2-5): lever names from SV1. An object form sets a shorter title.",
+            "description": "insights (1-3): insight ids with a saving; optimizations (1-4): optimization ids; levers (2-5): lever names from SV2. An object form sets a shorter title.",
             "items": {
               "type": ["string", "object"],
               "required": ["id"],

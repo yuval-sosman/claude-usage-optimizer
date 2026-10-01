@@ -69,7 +69,7 @@ serve what the user asked for in `$ARGUMENTS`, or to make the headlines better:
 
 - **Scenes** (the contract is `${CLAUDE_PLUGIN_ROOT}/schemas/video.schema.json`): `intro` (total cost and daily
   spend), `numbers` (`tiles`), `models` (cost by model and token type), `miss` (`trace`: one costly cache miss, step by
-  step), `insights` (`items`: 1–3 insight ids), `levers` (`items`: 2–5 SV1 lever names; use when there are no
+  step), `insights` (`items`: 1–3 insight ids), `levers` (`items`: 2–5 SV2 lever names; use when there are no
   insights), `optimizations` (`items`: 1–4 ids; applied ones show a check), `savings` (the changes together, overlaps
   removed). Each type at most once. Drop or reorder scenes to match the focus; keep `intro` first and end on
   `savings` when it is there.

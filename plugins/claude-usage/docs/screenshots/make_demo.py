@@ -446,7 +446,7 @@ def main():
 
 
 def history():
-    """Three made-up earlier reports in the report folder's score history, so the next report shows progress (SV9)."""
+    """Three made-up earlier reports in the report folder's score history, so the next report shows progress (SV1)."""
     out = os.path.join(HOME, '.claude-usage')
     os.makedirs(os.path.join(out, 'history'), exist_ok=True)
     with open(os.path.join(out, '.claude-usage'), 'w') as fh:            # the report folder's marker (layout.MARKER)
