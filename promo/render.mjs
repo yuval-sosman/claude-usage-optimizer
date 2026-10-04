@@ -1,11 +1,11 @@
-// Renders claude-usage-video.html to an MP4, frame by frame, through the Chrome DevTools protocol (Node 22+, no packages;
+// Renders usage-optimizer-video.html to an MP4, frame by frame, through the Chrome DevTools protocol (Node 22+, no packages;
 // Chrome at the macOS path; ffmpeg on PATH or in $FFMPEG).
-//   node promo/render.mjs promo/claude-usage-video.mp4            # 1080 x 1080, 30 fps, drawn at 2x and scaled down
-//   node promo/render.mjs promo/claude-usage-short.mp4 --src promo/claude-usage-short.html
+//   node promo/render.mjs promo/usage-optimizer-video.mp4            # 1080 x 1080, 30 fps, drawn at 2x and scaled down
+//   node promo/render.mjs promo/usage-optimizer-short.mp4 --src promo/usage-optimizer-short.html
 //   node promo/render.mjs sheet.png --stills 2,9,14,18,24,30,38,44,50   # one contact sheet of those moments
 // The README preview GIFs, from the MP4s (the plugin README shows the short one, the root README the full one):
-//   ffmpeg -i promo/claude-usage-short.mp4 -vf "fps=12,scale=600:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle" -loop 0 promo/claude-usage-short.gif
-//   ffmpeg -i promo/claude-usage-video.mp4 -vf "fps=10,scale=600:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=96:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle" -loop 0 promo/claude-usage-video.gif
+//   ffmpeg -i promo/usage-optimizer-short.mp4 -vf "fps=12,scale=600:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle" -loop 0 promo/usage-optimizer-short.gif
+//   ffmpeg -i promo/usage-optimizer-video.mp4 -vf "fps=10,scale=600:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=96:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle" -loop 0 promo/usage-optimizer-video.gif
 import { spawn } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -14,10 +14,10 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const argv = process.argv.slice(2);
 const opt = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 ? argv[i + 1] : def; };
-const out = resolve(argv.find((a, i) => !a.startsWith('--') && !(i > 0 && argv[i - 1].startsWith('--'))) || 'claude-usage-video.mp4');
+const out = resolve(argv.find((a, i) => !a.startsWith('--') && !(i > 0 && argv[i - 1].startsWith('--'))) || 'usage-optimizer-video.mp4');
 const fps = +opt('fps', 30), scale = +opt('scale', 2), SIZE = 1080;
 const stills = opt('stills') ? opt('stills').split(',').map(Number) : null;
-const html = opt('src') ? resolve(opt('src')) : join(dirname(fileURLToPath(import.meta.url)), 'claude-usage-video.html');
+const html = opt('src') ? resolve(opt('src')) : join(dirname(fileURLToPath(import.meta.url)), 'usage-optimizer-video.html');
 const ffmpegBin = process.env.FFMPEG || 'ffmpeg';
 
 const port = 9400 + Math.floor(Math.random() * 400);

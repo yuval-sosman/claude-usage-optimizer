@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "claude-usage/insights.schema.json",
+  "$id": "usage-optimizer/insights.schema.json",
   "title": "Claude Code usage insights",
   "description": "Written by the usage-optimizer:report skill from digest.md / metrics.json only (never from session transcripts). Rendered as the report's Insights tab. Check with: python3 scripts/validate.py insights <file> --metrics <out>/metrics.json",
   "type": "object",

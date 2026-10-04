@@ -2,9 +2,9 @@
 
 **See where your Claude Code money goes, and what would have kept it.**
 
-[![A 53-second tour: what 62 days of Claude Code cost, the report command, its questions, one costly cache miss traced step by step, Claude's insights with what each fix would have saved, applying a fix, the combined saving, and how to install](promo/claude-usage-video.gif)](promo/claude-usage-video.mp4)
+[![A 53-second tour: what 62 days of Claude Code cost, the report command, its questions, one costly cache miss traced step by step, Claude's insights with what each fix would have saved, applying a fix, the combined saving, and how to install](promo/usage-optimizer-video.gif)](promo/usage-optimizer-video.mp4)
 
-<sub>Demo data. Watch as video: [full 53-second tour](promo/claude-usage-video.mp4) · [25-second cut](promo/claude-usage-short.mp4).</sub>
+<sub>Demo data. Watch as video: [full 53-second tour](promo/usage-optimizer-video.mp4) · [25-second cut](promo/usage-optimizer-short.mp4).</sub>
 
 A Claude Code plugin marketplace with one plugin, **usage-optimizer**. It reads your local transcripts, answers 63 questions
 about cost, caching, context and habits, scores how efficiently you work, and has Claude write what to change, with the
@@ -327,7 +327,7 @@ on and it picks and words the scenes; it runs 30 to 60 seconds.
 
 - Every figure comes from your report's data; a headline can only quote a number the data has.
 - It leaves out project names, session titles, file paths and prompts unless you ask for them.
-- It writes `~/.claude-usage/video/claude-usage-video.mp4` (1080 × 1080, H.264) and `video.html`, which plays the same
+- It writes `~/.claude-usage/video/usage-optimizer-video.mp4` (1080 × 1080, H.264) and `video.html`, which plays the same
   video in a browser, offline. The MP4 needs Chrome (or Edge, Chromium, Brave) and ffmpeg. The skill checks for both
   first and, if one is missing, gives you the command to install it yourself; it never installs anything. Without them
   you still get the page, ready to screen-record.
@@ -342,7 +342,7 @@ compares usage across people (a team lead, a platform team):
 - It holds everything report.html holds, and more: every number, chart, table and miss trace of every project scope, the
   insights and optimizations, the optimization drafts, your setup (secrets redacted), the optimizations you applied, and
   every row of the CSV exports, with numbers as numbers. The format is `plugins/usage-optimizer/schemas/share.schema.json`.
-- It writes `~/.claude-usage/share/claude-usage-share-<name>-<date>.json` and shows it in your file manager. Add
+- It writes `~/.claude-usage/share/usage-optimizer-share-<name>-<date>.json` and shows it in your file manager. Add
   `--name` and `--team` to say who it is from. It tells you when the report is days old or the insights are out of
   date, so you can refresh them first.
 - It includes project names, session titles, file paths, prompt snippets and commands, like report.html (keys, tokens
@@ -389,7 +389,7 @@ where Claude Code guards every write. To change it, pass `--out DIR`, or set `CL
 ├── insights.json        written by /usage-optimizer:report; yours to edit
 ├── optimizations.json   written by /usage-optimizer:report (and /usage-optimizer:optimize)
 ├── data/                rebuilt on every run: metrics.json, digest.md and candidates.json (what Claude reads), config.json, *.csv
-├── video/               /usage-optimizer:video: storyboard.json, video.html and claude-usage-video.mp4
+├── video/               /usage-optimizer:video: storyboard.json, video.html and usage-optimizer-video.mp4
 ├── share/               /usage-optimizer:share: the one-file copies of your report you made to send
 ├── received/            share files others sent you, each unpacked into its own report folder
 ├── company/             /usage-optimizer:company: many people's share files combined (report.html, data/)

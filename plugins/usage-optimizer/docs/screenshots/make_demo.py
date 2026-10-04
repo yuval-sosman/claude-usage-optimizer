@@ -6,12 +6,12 @@
 Regenerating docs/images/ (from the plugin folder; DEMO_HOME stands in for $HOME, so every path shows as ~/…):
 
     D=$(mktemp -d); python3 docs/screenshots/make_demo.py $D/home
-    rsync -a --exclude .claude/ ./ $D/home/.claude/skills/claude-usage/
+    rsync -a --exclude .claude/ ./ $D/home/.claude/skills/usage-optimizer/
     run() { env -u CLAUDE_CONFIG_DIR -u CLAUDE_USAGE_OUT HOME=$D/home TZ=America/Los_Angeles python3 "$@"; }
-    run $D/home/.claude/skills/claude-usage/scripts/usage_report.py
+    run $D/home/.claude/skills/usage-optimizer/scripts/usage_report.py
     # have Claude write $D/home/.claude-usage/insights.json and optimizations.json by the report and optimize skills'
     # steps (reading only that folder), validate them, then:
-    run $D/home/.claude/skills/claude-usage/scripts/usage_report.py --render
+    run $D/home/.claude/skills/usage-optimizer/scripts/usage_report.py --render
     node docs/screenshots/shoot.mjs $D/home/.claude-usage/report.html docs/images docs/screenshots/shots.json
 """
 import datetime as dt

@@ -528,7 +528,7 @@ def read_text(p, strict=False):
 def temp_of(p):
     """The temp file write_text() writes before renaming it over p (beside p's real file, so the rename is atomic)."""
     real = os.path.realpath(p)
-    return os.path.join(os.path.dirname(real), f'.{os.path.basename(real)}.claude-usage-tmp')
+    return os.path.join(os.path.dirname(real), f'.{os.path.basename(real)}.usage-optimizer-tmp')
 
 
 def write_text(p, txt, mode=None):

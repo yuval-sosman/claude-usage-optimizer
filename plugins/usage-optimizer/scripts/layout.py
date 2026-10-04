@@ -5,7 +5,7 @@
   <out>/optimizations.json     written by /usage-optimizer:report, or redone by /usage-optimizer:optimize (Claude)
   <out>/data/                  rebuilt by usage_report.py on every run: metrics.json, digest.md, config.json, candidates.json, *.csv
   <out>/applied/               apply.py's record (applied.json) and backups/, once you apply an optimization
-  <out>/video/                 /usage-optimizer:video: storyboard.json (Claude), video.html and claude-usage-video.mp4 (video.py)
+  <out>/video/                 /usage-optimizer:video: storyboard.json (Claude), video.html and usage-optimizer-video.mp4 (video.py)
   <out>/share/                 /usage-optimizer:share: the one-file copies of the report you made to send (share.py pack)
   <out>/received/<name>/       share files others sent you, unpacked into report folders (share.py unpack)
   <out>/company/               /usage-optimizer:company: many people's share files combined (company.py build): report.html, data/

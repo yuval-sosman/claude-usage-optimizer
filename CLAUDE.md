@@ -75,10 +75,10 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
                       optimization ids and levers to show, never the figures; skills/video edits the words and the choice
   video.py check    the schema, 30–60 s, the ids exist, every number in the words is one the data has, no private names
   video.py render   → <OUT>/video/video.html (video_template.html + the figures from metrics/insights/optimizations + the
-                      fonts in scripts/fonts/, embedded) → <OUT>/video/claude-usage-video.mp4 (video_capture.py: a headless
+                      fonts in scripts/fonts/, embedded) → <OUT>/video/usage-optimizer-video.mp4 (video_capture.py: a headless
                       Chromium browser over the DevTools protocol draws every frame; ffmpeg encodes H.264)
 
-  share.py pack     → <OUT>/share/claude-usage-share-<who>-<date>.json (schema: schemas/share.schema.json), made on demand
+  share.py pack     → <OUT>/share/usage-optimizer-share-<who>-<date>.json (schema: schemas/share.schema.json), made on demand
                       by skills/share: metrics.json whole, insights/optimizations (with a status: current / out of date),
                       candidates.json, config.json, applied.json's records (id, when, files) and every CSV row (numeric
                       columns typed), plus who (account, optional name/team) and the UTC offset. Names are kept: it holds

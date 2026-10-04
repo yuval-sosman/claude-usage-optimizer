@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "claude-usage/optimizations.schema.json",
+  "$id": "usage-optimizer/optimizations.schema.json",
   "title": "Claude Code usage optimizations",
   "description": "Written by the usage-optimizer:optimize skill. Rendered as the report's Optimizations tab; applied change by change with scripts/apply.py (preview, backup, undo). Check with: python3 scripts/validate.py optimizations <file> --metrics <out>/metrics.json --insights <out>/insights.json",
   "type": "object",

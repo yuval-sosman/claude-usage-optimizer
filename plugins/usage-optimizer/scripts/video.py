@@ -9,7 +9,7 @@
 The storyboard names what each scene shows (tiles, a miss trace, insight and optimization ids, SV2 levers); every figure
 comes from data/metrics.json, insights.json and optimizations.json, and a number typed into a headline must match one of
 them. render writes <out>/video/video.html (plays by itself, works offline) and, with a Chromium-based browser and ffmpeg
-installed, <out>/video/claude-usage-video.mp4 (1080 x 1080, H.264). Standard library only.
+installed, <out>/video/usage-optimizer-video.mp4 (1080 x 1080, H.264). Standard library only.
 """
 import argparse
 import base64
@@ -33,7 +33,7 @@ ROOT = os.path.dirname(HERE)
 SCHEMA = os.path.join(ROOT, 'schemas', 'video.schema.json')
 TEMPLATE = os.path.join(HERE, 'video_template.html')
 FONTS = [('Bricolage Grotesque', 'BricolageGrotesque-latin.woff2', '400 800'), ('JetBrains Mono', 'JetBrainsMono-latin.woff2', '400 700')]
-MP4 = 'claude-usage-video.mp4'
+MP4 = 'usage-optimizer-video.mp4'
 
 SECONDS = {'intro': 5, 'numbers': 5.5, 'models': 6, 'miss': 7.5, 'insights': 7, 'levers': 6.5, 'optimizations': 6.5, 'savings': 7}
 MIN_S, MAX_S, SCENE_MIN, SCENE_MAX = 30, 60, 3.5, 12

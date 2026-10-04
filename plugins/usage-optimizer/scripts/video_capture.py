@@ -293,7 +293,7 @@ class Browser:
     """A headless browser with one page, sized to the video frame, with a throwaway profile and no network."""
 
     def __init__(self, exe, width, height, scale, log=None):
-        self.tmp = tempfile.mkdtemp(prefix='claude-usage-video-')
+        self.tmp = tempfile.mkdtemp(prefix='usage-optimizer-video-')
         pipe = os.name != 'nt'                          # Windows can't hand the browser fds 3 and 4
         args = [exe, '--headless=new', '--remote-debugging-pipe' if pipe else '--remote-debugging-port=0',
                 f'--user-data-dir={self.tmp}', '--hide-scrollbars', '--no-first-run', '--no-default-browser-check',

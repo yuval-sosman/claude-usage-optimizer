@@ -4,7 +4,7 @@
   python3 share.py pack   [--out DIR] [--name NAME] [--team TEAM] [--reveal]
   python3 share.py unpack FILE [--out DIR] [--to DIR] [--open]
 
-pack reads the report folder, never the transcripts, and writes <out>/share/claude-usage-share-<who>-<date>.json (the
+pack reads the report folder, never the transcripts, and writes <out>/share/usage-optimizer-share-<who>-<date>.json (the
 contract: schemas/share.schema.json). It holds everything report.html holds and more: every number, chart, table and miss
 trace of every scope (data/metrics.json), insights.json and optimizations.json (marked when out of date), the optimization
 drafts (candidates.json), the setup (config.json, secrets already removed), the optimizations applied, and every row of
@@ -226,7 +226,7 @@ def pack(out, name=None, team=None):
     VA.check(share, read_json(SCHEMA), 'share', errs)
     if errs:
         sys.exit('The share file would not match schemas/share.schema.json:\n  ' + '\n  '.join(errs[:20]))
-    path = layout.share(out, f'claude-usage-share-{slug(name) or slug(who) or "me"}-{now:%Y-%m-%d}.json')
+    path = layout.share(out, f'usage-optimizer-share-{slug(name) or slug(who) or "me"}-{now:%Y-%m-%d}.json')
     os.makedirs(os.path.dirname(path), exist_ok=True)
     write_json(path, share)
 
