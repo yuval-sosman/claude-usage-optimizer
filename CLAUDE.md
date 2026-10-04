@@ -66,6 +66,9 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
                  `apply.py check` previews every optimization in one call, one line each (the optimize skill uses it).
                  `apply` and `undo` write only after `confirm()` reads y from the user's own terminal (/dev/tty; on
                  Windows a console stdin): without one (Claude Code's tools, a pipe) they change nothing and exit 3.
+                 /dev/tty is opened twice, 'r' and 'w' (text 'r+' needs a seekable file, so it always failed); only the
+                 errnos in `NO_TERMINAL` mean "no terminal", any other error stops with its message. Check a change to
+                 it with docs/checks/confirm_check.py (a real pty), never only from Claude Code's tools (no terminal).
                  Every step, and the settings change it makes, must pass scripts/policy.py (see Invariants).
 
   video.py plan     → <OUT>/video/storyboard.json (schema: schemas/video.schema.json): which scenes, tiles, trace, insight /
@@ -423,6 +426,7 @@ S=plugins/claude-usage/scripts; O=$(python3 $S/usage_report.py --where | sed -n 
 python3 $S/usage_report.py --out /tmp/usage-check            # full run (≈5 s) into a scratch folder; prints report.html
 python3 $S/candidates.py --out /tmp/usage-check                # one line per catalog entry; "problems" must stay empty
 python3 $S/apply.py check --dir $O                             # every optimization's apply steps, one line each
+python3 plugins/claude-usage/docs/checks/confirm_check.py      # apply/undo on a real pty (y, n, Ctrl-C) and with no terminal; a scratch home
 python3 $S/validate.py insights $O/insights.json --metrics $O/data/metrics.json
 python3 $S/validate.py optimizations $O/optimizations.json --metrics $O/data/metrics.json --insights $O/insights.json
 python3 -c "import ast,sys; [ast.parse(open(f).read(), feature_version=(3,8)) for f in sys.argv[1:]]" $S/*.py $S/hooks/*.py
