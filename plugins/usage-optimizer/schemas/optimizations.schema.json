@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "usage-optimizer/optimizations.schema.json",
+  "title": "Claude Code usage optimizations",
+  "description": "Written by the usage-optimizer:optimize skill. Rendered as the report's Optimizations tab; applied change by change with scripts/apply.py (preview, backup, undo). Check with: python3 scripts/validate.py optimizations <file> --metrics <out>/metrics.json --insights <out>/insights.json",
+  "type": "object",
+  "required": ["schema_version", "generated", "source", "summary", "optimizations"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": 1},
+    "generated": {"type": "string"},
+    "author": {"type": "string"},
+    "source": {
+      "type": "object", "required": ["metrics_generated"], "additionalProperties": false,
+      "properties": {
+        "metrics_generated": {"type": "string"},
+        "insights_generated": {"type": "string"},
+        "claude_code_version": {"type": "string"}
+      }
+    },
+    "summary": {"type": "string", "minLength": 40, "maxLength": 900},
+    "optimizations": {
+      "type": "array", "minItems": 1, "maxItems": 30,
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "category", "kind", "problem", "what_it_does", "questions", "effort", "risk", "manual", "undo", "docs"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{2,60}$"},
+          "title": {"type": "string", "minLength": 5, "maxLength": 90},
+          "category": {"enum": ["cost", "cache", "context", "workflow", "delegation", "tooling", "reliability"]},
+          "kind": {"enum": ["hook", "setting", "statusline", "claude_md", "agent", "command", "habit"]},
+          "first": {"type": "boolean", "description": "Leads the Optimizations tab, in Start here (the cache-lifetime pin comes with it); at most 3"},
+          "problem": {"type": "string", "minLength": 20, "maxLength": 500, "description": "What it fixes, with the numbers from the report"},
+          "what_it_does": {"type": "string", "minLength": 20, "maxLength": 700},
+          "insights": {"type": "array", "items": {"type": "string"}, "description": "Insight ids in insights.json"},
+          "questions": {"type": "array", "minItems": 1, "maxItems": 6, "items": {"type": "string", "pattern": "^[A-Z]{2,3}[0-9]{1,2}$"}},
+          "savings": {
+            "type": "object", "required": ["usd_so_far", "usd_per_month", "basis", "kind"], "additionalProperties": false,
+            "properties": {
+              "usd_so_far": {"type": "number", "minimum": 0, "description": "The saving over all the analysed days (all time)"},
+              "usd_per_month": {"type": "number", "minimum": 0, "description": "The same saving per 30 days: usd_so_far × 30 / days covered"},
+              "basis": {"type": "string", "maxLength": 400},
+              "kind": {"enum": ["measured", "theoretical", "upper_bound"]}
+            }
+          },
+          "effort": {"enum": ["one-click", "minutes", "habit"]},
+          "risk": {"enum": ["low", "medium", "high"]},
+          "tradeoffs": {"type": "string", "maxLength": 500},
+          "related": {
+            "type": "array", "maxItems": 6,
+            "description": "How this optimization interacts with the others in this file. Both sides list the pair with the same relation, except requires (listed only by the one that needs the other).",
+            "items": {
+              "type": "object", "required": ["id", "relation", "note"], "additionalProperties": false,
+              "properties": {
+                "id": {"type": "string", "description": "Another optimization's id in this file"},
+                "relation": {"enum": ["alternative", "conflicts", "overlaps", "complements", "requires"],
+                             "description": "alternative: two ways to fix the same cost, pick one (once one is in place the other adds little); conflicts: don't combine, they work against each other; overlaps: both worth doing, but their savings count some of the same cost, so they don't add up; complements: each makes the other work better; requires: apply the other one first"},
+                "note": {"type": "string", "minLength": 10, "maxLength": 300, "description": "Why, in one sentence, from this optimization's side; for alternative, which to pick when"}
+              }
+            }
+          },
+          "apply": {
+            "type": "object", "required": ["summary", "steps"], "additionalProperties": false,
+            "description": "Present only when apply.py can make the change; scripts/policy.py fixes which files, settings keys and hook commands a step may touch",
+            "properties": {
+              "summary": {"type": "string", "maxLength": 300},
+              "steps": {
+                "type": "array", "minItems": 1, "maxItems": 8,
+                "items": {
+                  "type": "object", "required": ["action", "path"], "additionalProperties": false,
+                  "properties": {
+                    "action": {"enum": ["write_file", "merge_json", "set_json", "unset_json", "append_text"]},
+                    "path": {"type": "string", "description": "write_file: ~/.claude/hooks/claude-usage/<the source's name>; append_text: ~/.claude/CLAUDE.md; the JSON actions: ~/.claude/settings.json or a project's .claude/settings.local.json"},
+                    "source": {"type": "string", "description": "write_file: a file bundled with the plugin, relative to scripts/ (hooks/*.py, hooks/*.sh, prices.json)"},
+                    "content": {"type": "string", "maxLength": 800, "description": "append_text: the lines to add (at most 8)"},
+                    "mode": {"enum": ["700", "755", "600", "644"]},
+                    "value": {"description": "merge_json: object to deep-merge; set_json: value to set"},
+                    "pointer": {"type": "string", "pattern": "^(/[^/]+)+$", "description": "set_json / unset_json: JSON pointer, e.g. /env/CLAUDE_CODE_SUBAGENT_MODEL"},
+                    "marker": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,40}$", "description": "append_text: an id that makes the append idempotent"}
+                  }
+                }
+              }
+            }
+          },
+          "manual": {"type": "array", "minItems": 1, "maxItems": 10, "items": {"type": "string", "maxLength": 400}, "description": "How to do it by hand"},
+          "verify": {"type": "string", "maxLength": 300},
+          "undo": {"type": "string", "maxLength": 300},
+          "docs": {
+            "type": "array", "minItems": 1, "maxItems": 4,
+            "items": {"type": "object", "required": ["title", "url"], "additionalProperties": false,
+                      "properties": {"title": {"type": "string"}, "url": {"type": "string", "pattern": "^https://"}}}
+          }
+        }
+      }
+    }
+  }
+}

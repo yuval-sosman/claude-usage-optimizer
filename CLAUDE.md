@@ -2,28 +2,28 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-It is about working on the claude-usage plugin: it explains how the pieces depend on each other, so that a change in one place is followed through everywhere it
+It is about working on the usage-optimizer plugin: it explains how the pieces depend on each other, so that a change in one place is followed through everywhere it
 matters. User-facing docs are in the root README.md; every question's definition is in docs/QUESTIONS.md.
 
 The repo is a marketplace (`.claude-plugin/marketplace.json`, name `claude-usage-optimizer`) with one plugin in
-`plugins/claude-usage/`. Paths below (`scripts/…`, `skills/…`, `docs/…`, `.claude-plugin/plugin.json`) are relative to that folder.
+`plugins/usage-optimizer/`. Paths below (`scripts/…`, `skills/…`, `docs/…`, `.claude-plugin/plugin.json`) are relative to that folder.
 
 ## What it is
 
-A plugin, `claude-usage@claude-usage-optimizer` (users: `/plugin marketplace add yuval-sosman/claude-usage-optimizer`, then
-`/plugin install claude-usage@claude-usage-optimizer`; a working copy: `claude --plugin-dir plugins/claude-usage`). A deterministic script counts
+A plugin, `usage-optimizer@claude-usage-optimizer` (users: `/plugin marketplace add yuval-sosman/claude-usage-optimizer`, then
+`/plugin install usage-optimizer@claude-usage-optimizer`; a working copy: `claude --plugin-dir plugins/usage-optimizer`). A deterministic script counts
 the user's Claude Code transcripts and renders an HTML report. Claude then writes two tabs from what the script extracted:
-- **Insights**, written by `/claude-usage:report`.
-- **Optimizations**, written by `/claude-usage:report` too (its step 4 follows the optimize skill's SKILL.md, which it
-  reads), so the report opens complete; `/claude-usage:optimize` redoes them on its own.
+- **Insights**, written by `/usage-optimizer:report`.
+- **Optimizations**, written by `/usage-optimizer:report` too (its step 4 follows the optimize skill's SKILL.md, which it
+  reads), so the report opens complete; `/usage-optimizer:optimize` redoes them on its own.
 
-A third skill, `/claude-usage:brainstorm`, talks the data through with the user and can edit insights.json. A fourth,
-`/claude-usage:video`, turns the report into a 30–60 s video of the user's highlights to share (an MP4 and a self-playing
-HTML page, in the promo videos' style). A fifth, `/claude-usage:share`, packs the whole report folder into one JSON file
+A third skill, `/usage-optimizer:brainstorm`, talks the data through with the user and can edit insights.json. A fourth,
+`/usage-optimizer:video`, turns the report into a 30–60 s video of the user's highlights to share (an MP4 and a self-playing
+HTML page, in the promo videos' style). A fifth, `/usage-optimizer:share`, packs the whole report folder into one JSON file
 to send to whoever collects and compares usage, and (`open FILE`) unpacks one someone sent back into a report folder. A
-sixth, `/claude-usage:company <folder>`, combines many people's share files into one company report and summarises it. A
-seventh, `/claude-usage:clear`, removes the plugin's files from the report folder to start from scratch (the setup stays).
-An eighth, `/claude-usage:open`, opens a report that already exists (yours, the company report, or a received one) without
+sixth, `/usage-optimizer:company <folder>`, combines many people's share files into one company report and summarises it. A
+seventh, `/usage-optimizer:clear`, removes the plugin's files from the report folder to start from scratch (the setup stays).
+An eighth, `/usage-optimizer:open`, opens a report that already exists (yours, the company report, or a received one) without
 counting again. `optimize`, `brainstorm`, `video`, `share`, `company`, `clear` and `open` are manual-only
 (`disable-model-invocation: true`); `report` can also be triggered by the model, and when it is asked in words only to
 open the report, it runs open.py instead of building.
@@ -75,10 +75,10 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
                       optimization ids and levers to show, never the figures; skills/video edits the words and the choice
   video.py check    the schema, 30–60 s, the ids exist, every number in the words is one the data has, no private names
   video.py render   → <OUT>/video/video.html (video_template.html + the figures from metrics/insights/optimizations + the
-                      fonts in scripts/fonts/, embedded) → <OUT>/video/claude-usage-video.mp4 (video_capture.py: a headless
+                      fonts in scripts/fonts/, embedded) → <OUT>/video/usage-optimizer-video.mp4 (video_capture.py: a headless
                       Chromium browser over the DevTools protocol draws every frame; ffmpeg encodes H.264)
 
-  share.py pack     → <OUT>/share/claude-usage-share-<who>-<date>.json (schema: schemas/share.schema.json), made on demand
+  share.py pack     → <OUT>/share/usage-optimizer-share-<who>-<date>.json (schema: schemas/share.schema.json), made on demand
                       by skills/share: metrics.json whole, insights/optimizations (with a status: current / out of date),
                       candidates.json, config.json, applied.json's records (id, when, files) and every CSV row (numeric
                       columns typed), plus who (account, optional name/team) and the UTC offset. Names are kept: it holds
@@ -272,7 +272,7 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
   `docs/screenshots/make_demo.py` says; never screenshot a real report.
 
 **A card's numbers or blocks (usage_report.py):**
-- Run the full `usage_report.py`. This regenerates metrics.json with a new `generated` stamp, so insights.json/optimizations.json become **out of date** (the tabs show a banner) until `/claude-usage:report` runs again (it rewrites both).
+- Run the full `usage_report.py`. This regenerates metrics.json with a new `generated` stamp, so insights.json/optimizations.json become **out of date** (the tabs show a banner) until `/usage-optimizer:report` runs again (it rewrites both).
 - Update the question's entry in `docs/QUESTIONS.md` ("How" / "Check").
 - If an SV card changed, the savings quoted in insights/optimizations change too: regenerate them rather than hand-editing.
 - `candidates.py` reads SV, CX, EX, OV and TR cards by id, label, table key and chart title (like video.py). After renaming
@@ -403,12 +403,12 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
   scratch `CLAUDE_USAGE_OUT`, `--setting-sources project --no-session-persistence`, `--output-format stream-json --verbose`,
   run from a folder outside the repo so reads outside `<OUT>` are really refused). The Edit/Read rules name `~/.claude-usage`,
   so with a scratch `<OUT>` add the same rules for it, and for the working copy the rule an installed plugin gets for its
-  own reference files (`~/.claude/plugins/cache/claude-usage-optimizer/claude-usage/**`):
-  `--allowedTools "Edit(//<scratch>/data/notes-insights.json)" "Edit(//<scratch>/data/notes-optimizations.json)" "Read(//<scratch>/**)" "Read(//<repo>/plugins/claude-usage/**)"`
+  own reference files (`~/.claude/plugins/cache/claude-usage-optimizer/usage-optimizer/**`):
+  `--allowedTools "Edit(//<scratch>/data/notes-insights.json)" "Edit(//<scratch>/data/notes-optimizations.json)" "Read(//<scratch>/**)" "Read(//<repo>/plugins/usage-optimizer/**)"`
   (the report skill writes both notes files; it reads the optimize skill's SKILL.md and references from the plugin folder).
   Check `permission_denials` in the result: only what the skill shouldn't do on its own may be there. A skill the model
   starts itself (from plain words, not a typed slash command) gets no pre-approval from its `allowed-tools` in a headless
-  run (2.1.286: even `usage_report.py --where` is denied, and the Skill call needs `--allowedTools "Skill(claude-usage:report)"`),
+  run (2.1.286: even `usage_report.py --where` is denied, and the Skill call needs `--allowedTools "Skill(usage-optimizer:report)"`),
   so test a skill's commands through its slash command, and a plain-words route only for which command it picks.
 
 ## Staleness rules
@@ -422,15 +422,15 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
 There is no test suite; these commands are the checks.
 
 ```bash
-S=plugins/claude-usage/scripts; O=$(python3 $S/usage_report.py --where | sed -n 's/^out=//p')   # from the repo root
+S=plugins/usage-optimizer/scripts; O=$(python3 $S/usage_report.py --where | sed -n 's/^out=//p')   # from the repo root
 python3 $S/usage_report.py --out /tmp/usage-check            # full run (≈5 s) into a scratch folder; prints report.html
 python3 $S/candidates.py --out /tmp/usage-check                # one line per catalog entry; "problems" must stay empty
 python3 $S/apply.py check --dir $O                             # every optimization's apply steps, one line each
-python3 plugins/claude-usage/docs/checks/confirm_check.py      # apply/undo on a real pty (y, n, Ctrl-C) and with no terminal; a scratch home
+python3 plugins/usage-optimizer/docs/checks/confirm_check.py      # apply/undo on a real pty (y, n, Ctrl-C) and with no terminal; a scratch home
 python3 $S/validate.py insights $O/insights.json --metrics $O/data/metrics.json
 python3 $S/validate.py optimizations $O/optimizations.json --metrics $O/data/metrics.json --insights $O/insights.json
 python3 -c "import ast,sys; [ast.parse(open(f).read(), feature_version=(3,8)) for f in sys.argv[1:]]" $S/*.py $S/hooks/*.py
-claude plugin validate --strict . && claude plugin validate --strict plugins/claude-usage   # marketplace, then plugin
+claude plugin validate --strict . && claude plugin validate --strict plugins/usage-optimizer   # marketplace, then plugin
 python3 $S/video.py tools                                          # browser and ffmpeg found? if not, how to install them here
 python3 $S/video.py plan --out /tmp/usage-check && python3 $S/video.py check --out /tmp/usage-check   # after the full run
 python3 $S/video.py render --out /tmp/usage-check --stills 3,12,20   # PNG frames in video/stills/; without --stills, the MP4
@@ -442,7 +442,7 @@ python3 $S/clear.py --out /tmp/usage-check                        # what it woul
 ```
 
 - A full run on `<OUT>` itself changes the `generated` stamp. After that, both `validate.py` commands fail on
-  `source.metrics_generated` until `/claude-usage:report` runs again (it rewrites both). That is expected, so run
+  `source.metrics_generated` until `/usage-optimizer:report` runs again (it rewrites both). That is expected, so run
   it on `<OUT>` only when you mean to regenerate the insights.
 - Rendering (macOS): `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --virtual-time-budget=5000 --dump-dom "file://$O/report.html#tab=report" | grep -o '<body[^>]*>'`
   (also `tab=insights`, `tab=optimizations`, `q=<ID>`). Expect `data-render-status="ok"` and `data-render-errors="0"`.

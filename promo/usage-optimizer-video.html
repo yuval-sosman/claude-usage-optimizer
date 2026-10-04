@@ -1,0 +1,652 @@
+<title>usage-optimizer Launch Reel</title>
+<meta name="description" content="A 53-second animated introduction to the usage-optimizer plugin for Claude Code.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
+<style>
+/* One dark world on purpose: the plugin's report palette (dark theme), set as a fixed 1080 x 1080 film frame. */
+:root {
+  color-scheme: dark;
+  --void: #050505;
+  --bg: #0c0c0b;
+  --panel: #151514;
+  --panel-2: #1f1f1d;
+  --term: #10100f;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-2: rgba(255, 255, 255, 0.16);
+  --text: #efeee9;
+  --text-2: #bab9b1;
+  --text-3: #87867f;
+  --blue: #3d8ae3;
+  --blue-soft: rgba(61, 138, 227, 0.42);
+  --orange: #eb6834;
+  --teal: #1baf7a;
+  --amber: #e0a000;
+  --pink: #e87ba4;
+  --violet: #8b7ee8;
+  --green: #5cb56a;
+  --green-soft: rgba(92, 181, 106, 0.13);
+  --red: #e34948;
+  --red-text: #f08a89;
+  --red-soft: rgba(227, 73, 72, 0.38);
+  --display: "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
+  --ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--void); color: var(--text); font-family: var(--ui); -webkit-font-smoothing: antialiased; overflow: hidden; }
+
+/* ---------- player shell ---------- */
+#viewport { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding-block: 16px; padding-inline: 16px; }
+#frame { position: relative; flex: none; width: 540px; height: 540px; overflow: hidden; border-radius: 14px; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.07), 0 30px 80px rgba(0, 0, 0, 0.6); }
+#stage { position: absolute; left: 0; top: 0; width: 1080px; height: 1080px; transform-origin: 0 0; background: var(--bg); overflow: hidden; }
+#stage::before { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background-image: linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px); background-size: 100% 54px; background-position: 0 26px;
+  -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 42%, #000 20%, transparent 90%); mask-image: radial-gradient(ellipse 80% 70% at 50% 42%, #000 20%, transparent 90%); }
+#controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; font: 500 13px/1.2 var(--ui); color: var(--text-2); }
+#controls button { font: 500 13px/1 var(--ui); color: var(--text); background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 6px; padding: 8px 12px; cursor: pointer; }
+#controls button:hover { background: #2a2a27; }
+#controls button:focus-visible, #scrub:focus-visible, #bigplay:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+#scrub { flex: 1 1 140px; min-width: 0; accent-color: var(--blue); }
+#time { font: 500 13px/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--text-2); }
+#hint { flex-basis: 100%; margin: 0; font: 400 12px/1.4 var(--ui); color: var(--text-3); }
+#bigplay { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 5; font: 600 16px/1 var(--ui); color: #0c0c0b; background: var(--text); border: 0; border-radius: 999px; padding: 16px 28px; cursor: pointer; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); }
+html.bare #controls { display: none; }
+html.record #viewport { padding: 0; }
+html.record #frame { border-radius: 0; box-shadow: none; }
+html.record #controls, html.record #bigplay { display: none; }
+
+/* ---------- scenes ---------- */
+.scene { position: absolute; inset: 0; padding: 128px 72px 64px; display: flex; flex-direction: column; gap: 40px; visibility: hidden; opacity: 0; }
+.layer { padding: 0; pointer-events: none; }
+.topbar { position: absolute; top: 48px; left: 72px; right: 72px; display: flex; align-items: center; justify-content: space-between; }
+.brand { display: flex; align-items: center; gap: 14px; font: 600 24px/1 var(--mono); letter-spacing: -0.01em; }
+.mark { width: 34px; height: 34px; flex: none; display: block; }
+.mark .m1 { fill: var(--blue); } .mark .m2 { fill: var(--orange); } .mark .m3 { fill: var(--green); }
+.pill { font: 500 18px/1 var(--mono); color: var(--text-3); border: 1px solid var(--line-2); border-radius: 999px; padding: 9px 16px; }
+
+.cap { display: flex; flex-direction: column; gap: 18px; }
+.eyebrow { display: flex; align-items: center; gap: 12px; font: 500 22px/1 var(--mono); color: var(--text-2); letter-spacing: 0.02em; }
+.dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: var(--c, var(--blue)); flex: none; }
+h1, h2, h3 { margin: 0; }
+h2 { font: 700 68px/1.03 var(--display); letter-spacing: -0.028em; text-wrap: balance; max-width: 936px; }
+.sub { margin: 0; font: 400 29px/1.36 var(--ui); color: var(--text-2); max-width: 900px; text-wrap: pretty; }
+.w { display: inline-block; overflow: hidden; vertical-align: top; padding-bottom: 0.12em; margin-bottom: -0.12em; }
+.w > span { display: inline-block; }
+
+/* terminal */
+.term { background: var(--term); border: 1px solid var(--line-2); border-radius: 14px; overflow: hidden; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45); }
+.term-bar { height: 52px; display: flex; align-items: center; gap: 9px; padding: 0 22px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.term-bar i { width: 13px; height: 13px; border-radius: 50%; background: #34342f; }
+.term-bar span { margin-left: 12px; font: 500 18px/1 var(--mono); color: var(--text-3); }
+.term-body { padding: 24px 32px 28px; font: 400 25px/1.55 var(--mono); color: var(--text); }
+.tl { white-space: pre; }
+.tl b { font-weight: 700; }
+.pr { color: var(--orange); font-weight: 700; }
+.mut { color: var(--text-3); }
+.tl-stack { position: relative; }
+.tl-stack .spin-line { position: absolute; inset: 0 auto auto 0; color: var(--text-2); }
+.spin { color: var(--orange); }
+.lever { display: grid; grid-template-columns: 1fr auto; gap: 24px; }
+.lever em { font-style: normal; color: var(--green); font-weight: 600; }
+.ok { color: var(--text-2); }
+.ok::first-letter { color: var(--green); }
+[data-type].typing::after { content: ""; display: inline-block; width: 0.58em; height: 1.05em; margin-left: 2px; vertical-align: -0.18em; background: var(--text); }
+[data-type].typing.blink::after { opacity: 0; }
+
+/* report panel */
+.panel { background: var(--panel); border: 1px solid var(--line-2); border-radius: 14px; }
+.stack { position: relative; flex: 1; }
+.stack > * { position: absolute; left: 0; right: 0; top: 0; }
+.report { padding: 26px 32px 30px; display: flex; flex-direction: column; gap: 22px; }
+.r-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+.r-title { font: 600 24px/1.2 var(--ui); }
+.r-meta { margin-top: 6px; font: 400 18px/1.2 var(--ui); color: var(--text-3); }
+.r-tabs { display: flex; gap: 22px; font: 500 20px/1 var(--ui); color: var(--text-2); padding-top: 4px; }
+.r-tabs span { padding-bottom: 10px; }
+.r-tabs .on { color: var(--text); box-shadow: inset 0 -2px 0 var(--text); }
+.r-tabs em { font-style: normal; font-size: 16px; background: var(--panel-2); border-radius: 999px; padding: 2px 8px; margin-left: 4px; color: var(--text-2); }
+.r-hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
+.r-lbl { font: 400 20px/1.2 var(--ui); color: var(--text-2); }
+.r-big { font: 700 92px/1 var(--ui); letter-spacing: -0.03em; margin-top: 8px; font-variant-numeric: tabular-nums; }
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line-2); border-radius: 10px; overflow: hidden; }
+.kpi { padding: 16px 20px 18px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.kpi:nth-child(4n) { border-right: 0; }
+.kpi:nth-child(n+5) { border-bottom: 0; }
+.kpi span { display: block; font: 400 19px/1.2 var(--ui); color: var(--text-2); white-space: nowrap; }
+.kpi b { display: block; margin-top: 8px; font: 600 38px/1 var(--ui); font-variant-numeric: tabular-nums; }
+
+/* sparkline */
+.sp-line { fill: none; stroke: var(--blue); stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; }
+.sp-area { fill: rgba(61, 138, 227, 0.14); }
+.sp-peak { fill: var(--blue); stroke: var(--bg); stroke-width: 3; }
+
+/* question ticker */
+.ticker { bottom: 0; overflow: hidden; -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 12%, #000 78%, transparent 100%); mask-image: linear-gradient(to bottom, transparent 0, #000 12%, #000 78%, transparent 100%); }
+.q { display: grid; grid-template-columns: 96px 1fr; align-items: baseline; gap: 8px; padding: 18px 4px; border-bottom: 1px solid var(--line); font: 500 29px/1.25 var(--ui); }
+.q b { font: 600 22px/1 var(--mono); color: var(--c); }
+
+/* cache-miss trace */
+.trace { padding: 26px 32px 30px; display: flex; flex-direction: column; gap: 22px; }
+.tr-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; }
+.tr-title { font: 600 30px/1.2 var(--ui); }
+.tr-meta { margin-top: 6px; font: 400 20px/1.3 var(--ui); color: var(--text-3); }
+.tr-cost { font: 700 46px/1 var(--ui); color: var(--red-text); font-variant-numeric: tabular-nums; }
+.axis { position: relative; height: 30px; margin-left: 110px; font: 500 18px/30px var(--mono); color: var(--text-3); }
+.axis span { position: absolute; top: 0; white-space: nowrap; }
+.axis .idle-lbl { text-align: center; color: var(--text-2); }
+.lanes { position: relative; display: grid; grid-template-rows: repeat(3, 52px); margin-bottom: 44px; border-bottom: 1px solid var(--line); }
+.lane { display: flex; align-items: center; font: 500 20px/1 var(--ui); color: var(--text-2); border-top: 1px solid var(--line); }
+.lane:nth-child(2) { background: rgba(255, 255, 255, 0.025); }
+.track { position: absolute; left: 110px; right: 0; top: 0; bottom: 0; }
+.bar { position: absolute; height: 26px; width: 0; border-radius: 5px; overflow: hidden; }
+.bar.prev { top: 65px; left: 16px; background: var(--blue-soft); }
+.bar.prev::after { content: ""; position: absolute; right: 0; top: 0; bottom: 0; width: 18px; background: var(--blue); }
+.bar.prev span { position: absolute; left: 12px; top: 0; font: 500 17px/26px var(--ui); color: #dde8f6; white-space: nowrap; }
+.bar.miss { top: 65px; left: 556px; background: linear-gradient(90deg, var(--red-soft), var(--red)); }
+.tick { position: absolute; top: 118px; width: 4px; height: 24px; border-radius: 2px; background: var(--teal); }
+.idle { position: absolute; left: 326px; top: 0; bottom: 0; width: 0; border-inline: 1px dashed rgba(255, 255, 255, 0.28);
+  background: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.13) 0 2px, transparent 2px 9px); }
+.expiry { position: absolute; left: 429px; top: -4px; bottom: -30px; border-left: 2px dashed var(--red); }
+.expiry span { position: absolute; top: 100%; left: 0; transform: translate(-50%, 4px); white-space: nowrap; font: 500 18px/1 var(--mono); color: var(--red-text); }
+.you { position: absolute; top: 0; left: 0; width: 556px; height: 52px; display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+.you span { font: 500 19px/1 var(--ui); background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 6px; padding: 7px 10px; white-space: nowrap; }
+.you i { width: 14px; height: 14px; border-radius: 50%; background: var(--orange); flex: none; margin-right: -7px; }
+.miss-lbl { position: absolute; right: 0; top: 104px; height: 52px; display: flex; align-items: center; font: 600 19px/1 var(--ui); color: var(--red-text); }
+.tip { display: flex; gap: 16px; align-items: flex-start; background: rgba(61, 138, 227, 0.09); border: 1px solid rgba(61, 138, 227, 0.24); border-radius: 10px; padding: 18px 22px; }
+.tip svg { width: 26px; height: 26px; flex: none; margin-top: 2px; fill: none; stroke: var(--blue); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.tip b { display: block; font: 600 21px/1.3 var(--ui); }
+.tip p { margin: 4px 0 0; font: 400 21px/1.4 var(--ui); color: var(--text-2); }
+
+/* insight cards */
+.cards { display: flex; flex-direction: column; gap: 16px; }
+.icard { display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: start; padding: 22px 28px 24px; }
+.ic-meta { display: flex; align-items: center; gap: 10px; font: 500 19px/1 var(--ui); color: var(--text-3); }
+.icard h3 { margin: 12px 0 16px; font: 600 29px/1.2 var(--ui); }
+.fix { display: flex; align-items: center; gap: 12px; font: 400 19px/1 var(--ui); color: var(--text-3); }
+.fix span { color: var(--text); border: 1px solid var(--line-2); border-radius: 6px; padding: 8px 12px; }
+.ic-save { text-align: right; padding-top: 6px; }
+.amt { font: 600 46px/1 var(--ui); color: var(--green); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.basis { margin-top: 10px; font: 400 19px/1.3 var(--ui); color: var(--text-3); white-space: nowrap; }
+
+/* apply */
+.diff { margin: 6px -12px; padding: 4px 12px; border-radius: 8px; background: rgba(255, 255, 255, 0.03); }
+.add { color: #8fd49a; background: var(--green-soft); margin: 0 -12px; padding: 0 12px; }
+.ctx { color: var(--text-3); }
+.applied { color: var(--green); font-weight: 600; }
+
+/* payoff */
+.s7 { gap: 0; }
+.pay-num { margin-top: 18px; font: 800 250px/0.88 var(--display); letter-spacing: -0.045em; color: var(--green); }
+.pay-of { margin-top: 20px; font: 500 30px/1.35 var(--ui); color: var(--text-2); }
+.pay-bar { margin-top: 36px; height: 30px; border-radius: 8px; background: var(--panel-2); border: 1px solid var(--line-2); overflow: hidden; }
+.pay-bar div { height: 100%; width: 0; background: var(--green); }
+.pay-legend { margin-top: 12px; display: flex; justify-content: space-between; font: 500 19px/1 var(--mono); color: var(--text-3); }
+.pay-legend b { color: var(--green); font-weight: 600; }
+.facts { margin-top: 52px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
+.fact { display: flex; flex-direction: column; gap: 14px; padding-top: 18px; border-top: 1px solid var(--line-2); }
+.fact svg { width: 30px; height: 30px; fill: none; stroke: var(--text-2); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.fact p { margin: 0; font: 500 24px/1.35 var(--ui); }
+.fine { margin: 36px 0 0; font: 400 18px/1.45 var(--ui); color: var(--text-3); max-width: 900px; }
+
+/* call to action */
+.s8 { padding-top: 64px; gap: 0; justify-content: center; }
+.cta-brand { display: flex; align-items: center; gap: 26px; font: 800 116px/1 var(--display); letter-spacing: -0.045em; }
+.cta-brand .mark { width: 96px; height: 96px; }
+.cta-tag { margin: 30px 0 0; font: 500 36px/1.3 var(--ui); color: var(--text-2); max-width: 900px; }
+.install { margin-top: 52px; padding: 28px 34px 30px; display: flex; flex-direction: column; gap: 26px; }
+.step { display: flex; align-items: center; gap: 12px; font: 500 19px/1 var(--mono); color: var(--text-3); }
+.step .n { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line-2); display: grid; place-items: center; font-size: 15px; color: var(--text-2); }
+.install code { display: block; margin-top: 10px; font: 500 23px/1.35 var(--mono); color: var(--text); white-space: nowrap; }
+.install code .pr { margin-right: 0; }
+.cta-foot { margin-top: 40px; display: flex; flex-direction: column; gap: 10px; }
+.cta-foot .url { font: 600 26px/1.2 var(--mono); }
+.cta-foot .req { font: 400 20px/1.3 var(--ui); color: var(--text-3); }
+</style>
+
+<div id="viewport">
+  <div id="frame">
+    <div id="stage" aria-label="Animated introduction to the usage-optimizer plugin">
+
+      <!-- persistent top bar -->
+      <div class="scene layer" data-t="-1,46.4">
+        <div class="topbar">
+          <div class="brand">
+            <svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect class="m1" x="3" y="3" width="7" height="26" rx="2"/><rect class="m2" x="12.5" y="11" width="7" height="18" rx="2"/><rect class="m3" x="22" y="19" width="7" height="10" rx="2"/></svg>
+            <span>usage-optimizer</span>
+          </div>
+          <div class="pill" data-in="1.0" data-fx="fade">Demo data</div>
+        </div>
+      </div>
+
+      <!-- 1. Hook -->
+      <section class="scene s1" data-t="-1,5.0" style="justify-content:center;padding-top:110px;gap:0">
+        <h1 style="font:760 106px/1 var(--display);letter-spacing:-0.04em">Where does your<br>Claude Code<br>money go?</h1>
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:36px;margin-top:64px">
+          <div>
+            <div class="eyebrow" data-in="0.7">62 days · API list prices</div>
+            <div data-in="0.8" data-fx="fade" data-count="586" data-cin="0.8" data-cdur="1.6" data-pre="$" style="margin-top:12px;font:800 190px/0.9 var(--display);letter-spacing:-0.045em">$0</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:12px;align-items:flex-end">
+            <svg data-spark width="440" height="150" viewBox="0 0 440 150" aria-hidden="true">
+              <path class="sp-area" data-in="2.0" data-fx="fade"/>
+              <path class="sp-line" pathLength="1" data-draw data-din="0.9" data-ddur="1.5"/>
+              <circle class="sp-peak" r="7" data-in="2.3" data-fx="fade"/>
+            </svg>
+            <div class="eyebrow" data-in="2.4" style="font-size:19px;color:var(--text-3)">per day · highest $39.70 on Aug 10</div>
+          </div>
+        </div>
+        <p data-words="2.9" data-step="0.045" style="margin:56px 0 0;font:500 34px/1.3 var(--ui);color:var(--text-2);max-width:880px">The usage-optimizer plugin shows you, down to every cache miss.</p>
+      </section>
+
+      <!-- 2. One command -->
+      <section class="scene" data-t="4.65,11.8">
+        <header class="cap">
+          <div class="eyebrow" data-in="4.9"><i class="dot" style="--c:var(--blue)"></i>One command</div>
+          <h2 data-words="5.0">It reads your transcripts and builds a report.</h2>
+          <p class="sub" data-in="5.45">A script does the counting on your machine. Claude writes what the numbers mean.</p>
+        </header>
+        <div class="term" data-in="5.25">
+          <div class="term-bar"><i></i><i></i><i></i><span>~/code/billing-api · claude</span></div>
+          <div class="term-body">
+            <div class="tl"><span class="pr">&gt;</span> <span data-type data-tin="5.95" data-cps="22">/usage-optimizer:report</span></div>
+            <div class="tl-stack">
+              <div class="tl mut" data-in="7.85" data-fx="fade">Report: ~/.claude-usage/report.html</div>
+              <div class="tl spin-line" data-in="6.95" data-out="7.7" data-fx="fade" data-dur="0.2"><span class="spin" data-spin>⠋</span> Counting 675 transcripts…</div>
+            </div>
+            <div class="tl" data-in="8.1">62 days would have cost <b>$586</b> at list prices.</div>
+            <div class="tl" data-in="8.4">The biggest levers:</div>
+            <div class="tl lever" data-in="8.7"><span>1. Re-reading files it already has</span><em>$73.02</em></div>
+            <div class="tl lever" data-in="8.95"><span>2. Subagents on Opus, not Sonnet 5</span><em>$41.92</em></div>
+            <div class="tl lever" data-in="9.2"><span>3. Avoidable cache misses</span><em>$38.76</em></div>
+            <div class="tl ok" data-in="9.6">✓ Going well: a 93% cache hit rate.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. The report + 63 questions -->
+      <section class="scene" data-t="11.45,19.8">
+        <header class="cap">
+          <div class="eyebrow" data-in="11.7"><i class="dot" style="--c:var(--orange)"></i>The report</div>
+          <h2 data-words="11.8">63 questions about how you use Claude Code.</h2>
+          <p class="sub" data-in="12.25">Cost, caching, context, sessions, subagents, tools and hooks. Each with numbers and a chart.</p>
+        </header>
+        <div class="stack">
+          <div class="panel report" data-in="12.1" data-out="15.45">
+            <div class="r-head">
+              <div><div class="r-title">Claude Code usage report</div><div class="r-meta">Jul 28 – Sep 28, 2026 · 675 transcripts</div></div>
+              <div class="r-tabs"><span class="on">Report</span><span>Insights<em>18</em></span><span>Optimizations<em>8</em></span></div>
+            </div>
+            <div class="r-hero">
+              <div>
+                <div class="r-lbl">Cost at API list prices</div>
+                <div class="r-big" data-count="586" data-cin="12.35" data-cdur="1.2" data-pre="$">$0</div>
+              </div>
+              <svg data-spark width="440" height="100" viewBox="0 0 440 100" aria-hidden="true">
+                <path class="sp-area" data-in="13.4" data-fx="fade"/>
+                <path class="sp-line" pathLength="1" data-draw data-din="12.45" data-ddur="1.3"/>
+              </svg>
+            </div>
+            <div class="kpis">
+              <div class="kpi" data-in="12.8" data-fx="pop"><span>Sessions</span><b>158</b></div>
+              <div class="kpi" data-in="12.87" data-fx="pop"><span>Your prompts</span><b>666</b></div>
+              <div class="kpi" data-in="12.94" data-fx="pop"><span>Median session</span><b>$1.84</b></div>
+              <div class="kpi" data-in="13.01" data-fx="pop"><span>Active hours</span><b>89 h</b></div>
+              <div class="kpi" data-in="13.08" data-fx="pop"><span>Cache hit rate</span><b>92.9%</b></div>
+              <div class="kpi" data-in="13.15" data-fx="pop"><span>Re-read per output</span><b>76×</b></div>
+              <div class="kpi" data-in="13.22" data-fx="pop"><span>Subagent share</span><b>23.5%</b></div>
+              <div class="kpi" data-in="13.29" data-fx="pop"><span>Median peak context</span><b>74.6K</b></div>
+            </div>
+          </div>
+          <div class="ticker" data-in="15.55" data-fx="fade">
+            <div data-scroll data-sin="15.7" data-speed="150">
+              <div class="q" style="--c:var(--blue)"><b>OV3</b><span>Which token type dominates the bill?</span></div>
+              <div class="q" style="--c:var(--orange)"><b>CX8</b><span>How many cache misses did I have, and why?</span></div>
+              <div class="q" style="--c:var(--amber)"><b>EX2</b><span>What loads into every session but never gets used?</span></div>
+              <div class="q" style="--c:var(--teal)"><b>SE6</b><span>Do subagents pay off?</span></div>
+              <div class="q" style="--c:var(--violet)"><b>ME3</b><span>How often do my pauses outlast the cache?</span></div>
+              <div class="q" style="--c:var(--amber)"><b>EX8</b><span>Which files does Claude re-read?</span></div>
+              <div class="q" style="--c:var(--green)"><b>SV5</b><span>At what context size should I /compact?</span></div>
+              <div class="q" style="--c:var(--pink)"><b>OUT2</b><span>What do 100 changed lines cost?</span></div>
+              <div class="q" style="--c:var(--teal)"><b>SE3</b><span>Which of my prompts were most expensive?</span></div>
+              <div class="q" style="--c:var(--orange)"><b>CX4</b><span>How big is my context when I /clear?</span></div>
+              <div class="q" style="--c:var(--amber)"><b>EX5</b><span>What do my hooks cost?</span></div>
+              <div class="q" style="--c:var(--green)"><b>SV7</b><span>What if another model had done the same work?</span></div>
+              <div class="q" style="--c:var(--blue)"><b>OV8</b><span>What's my total waste in tokens and dollars?</span></div>
+              <div class="q" style="--c:var(--amber)"><b>EX9</b><span>How much does Claude spend exploring before its first edit?</span></div>
+              <div class="q" style="--c:var(--violet)"><b>ME1</b><span>When do I work?</span></div>
+              <div class="q" style="--c:var(--green)"><b>SV8</b><span>What would fresh sessions after long breaks have saved?</span></div>
+              <div class="q" style="--c:var(--red)"><b>TR2</b><span>What changed when my setup changed?</span></div>
+              <div class="q" style="--c:var(--orange)"><b>CX3</b><span>What is my context made of, and what does each part cost?</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 4. Cache-miss trace -->
+      <section class="scene" data-t="19.45,27.2">
+        <header class="cap">
+          <div class="eyebrow" data-in="19.7"><i class="dot" style="--c:var(--red)"></i>Cache misses</div>
+          <h2 data-words="19.8">It traces every costly cache miss.</h2>
+          <p class="sub" data-in="20.2">You came back after 2 hours. The 1-hour cache had expired, so 183K tokens were written again.</p>
+        </header>
+        <div class="panel trace" data-in="20.1">
+          <div class="tr-head">
+            <div><div class="tr-title">You came back after a break</div><div class="tr-meta">Aug 14 · 15:50 · Stripe webhook retries · Opus 5</div></div>
+            <div class="tr-cost" data-in="24.0" data-fx="pop">+$1.74</div>
+          </div>
+          <div>
+            <div class="axis">
+              <span style="left:0">13:48</span>
+              <span class="idle-lbl" style="left:326px;width:210px" data-in="22.5" data-fx="fade">2h 2m idle</span>
+              <span style="right:0">15:50</span>
+            </div>
+            <div class="lanes">
+              <div class="lane">You</div><div class="lane">Claude</div><div class="lane">Tools</div>
+              <div class="track">
+                <div class="idle" data-grow="210" data-unit="px" data-gin="21.9" data-gdur="0.8"></div>
+                <div class="bar prev" data-grow="300" data-unit="px" data-gin="20.6" data-gdur="1.2"><span data-in="21.5" data-fx="fade">Previous reply</span></div>
+                <div class="tick" style="left:44px" data-in="20.78" data-fx="fade" data-dur="0.15"></div>
+                <div class="tick" style="left:104px" data-in="21.02" data-fx="fade" data-dur="0.15"></div>
+                <div class="tick" style="left:166px" data-in="21.26" data-fx="fade" data-dur="0.15"></div>
+                <div class="tick" style="left:226px" data-in="21.5" data-fx="fade" data-dur="0.15"></div>
+                <div class="tick" style="left:284px" data-in="21.72" data-fx="fade" data-dur="0.15"></div>
+                <div class="expiry" data-in="22.75" data-fx="fade"><span>Cache expired 14:48</span></div>
+                <div class="you" data-in="23.1" data-fx="left"><span>“that broke the build, check the error”</span><i></i></div>
+                <div class="bar miss" data-grow="206" data-unit="px" data-gin="23.45" data-gdur="0.7"></div>
+                <div class="miss-lbl" data-in="24.0" data-fx="fade">183K re-written</div>
+              </div>
+            </div>
+          </div>
+          <div class="tip" data-in="24.6">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1 2V16h5.2v-.2c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/></svg>
+            <div><b>What could have been better</b><p>Run /compact before a long break, or start a fresh session, which begins at about 21K tokens.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 5. Insights -->
+      <section class="scene" data-t="26.85,33.8">
+        <header class="cap">
+          <div class="eyebrow" data-in="27.1"><i class="dot" style="--c:var(--green)"></i>Insights</div>
+          <h2 data-words="27.2">Claude writes the bottom line, cost first.</h2>
+          <p class="sub" data-in="27.6">Each insight names the fix and what it would have saved.</p>
+        </header>
+        <div class="cards">
+          <article class="panel icard" data-in="27.85">
+            <div>
+              <div class="ic-meta"><i class="dot" style="--c:var(--red)"></i>High priority</div>
+              <h3>Claude re-reads files it already has</h3>
+              <div class="fix">Fix it <span>Tell Claude not to re-read files →</span></div>
+            </div>
+            <div class="ic-save"><div class="amt" data-count="73.02" data-dec="2" data-pre="$" data-cin="28.1" data-cdur="1.1">$0.00</div><div class="basis">≈ $35.11 / 30 days</div></div>
+          </article>
+          <article class="panel icard" data-in="28.25">
+            <div>
+              <div class="ic-meta"><i class="dot" style="--c:var(--red)"></i>High priority</div>
+              <h3>Subagents run on Opus, not Sonnet 5</h3>
+              <div class="fix">Fix it <span>Run subagents on Sonnet 5 by default →</span></div>
+            </div>
+            <div class="ic-save"><div class="amt" data-count="41.92" data-dec="2" data-pre="$" data-cin="28.5" data-cdur="1.1">$0.00</div><div class="basis">≈ $20.16 / 30 days</div></div>
+          </article>
+          <article class="panel icard" data-in="28.65">
+            <div>
+              <div class="ic-meta"><i class="dot" style="--c:var(--red)"></i>High priority</div>
+              <h3>Most cache misses were avoidable</h3>
+              <div class="fix">Fix it <span>Ask before re-writing a big expired session →</span></div>
+            </div>
+            <div class="ic-save"><div class="amt" data-count="38.76" data-dec="2" data-pre="$" data-cin="28.9" data-cdur="1.1">$0.00</div><div class="basis">≈ $18.64 / 30 days</div></div>
+          </article>
+        </div>
+      </section>
+
+      <!-- 6. Apply -->
+      <section class="scene" data-t="33.45,40.8">
+        <header class="cap">
+          <div class="eyebrow" data-in="33.7"><i class="dot" style="--c:var(--amber)"></i>Optimizations</div>
+          <h2 data-words="33.8">Apply the fixes one command at a time.</h2>
+          <p class="sub" data-in="34.2">A diff before anything changes, a backup, and a one-command undo.</p>
+        </header>
+        <div class="term" data-in="34.0">
+          <div class="term-bar"><i></i><i></i><i></i><span>~ · zsh</span></div>
+          <div class="term-body" style="font-size:24px">
+            <div class="tl"><span class="pr">$</span> <span data-type data-tin="34.5" data-cps="26">apply.py apply subagents-on-sonnet</span></div>
+            <div class="tl" data-in="36.1"><b>Run general-purpose subagents on Sonnet 5</b></div>
+            <div class="diff" data-in="36.3" data-fx="fade">
+              <div class="tl mut" data-in="36.35" data-fx="fade">~/.claude/settings.json</div>
+              <div class="tl ctx" data-in="36.5" data-fx="fade">      "Bash(git diff:*)"</div>
+              <div class="tl ctx" data-in="36.62" data-fx="fade">    ]</div>
+              <div class="tl add" data-in="36.74" data-fx="left">+  },</div>
+              <div class="tl add" data-in="36.86" data-fx="left">+  "env": {</div>
+              <div class="tl add" data-in="36.98" data-fx="left">+    "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet"</div>
+              <div class="tl ctx" data-in="37.1" data-fx="fade">   }</div>
+            </div>
+            <div class="tl" data-in="37.35" data-fx="fade">Apply these changes? [y/N] <span data-type data-tin="37.95" data-cps="10">y</span></div>
+            <div class="tl applied" data-in="38.25">✓ Applied. Backup saved.</div>
+            <div class="tl mut" data-in="38.5">Undo: apply.py undo subagents-on-sonnet</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 7. Payoff -->
+      <section class="scene s7" data-t="40.45,46.4">
+        <h2 data-words="40.7">Applied together, these fixes would have saved</h2>
+        <div class="pay-num" data-in="40.95" data-fx="fade" data-count="152" data-cin="41.0" data-cdur="1.5" data-pre="$">$0</div>
+        <div class="pay-of" data-in="41.5">of $586 in 62 days, about $73 every 30 days. Overlaps removed.</div>
+        <div class="pay-bar" data-in="41.0" data-fx="fade"><div data-grow="25.9" data-unit="%" data-gin="41.0" data-gdur="1.5"></div></div>
+        <div class="pay-legend" data-in="42.3" data-fx="fade"><span><b>$152 saved · 26%</b></span><span>$586 spent</span></div>
+        <div class="facts">
+          <div class="fact" data-in="42.6">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
+            <p>Counted on your machine by a plain Python script.</p>
+          </div>
+          <div class="fact" data-in="42.8">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v6c0 4.2-2.9 7.4-7 9-4.1-1.6-7-4.8-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg>
+            <p>Claude reads the summary, never your transcripts.</p>
+          </div>
+          <div class="fact" data-in="43.0">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg>
+            <p>Any Claude model. macOS, Linux and Windows.</p>
+          </div>
+        </div>
+        <p class="fine" data-in="43.3" data-fx="fade">Demo data. Dollars are API list-price equivalents: on a subscription they are a yardstick, not your bill.</p>
+      </section>
+
+      <!-- 8. Call to action -->
+      <section class="scene s8" data-t="46.05,999">
+        <div class="cta-brand" data-in="46.3" data-fx="pop">
+          <svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect class="m1" x="3" y="3" width="7" height="26" rx="2"/><rect class="m2" x="12.5" y="11" width="7" height="18" rx="2"/><rect class="m3" x="22" y="19" width="7" height="10" rx="2"/></svg>
+          <span>usage-optimizer</span>
+        </div>
+        <p class="cta-tag" data-words="46.65" data-step="0.04">See where your Claude Code money goes, and what would have kept it.</p>
+        <div class="term install" data-in="47.05">
+          <div data-in="47.25"><div class="step"><span class="n">1</span>Add the marketplace</div><code>/plugin marketplace add yuval-sosman/claude-usage-optimizer</code></div>
+          <div data-in="47.5"><div class="step"><span class="n">2</span>Install the plugin</div><code>/plugin install usage-optimizer@claude-usage-optimizer</code></div>
+          <div data-in="47.75"><div class="step"><span class="n">3</span>Run it</div><code><span class="pr">/</span>usage-optimizer:report</code></div>
+        </div>
+        <div class="cta-foot" data-in="48.2">
+          <span class="url">github.com/yuval-sosman/claude-usage-optimizer</span>
+          <span class="req">Python 3.8+, standard library only · macOS, Linux, Windows</span>
+        </div>
+      </section>
+
+    </div>
+    <button id="bigplay" type="button" hidden>▶ Play</button>
+  </div>
+  <div id="controls" role="group" aria-label="Playback">
+    <button id="play" type="button">Pause</button>
+    <button id="restart" type="button">Restart</button>
+    <input id="scrub" type="range" min="0" max="53" step="0.01" value="0" aria-label="Position in the video">
+    <span id="time">0:00 / 0:53</span>
+    <p id="hint">Space plays or pauses · R restarts · H hides these controls for screen recording</p>
+  </div>
+</div>
+
+<script>
+(() => {
+  const D = 53;
+  const root = document.documentElement;
+  const rec = /(^|[?&#])record\b/.test(location.search + location.hash);
+  if (rec) root.classList.add('record');
+  let reduce = false;
+  try { reduce = matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { /* older browsers */ }
+
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+  const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+  const eOut = x => 1 - Math.pow(1 - x, 3);
+  const eIO = x => x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+
+  // Demo daily spend, Jul 28 to Sep 27 (62 days): quiet weekends, the peak ($39.70) on Mon Aug 10, $586 in all.
+  const rnd = (s => () => { s = s + 0x6D2B79F5 | 0; let x = Math.imul(s ^ s >>> 15, 1 | s); x = x + Math.imul(x ^ x >>> 7, 61 | x) ^ x; return ((x ^ x >>> 14) >>> 0) / 4294967296; })(7);
+  const spend = [];
+  for (let i = 0; i < 62; i++) {
+    const wd = (2 + i) % 7, weekend = wd === 0 || wd === 6;
+    spend.push(weekend ? (rnd() < 0.5 ? 0 : rnd() * 3) : 4 + rnd() * 9 + (rnd() < 0.18 ? 8 + rnd() * 10 : 0));
+  }
+  const PEAK = 13;
+  spend[PEAK] = 0;
+  const k = (586 - 39.7) / spend.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < 62; i++) spend[i] = Math.min(34, spend[i] * k);
+  spend[PEAK] = 39.7;
+  for (const svg of $$('svg[data-spark]')) {
+    const w = +svg.getAttribute('width'), h = +svg.getAttribute('height'), pad = 9;
+    const pts = spend.map((v, i) => [pad + i / (spend.length - 1) * (w - 2 * pad), h - pad - v / 40 * (h - 2 * pad)]);
+    const line = 'M' + pts.map(p => p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' L');
+    svg.querySelector('.sp-line').setAttribute('d', line);
+    svg.querySelector('.sp-area').setAttribute('d', line + ` L${pts[pts.length - 1][0].toFixed(1)} ${h - pad} L${pad} ${h - pad} Z`);
+    const peak = svg.querySelector('.sp-peak');
+    if (peak) { peak.setAttribute('cx', pts[PEAK][0]); peak.setAttribute('cy', pts[PEAK][1]); }
+  }
+
+  // Word-by-word reveal: each word rises out of its own mask.
+  for (const el of $$('[data-words]')) {
+    const a = +el.dataset.words, step = +(el.dataset.step || 0.05);
+    const words = el.textContent.trim().split(/\s+/);
+    el.textContent = '';
+    words.forEach((word, i) => {
+      const outer = document.createElement('span'), inner = document.createElement('span');
+      outer.className = 'w';
+      inner.textContent = word;
+      inner.dataset.in = (a + i * step).toFixed(3);
+      inner.dataset.fx = 'rise';
+      outer.appendChild(inner);
+      el.appendChild(outer);
+      if (i < words.length - 1) el.appendChild(document.createTextNode(' '));
+    });
+  }
+
+  const scenes = $$('.scene').map(el => { const [a, b] = el.dataset.t.split(',').map(Number); return { el, a, b, on: null }; });
+  const sceneOf = el => scenes.find(s => s.el === el.closest('.scene'));
+  const DUR = { up: 0.6, rise: 0.55, pop: 0.45, fade: 0.45, left: 0.5 };
+  const anims = $$('[data-in]').map(el => {
+    const fx = el.dataset.fx || 'up';
+    return { el, sc: sceneOf(el), fx, a: +el.dataset.in, o: el.dataset.out != null ? +el.dataset.out : null, d: +(el.dataset.dur || DUR[fx] || 0.6) };
+  });
+  const counters = $$('[data-count]').map(el => ({ el, sc: sceneOf(el), to: +el.dataset.count, a: +el.dataset.cin, d: +(el.dataset.cdur || 1.2), dec: +(el.dataset.dec || 0), pre: el.dataset.pre || '', last: '' }));
+  const typers = $$('[data-type]').map(el => ({ el, sc: sceneOf(el), full: el.textContent, a: +el.dataset.tin, cps: +(el.dataset.cps || 24), n: -1 }));
+  const growers = $$('[data-grow]').map(el => ({ el, sc: sceneOf(el), w: +el.dataset.grow, unit: el.dataset.unit || '%', a: +el.dataset.gin, d: +(el.dataset.gdur || 1) }));
+  const drawers = $$('[data-draw]').map(el => ({ el, sc: sceneOf(el), a: +el.dataset.din, d: +(el.dataset.ddur || 1.2) }));
+  const scrollers = $$('[data-scroll]').map(el => ({ el, sc: sceneOf(el), a: +el.dataset.sin, v: +el.dataset.speed }));
+  const spinners = $$('[data-spin]').map(el => ({ el, sc: sceneOf(el) }));
+  const FRAMES = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏';
+  const money = (v, dec) => v.toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+
+  function render(t) {
+    for (const s of scenes) {
+      const on = t >= s.a && t <= s.b;
+      if (on !== s.on) { s.el.style.visibility = on ? 'visible' : 'hidden'; s.on = on; }
+      if (!on) continue;
+      const fin = s.a < 0 ? 1 : eOut(clamp((t - s.a) / 0.35));
+      const fout = 1 - clamp((t - (s.b - 0.35)) / 0.35);
+      s.el.style.opacity = Math.min(fin, fout);
+    }
+    for (const a of anims) {
+      if (!a.sc.on) continue;
+      const p = eOut(clamp((t - a.a) / a.d));
+      const q = a.o == null ? 0 : clamp((t - a.o) / 0.3);
+      const st = a.el.style;
+      st.opacity = p * (1 - q);
+      if (a.fx === 'rise') st.transform = `translateY(${(1 - p) * 105}%)`;
+      else if (a.fx === 'pop') st.transform = `scale(${0.94 + 0.06 * p})`;
+      else if (a.fx === 'left') st.transform = `translateX(${(1 - p) * -28}px)`;
+      else if (a.fx === 'up') st.transform = `translateY(${(1 - p) * 28 - q * 10}px)`;
+    }
+    for (const c of counters) {
+      if (!c.sc.on) continue;
+      const s = c.pre + money(c.to * eOut(clamp((t - c.a) / c.d)), c.dec);
+      if (s !== c.last) { c.el.textContent = s; c.last = s; }
+    }
+    for (const y of typers) {
+      if (!y.sc.on) continue;
+      const n = Math.floor(clamp((t - y.a) * y.cps, 0, y.full.length));
+      if (n !== y.n) { y.el.textContent = y.full.slice(0, n); y.n = n; }
+      const typing = t >= y.a - 0.7 && n < y.full.length;
+      y.el.classList.toggle('typing', typing);
+      y.el.classList.toggle('blink', typing && t < y.a && Math.floor(t * 2.5) % 2 === 1);
+    }
+    for (const g of growers) if (g.sc.on) g.el.style.width = (g.w * eIO(clamp((t - g.a) / g.d))) + g.unit;
+    for (const d of drawers) if (d.sc.on) d.el.style.strokeDashoffset = 1 - eIO(clamp((t - d.a) / d.d));
+    for (const s of scrollers) if (s.sc.on) s.el.style.transform = `translateY(${-Math.max(0, t - s.a) * s.v}px)`;
+    for (const s of spinners) if (s.sc.on) s.el.textContent = FRAMES[Math.floor(t * 12) % FRAMES.length];
+  }
+
+  const frame = $('#frame'), stage = $('#stage'), ctr = $('#controls');
+  const btn = $('#play'), scrub = $('#scrub'), time = $('#time'), big = $('#bigplay');
+  let t = 0, playing = !rec && !reduce, started = playing, last = null, shownPlaying = null;
+  const mmss = s => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+
+  function ui() {
+    if (shownPlaying !== playing) { btn.textContent = playing ? 'Pause' : 'Play'; shownPlaying = playing; }
+    scrub.value = t.toFixed(2);
+    time.textContent = mmss(t) + ' / ' + mmss(D);
+    big.hidden = playing || started;
+  }
+  function fit() {
+    if (rec) { frame.style.width = frame.style.height = '1080px'; stage.style.transform = 'none'; return; }
+    const bare = root.classList.contains('bare');
+    const ch = bare ? 0 : ctr.offsetHeight + 12;
+    const s = Math.max(0.2, Math.min((innerWidth - 32) / 1080, (innerHeight - 32 - ch) / 1080));
+    frame.style.width = frame.style.height = (1080 * s) + 'px';
+    stage.style.transform = `scale(${s})`;
+    ctr.style.width = Math.min(innerWidth - 32, Math.max(1080 * s, 300)) + 'px';
+  }
+  function play(on) { playing = on; if (on) started = true; last = null; ui(); }
+  function seek(s) { t = clamp(s, 0, D); render(t); ui(); }
+  function loop(now) {
+    if (playing) {
+      if (last != null) { t += Math.min(0.1, (now - last) / 1000); if (t >= D) t = 0; }
+      last = now;
+      render(t); ui();
+    }
+    requestAnimationFrame(loop);
+  }
+
+  btn.addEventListener('click', () => play(!playing));
+  big.addEventListener('click', () => play(true));
+  $('#restart').addEventListener('click', () => { seek(0); play(true); });
+  scrub.addEventListener('input', () => { started = true; seek(+scrub.value); });
+  addEventListener('keydown', e => {
+    if (e.target === scrub && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return;
+    if (e.key === ' ' || e.key === 'k') { e.preventDefault(); play(!playing); }
+    else if (e.key === 'r' || e.key === 'R') { seek(0); play(true); }
+    else if (e.key === 'h' || e.key === 'H') { root.classList.toggle('bare'); fit(); }
+    else if (e.key === 'ArrowRight') seek(t + 2);
+    else if (e.key === 'ArrowLeft') seek(t - 2);
+  });
+  addEventListener('resize', fit);
+
+  // Frame-exact rendering for the MP4 export (render.mjs): load with ?record, await __ready, then __seek(seconds).
+  window.__duration = D;
+  window.__seek = s => { t = s; render(t); return true; };
+  window.__ready = (document.fonts ? document.fonts.ready : Promise.resolve())
+    .then(() => Promise.all(['760 106px "Bricolage Grotesque"', '800 190px "Bricolage Grotesque"', '400 25px "JetBrains Mono"', '600 24px "JetBrains Mono"'].map(f => document.fonts.load(f))))
+    .then(() => true, () => true);
+
+  fit();
+  render(0);
+  ui();
+  if (!rec) requestAnimationFrame(loop);
+})();
+</script>

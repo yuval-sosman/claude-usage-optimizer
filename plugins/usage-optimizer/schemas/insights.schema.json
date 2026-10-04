@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "usage-optimizer/insights.schema.json",
+  "title": "Claude Code usage insights",
+  "description": "Written by the usage-optimizer:report skill from digest.md / metrics.json only (never from session transcripts). Rendered as the report's Insights tab. Check with: python3 scripts/validate.py insights <file> --metrics <out>/metrics.json",
+  "type": "object",
+  "required": ["schema_version", "generated", "source", "summary", "insights"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": 1},
+    "generated": {"type": "string", "description": "Local time the insights were written, YYYY-MM-DD HH:MM"},
+    "author": {"type": "string", "description": "e.g. \"Claude (usage-optimizer:report)\""},
+    "source": {
+      "type": "object",
+      "required": ["metrics_generated"],
+      "additionalProperties": false,
+      "properties": {
+        "metrics_generated": {"type": "string", "description": "meta.generated of the metrics.json these insights were written from (the report flags them as stale when it changes)"},
+        "range": {"type": "object", "properties": {"start": {"type": ["string", "null"]}, "end": {"type": ["string", "null"]}}},
+        "scope": {"type": "string", "description": "Report scope the insights are about; default \"all\""},
+        "spend_usd": {"type": "number", "description": "Total spend of that scope at API list prices"}
+      }
+    },
+    "summary": {"type": "string", "minLength": 40, "maxLength": 900, "description": "3-5 sentences: the overall bottom line, cost first"},
+    "insights": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 40,
+      "items": {
+        "type": "object",
+        "required": ["id", "category", "title", "bottom_line", "detail", "questions", "priority", "confidence"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{2,60}$"},
+          "category": {"enum": ["cost", "cache", "context", "workflow", "delegation", "tooling", "reliability"]},
+          "title": {"type": "string", "minLength": 5, "maxLength": 90},
+          "bottom_line": {"type": "string", "minLength": 20, "maxLength": 280, "description": "One sentence with the key number: what is true and why it matters"},
+          "detail": {"type": "string", "minLength": 40, "maxLength": 1400, "description": "The reasoning, with numbers from the cited questions"},
+          "questions": {
+            "type": "array", "minItems": 1, "maxItems": 6,
+            "items": {"type": "string", "pattern": "^[A-Z]{2,3}[0-9]{1,2}$"},
+            "description": "Report question IDs (cards) that together support the insight; the first is the main one"
+          },
+          "evidence": {
+            "type": "array", "maxItems": 6,
+            "items": {
+              "type": "object", "required": ["question", "fact"], "additionalProperties": false,
+              "properties": {
+                "question": {"type": "string", "pattern": "^[A-Z]{2,3}[0-9]{1,2}$"},
+                "fact": {"type": "string", "maxLength": 240}
+              }
+            }
+          },
+          "priority": {"enum": ["high", "medium", "low"]},
+          "confidence": {"enum": ["high", "medium", "low"]},
+          "scope": {"type": "string", "description": "Scope id when the insight is about one project; the report switches to it"},
+          "savings": {
+            "type": "object",
+            "required": ["usd_so_far", "usd_per_month", "basis", "kind"],
+            "additionalProperties": false,
+            "description": "Required for category \"cost\": what applying the change from day one would have saved over the analysed period",
+            "properties": {
+              "usd_so_far": {"type": "number", "minimum": 0, "description": "The saving over all the analysed days (all time)"},
+              "pct_of_spend": {"type": "number", "minimum": 0, "maximum": 100},
+              "usd_per_month": {"type": "number", "minimum": 0, "description": "The same saving per 30 days: usd_so_far × 30 / days covered"},
+              "tokens_so_far": {"type": "number", "minimum": 0},
+              "basis": {"type": "string", "minLength": 10, "maxLength": 400, "description": "How it was computed, naming the question it comes from (usually an SV card)"},
+              "kind": {"enum": ["measured", "theoretical", "upper_bound"]},
+              "overlaps_with": {"type": "array", "items": {"type": "string"}, "description": "Insight ids whose savings overlap with this one"}
+            }
+          },
+          "actions": {"type": "array", "maxItems": 4, "items": {"type": "string", "maxLength": 240}, "description": "Short imperatives: what to do"},
+          "optimizations": {"type": "array", "items": {"type": "string"}, "description": "Ids in optimizations.json (added by the optimize skill)"}
+        }
+      }
+    }
+  }
+}
