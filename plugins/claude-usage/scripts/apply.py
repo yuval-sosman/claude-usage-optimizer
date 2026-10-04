@@ -23,6 +23,7 @@ import argparse
 import copy
 import datetime as dt
 import difflib
+import errno
 import json
 import os
 import re
@@ -791,24 +792,34 @@ def undo_record(oid, rec, out, state):
     return notes
 
 
+NO_TERMINAL = {errno.ENXIO, errno.ENOENT, errno.ENODEV, errno.ENOTTY}  # opening /dev/tty with no terminal to open
+
+
 def confirm(question):
     """True only when a person typed y at their own terminal. The question and the answer go through the terminal itself
     (/dev/tty; on Windows, standard input only when it is a console), never through a pipe: a program running this
     without a terminal, such as Claude Code's tools, a script or `yes |`, always gets False, and None when there is no
-    terminal to ask at all."""
+    terminal to ask at all. /dev/tty is opened twice, to read and to write: text mode 'r+' needs a seekable file, which a
+    terminal is not."""
     try:
         if os.name == 'nt':
             if not (sys.stdin and sys.stdin.isatty() and sys.stdout.isatty()):
                 return None
             return input(question).strip().lower() in ('y', 'yes')
-        with open('/dev/tty', 'r+', encoding='utf-8', errors='replace') as tty:
+        with open('/dev/tty', 'r', encoding='utf-8', errors='replace') as tty, \
+                open('/dev/tty', 'w', encoding='utf-8', errors='replace') as tty_out:
             if not tty.isatty():
                 return None
-            tty.write(question)
-            tty.flush()
+            tty_out.write(question)
+            tty_out.flush()
             return tty.readline().strip().lower() in ('y', 'yes')
-    except (OSError, EOFError, KeyboardInterrupt):
-        return None
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return False
+    except OSError as e:
+        if e.errno in NO_TERMINAL:
+            return None
+        raise SystemExit(f'\nCould not ask at the terminal ({e}); nothing was changed.')
 
 
 def refuse_without_terminal(verb, oid, out):
