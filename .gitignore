@@ -1,4 +1,4 @@
 __pycache__/
 *.pyc
 .DS_Store
-plugins/claude-usage/scripts/hooks/state/
+plugins/usage-optimizer/scripts/hooks/state/
