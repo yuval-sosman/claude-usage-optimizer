@@ -364,6 +364,10 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
 **Hooks (`scripts/hooks/`):**
 - Hooks must fail open: never block on an error. That includes `import _session` (wrapped in try; a missing helper makes the hook a no-op).
 - apply.py installs `_session.py` and `prices.json` only beside hooks that import `_session`.
+- `last_usage()` returns None when a `compact_boundary` system line is newer than every call: `/compact` doesn't write
+  the summary's own call as an assistant line, so the newest call found would be the one before the compact (the old,
+  big context). The guards then let the first prompt after a compact through and the status line leaves out its context
+  part until the next call. Every caller of `last_usage()` must handle None.
 - Keep `_session.py`'s `canon_model`/price fallback in step with the engine's, `_aliases` and `_modifiers` included (the
   hooks pass the call from `last_usage()` to `price()`; they don't read `modelOverrides`).
 - Changes reach users only when they re-apply the optimization.

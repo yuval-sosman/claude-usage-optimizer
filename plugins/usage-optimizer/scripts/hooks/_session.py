@@ -47,7 +47,7 @@ def last_usage(transcript):
     """The newest main-thread API call in the transcript: its end time, context size, model and cache lifetime.
 
     Scans back from the end of the file (at most TAIL bytes) until it has the newest call and a cache write to tell the
-    lifetime by, which is usually within the first 64 KB read."""
+    lifetime by, which is usually within the first 64 KB read. None after a /compact, until the next call."""
     st = {'last': None, 'w1': 0, 'w5': 0}
     batches = tail(transcript)
     while True:
@@ -85,8 +85,16 @@ def tail(path):
 
 
 def scan(lines, st):
-    """Go on from st through lines, newest first: True once it has the newest call and a cache write at or before it."""
+    """Go on from st through lines, newest first: True once it has the newest call and a cache write at or before it, or
+    (with no call) at a /compact boundary newer than any call: the context before it is gone, and the summary's own call
+    is not in the transcript."""
     for ln in reversed(lines):
+        if st['last'] is None and '"compact_boundary"' in ln:
+            try:
+                if json.loads(ln).get('subtype') == 'compact_boundary':
+                    return True
+            except ValueError:
+                pass
         if '"assistant"' not in ln or '"usage"' not in ln:
             continue
         try:
