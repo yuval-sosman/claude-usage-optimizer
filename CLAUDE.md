@@ -247,8 +247,10 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
   before `--since` were dropped; their calls and sessions carry `cut`, their `baseline` is None (so CX11, SV8's base and
   CX5 leave them out), `_sv_compact` starts them at the median baseline, and `_items()` labels their first call "Carried
   from before the report's range". `compactions(m)` prices the compactions that happened from `compactMetadata` (SV5's
-  "Compactions so far" tiles; an estimate, not in the logged spend). The hooks see compactions (the boundary record) but
-  not rewinds: the branching record is written after UserPromptSubmit runs.
+  "Compactions so far" tiles; an estimate, not in the logged spend). `_session.scan()` applies the same rewind rule to the newest user record, so the status line and the guards go by
+  the checkpoint's context once that record is in the file; the one prompt that starts the rewound branch is written
+  after UserPromptSubmit runs, so that prompt alone is still judged on the abandoned branch (no record marks a rewind
+  before it).
 - **Stop hooks:** `_post_stop()` charges a Stop hook only the calls that descend from its `stop_hook_summary` record
   (`parentUuid`) before a `new_input()`; EX5's "What Stop hooks set off" and SV2's lever both read it. Don't go back to a
   time window: work started by another input (another session's message, a `/loop` wake-up) would be charged to the hook.

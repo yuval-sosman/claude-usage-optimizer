@@ -12,6 +12,8 @@ CLAUDE_USAGE_HOOK_STATE) and checks what they say:
   - a record holding a raw U+2028 (which str.splitlines() would cut): the newest call is still found;
   - lines that are valid JSON but not objects, and odd timestamps: skipped, never an error;
   - usage without the cache_creation breakdown: a 5-minute lifetime, like the engine;
+  - a /rewind (the newest user record points at an older assistant message): the checkpoint's context, not the
+    abandoned branch's; a record pointing at the newest call, or at a user record, changes nothing;
   - the big-read guard: two parallel Reads of two big files each get one deny, the retry of either goes through; a
     folder is never denied.
 Exits 1 on the first failure.
@@ -50,8 +52,11 @@ def boundary(t):
             'compactMetadata': {'trigger': 'manual', 'preTokens': 140000, 'postTokens': 12000, 'durationMs': 90000}}
 
 
-def user(t, text):
-    return {'type': 'user', 'timestamp': iso(t), 'sessionId': 's', 'uuid': 'x%d' % int(t), 'message': {'role': 'user', 'content': text}}
+def user(t, text, parent=None):
+    d = {'type': 'user', 'timestamp': iso(t), 'sessionId': 's', 'uuid': 'x%d' % int(t), 'message': {'role': 'user', 'content': text}}
+    if parent:
+        d['parentUuid'] = parent
+    return d
 
 
 class Run:
@@ -155,6 +160,21 @@ def main():
         side = R.transcript(before + [dict(boundary(NOW - 10), isSidechain=True)])
         out = R.guard(side)
         R.check("a subagent's boundary doesn't hide the main thread's idle call", '"block"' in out, out)
+
+        # a /rewind: calls of 30K, 90K and 180K, then the user's next record points at the 90K call (the branch stays in the file)
+        c1, c2, c3 = call(NOW - 400, 30000, cw1=30000), call(NOW - 300, 90000, cw1=60000), call(NOW - 200, 180000, cw1=90000)
+        rw = R.transcript([user(NOW - 410, 'a'), c1, user(NOW - 310, 'b', c1['uuid']), c2, user(NOW - 210, 'c', c2['uuid']), c3,
+                           user(NOW - 100, 'rewound: go on from here', c2['uuid'])])
+        out = R.status(rw)
+        R.check('after a /rewind the status line shows the checkpoint context (90K), not the branch (180K)', 'ctx 90K' in out and 'cache warm' in out, out)
+        out = R.hook('context_guard.py', {'prompt': 'hi', 'session_id': 'sid', 'transcript_path': rw}, ['--threshold', '100000'])
+        R.check('after a /rewind the context notice judges 90K (quiet under 100K)', out == '', out)
+        plain = R.transcript([user(NOW - 410, 'a'), c1, user(NOW - 310, 'b', c1['uuid']), c2, user(NOW - 210, 'c', c2['uuid']), c3,
+                              user(NOW - 100, 'tool result', c3['uuid'])])
+        R.check('a user record pointing at the newest call is not a rewind', 'ctx 180K' in R.status(plain), R.status(plain))
+        meta = R.transcript([user(NOW - 410, 'a'), c1, user(NOW - 310, 'b', c1['uuid']), c2, user(NOW - 210, 'c', c2['uuid']), c3,
+                             user(NOW - 100, 'meta', 'x%d' % int(NOW - 210))])
+        R.check('a user record whose parent is a user record changes nothing', 'ctx 180K' in R.status(meta), R.status(meta))
 
         ts = R.transcript(before + [call(NOW - 60, 20000, cw1=19000, extra={'timestamp': iso(NOW - 60)[:-1] + '123456Z'})])
         R.check('a 9-digit fraction timestamp parses', 'ctx 20K' in R.status(ts) and 'cache warm' in R.status(ts), R.status(ts))

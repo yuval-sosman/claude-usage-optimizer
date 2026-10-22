@@ -56,8 +56,9 @@ def last_usage(transcript):
     lifetime by, which is usually within the first 64 KB read. After a /compact, until the next call, the result is the
     boundary instead: kind 'compacted', t the time the compaction finished (the cached prefix's clock restarted then), and
     ctx 0, since the context the summary leaves is not in the transcript (a guard that compares ctx with a threshold does
-    nothing, which is right: the old context is gone). A call has kind 'call'."""
-    st = {'last': None, 'w1': 0, 'w5': 0}
+    nothing, which is right: the old context is gone). A call has kind 'call'. After a /rewind (the newest user record
+    points at an older assistant message), the checkpoint's call, with the newest call's time."""
+    st = {'last': None, 'first': None, 'parent': None, 'w1': 0, 'w5': 0}
     batches = tail(transcript)
     while True:
         try:
@@ -66,7 +67,7 @@ def last_usage(transcript):
             return None
         if lines is None or scan(lines, st):
             break
-    last, w1, w5 = st['last'], st['w1'], st['w5']
+    last, w1, w5 = st['last'] or st['first'], st['w1'], st['w5']     # a parent never found in the tail: the newest call
     if last is None or last['t'] is None:
         return None
     last['ttl'] = 3600 if w1 >= w5 and w1 > 0 else 300 if w5 > 0 else 3600
@@ -96,10 +97,15 @@ def tail(path):
 def scan(lines, st):
     """Go on from st through lines, newest first: True once it has the newest call (or, with no call after it, the newest
     /compact boundary: the summary's own call is not in the transcript) and a cache write at or before it to tell the
-    lifetime by. One parse per line; anything that is not a JSON object is skipped."""
+    lifetime by. One parse per line; anything that is not a JSON object is skipped.
+
+    A /rewind leaves the abandoned branch in the file: the newest user record then points (parentUuid) at an assistant
+    message older than the newest one. The call to go by is that older message's (the checkpoint's context), with the
+    newest call's time (every call since read and so refreshed the cached prefix)."""
     for ln in reversed(lines):
-        boundary = st['last'] is None and '"compact_boundary"' in ln
-        if not boundary and ('"assistant"' not in ln or '"usage"' not in ln):
+        want_user = st['parent'] is None and st['first'] is None and '"user"' in ln and '"parentUuid"' in ln
+        boundary = st['last'] is None and st['first'] is None and '"compact_boundary"' in ln
+        if not (want_user or boundary or ('"assistant"' in ln and '"usage"' in ln)):
             continue
         try:
             d = json.loads(ln)
@@ -107,11 +113,17 @@ def scan(lines, st):
             continue
         if not isinstance(d, dict) or d.get('isSidechain'):
             continue
-        if d.get('type') == 'system':
+        typ = d.get('type')
+        if typ == 'user':
+            if want_user:                      # the newest user record, newer than every call: a prompt, a tool result…
+                p = d.get('parentUuid')
+                st['parent'] = p if isinstance(p, str) and p else False
+            continue
+        if typ == 'system':
             if boundary and d.get('subtype') == 'compact_boundary':
                 st['last'] = dict(kind='compacted', t=parse_ts(d.get('timestamp') or ''), model='', ctx=0, geo=None, speed=None)
             continue
-        if d.get('type') != 'assistant':
+        if typ != 'assistant':
             continue
         m = d.get('message') or {}
         u = m.get('usage') or {}
@@ -123,11 +135,19 @@ def scan(lines, st):
             w1, w5 = 0, u.get('cache_creation_input_tokens')
         st['w1'] += w1 or 0
         st['w5'] += w5 or 0
-        if st['last'] is None:
-            st['last'] = dict(kind='call', t=parse_ts(d.get('timestamp') or ''), model=m.get('model') or '',
-                              ctx=(u.get('input_tokens') or 0) + (u.get('cache_read_input_tokens') or 0) + (u.get('cache_creation_input_tokens') or 0),
-                              geo=u.get('inference_geo'), speed=u.get('speed'))
-        if st['w1'] + st['w5'] > 0:
+        cd = dict(kind='call', t=parse_ts(d.get('timestamp') or ''), model=m.get('model') or '',
+                  ctx=(u.get('input_tokens') or 0) + (u.get('cache_read_input_tokens') or 0) + (u.get('cache_creation_input_tokens') or 0),
+                  geo=u.get('inference_geo'), speed=u.get('speed'), mid=m.get('id') or d.get('uuid') or '')
+        if st['first'] is None:
+            st['first'] = cd
+        if st['parent']:                       # the newest user record points at a call: this one?
+            if d.get('uuid') == st['parent']:
+                if st['last'] is None:         # an older message than the newest: a /rewind to it
+                    st['last'] = dict(cd, t=st['first']['t']) if cd['mid'] != st['first']['mid'] else st['first']
+                st['parent'] = False
+        elif st['last'] is None:
+            st['last'] = cd
+        if st['last'] is not None and st['w1'] + st['w5'] > 0:
             return True
     return False
 
