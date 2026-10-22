@@ -10,7 +10,8 @@ CLAUDE_USAGE_HOOK_STATE) and checks what they say:
     "compacted … ago · cache warm";
   - the first call after the compact: as before the compact, with the new size;
   - a record holding a raw U+2028 (which str.splitlines() would cut): the newest call is still found;
-  - lines that are valid JSON but not objects, and odd timestamps: skipped, never an error;
+  - lines that are valid JSON but not objects, and odd timestamps: skipped, never an error; an unreadable timestamp on
+    the newest call falls back to the file's modification time; --grace 0 cannot make the block inescapable;
   - usage without the cache_creation breakdown: a 5-minute lifetime, like the engine;
   - a /rewind (the newest user record points at an older assistant message): the checkpoint's context, not the
     abandoned branch's; a record pointing at the newest call, or at a user record, changes nothing;
@@ -175,6 +176,14 @@ def main():
         meta = R.transcript([user(NOW - 410, 'a'), c1, user(NOW - 310, 'b', c1['uuid']), c2, user(NOW - 210, 'c', c2['uuid']), c3,
                              user(NOW - 100, 'meta', 'x%d' % int(NOW - 210))])
         R.check('a user record whose parent is a user record changes nothing', 'ctx 180K' in R.status(meta), R.status(meta))
+
+        out = R.hook('stale_cache_guard.py', {'prompt': 'hi', 'session_id': 'sid', 'transcript_path': pre}, ['--min-context', '60000', '--grace', '0'])
+        out2 = R.hook('stale_cache_guard.py', {'prompt': 'hi', 'session_id': 'sid', 'transcript_path': pre}, ['--min-context', '60000', '--grace', '0'], fresh=False)
+        R.check('--grace 0: the first send blocks, the second (right away) still goes through', '"block"' in out and out2 == '', (out[:40], out2))
+        bad = R.transcript(before + [call(NOW - 60, 20000, cw1=19000, extra={'timestamp': 'not a time'})])
+        os.utime(bad, (NOW - 60, NOW - 60))
+        out = R.status(bad)
+        R.check("an unreadable timestamp on the newest call: the file's time stands in (ctx 20K, cache warm)", 'ctx 20K' in out and 'cache warm' in out, out)
 
         ts = R.transcript(before + [call(NOW - 60, 20000, cw1=19000, extra={'timestamp': iso(NOW - 60)[:-1] + '123456Z'})])
         R.check('a 9-digit fraction timestamp parses', 'ctx 20K' in R.status(ts) and 'cache warm' in R.status(ts), R.status(ts))

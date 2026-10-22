@@ -68,8 +68,13 @@ def last_usage(transcript):
         if lines is None or scan(lines, st):
             break
     last, w1, w5 = st['last'] or st['first'], st['w1'], st['w5']     # a parent never found in the tail: the newest call
-    if last is None or last['t'] is None:
+    if last is None:
         return None
+    if last['t'] is None:                      # an unreadable timestamp: the file was last written at or after the call
+        try:
+            last['t'] = os.path.getmtime(transcript)
+        except OSError:
+            return None
     last['ttl'] = 3600 if w1 >= w5 and w1 > 0 else 300 if w5 > 0 else 3600
     return last
 

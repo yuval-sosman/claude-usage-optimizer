@@ -216,7 +216,7 @@ rules cover pairs the catalog doesn't list:
 - **Manual**: copy the files from the plugin to `~/.claude/hooks/claude-usage/`.
 - **Related**: none (the hooks' own entries are skipped while their hook is installed).
 
-### statusline-cache: see context size and cache warmth all the time
+### statusline-cache: see context size and cache warmth all the time (after /compact: how long ago, and the countdown)
 - **When**: no `statusLine` in any settings file (config.json). The docs: "Track context usage continuously with a custom
   status line."
 - **Apply**: `write_file` `~/.claude/hooks/claude-usage/statusline.py` from `hooks/statusline.py` (mode 700); `merge_json`
