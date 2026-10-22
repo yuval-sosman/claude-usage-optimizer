@@ -239,6 +239,26 @@ def main():
         R.check("'1,001 lines' is counted", '1,001 lines' in outs[0], outs[0])
         out = R.hook('big_read_guard.py', {'tool_name': 'Read', 'session_id': 'sid', 'tool_input': {'file_path': d}}, ['--max-kb', '0'])
         R.check('a folder is never denied', out == '', out)
+        # item 15 of the review, in process: scan() parses each line at most once, whatever the line holds
+        sys.path.insert(0, R.hooks)
+        import _session as S
+        counts = {}
+        real = json.loads
+
+        def counting(x, *a, **k):
+            counts[x] = counts.get(x, 0) + 1
+            return real(x, *a, **k)
+        S.json.loads = counting
+        try:
+            st = {'last': None, 'first': None, 'parent': None, 'w1': 0, 'w5': 0}
+            lines = [json.dumps(r) for r in [user(NOW - 500, 'a'), boundary(NOW - 400), user(NOW - 390, 'summary'), call(NOW - 300, 50000, cw1=40000),
+                                            {'type': 'assistant', 'message': {'usage': {}}}, call(NOW - 200, 60000, cw1=1000, text='compact_boundary'),
+                                            user(NOW - 100, 'next', 'u%d' % int(NOW - 200))]] + ['["compact_boundary"]', 'null', '{"type":"assistant","message":{"usage":5}}']
+            S.scan(lines, st)
+        finally:
+            S.json.loads = real
+        R.check('scan() parses each line at most once', all(n == 1 for n in counts.values()), counts)
+        R.check('scan() on that mix picks the newest call (60K) and a 1-hour lifetime', st['last'] is not None and st['last']['ctx'] == 60000 and st['w1'] > 0, st['last'])
     finally:
         R.close()
     if R.fails:

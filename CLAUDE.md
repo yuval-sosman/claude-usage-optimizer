@@ -249,8 +249,13 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
   from before the report's range". `compactions(m)` prices the compactions that happened from `compactMetadata` (SV5's
   "Compactions so far" tiles; an estimate, not in the logged spend). `_session.scan()` applies the same rewind rule to the newest user record, so the status line and the guards go by
   the checkpoint's context once that record is in the file; the one prompt that starts the rewound branch is written
-  after UserPromptSubmit runs, so that prompt alone is still judged on the abandoned branch (no record marks a rewind
-  before it).
+  after UserPromptSubmit runs, so that prompt alone is
+  still judged on the abandoned branch (no record marks a rewind before it). Checked on a real one: `claude -p …
+  --resume <sid> --resume-session-at <assistant uuid>` is a headless /rewind; a UserPromptSubmit hook that copies the
+  transcript saw it end at the previous turn's `last-prompt`, `mode`, `cost-state` and `queue-operation` records, none
+  naming the branch target, while the helper gave the checkpoint's call as soon as the prompt record existed. CX5 reads
+  CLAUDE.md and the other memory files from disk at run time, so two runs that straddle an edit to one of them differ
+  in CX5 alone: compare runs with nothing edited in between.
 - **Stop hooks:** `_post_stop()` charges a Stop hook only the calls that descend from its `stop_hook_summary` record
   (`parentUuid`) before a `new_input()`; EX5's "What Stop hooks set off" and SV2's lever both read it. Don't go back to a
   time window: work started by another input (another session's message, a `/loop` wake-up) would be charged to the hook.
