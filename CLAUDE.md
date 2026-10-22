@@ -239,6 +239,16 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
 - **Across scopes:** `where_used()` runs once on all projects in `build()` and reaches every scope as `g.where`: what a
   user-level setting loads everywhere but only some projects use (SV3's "used in some projects" table, `item_origin()`'s
   advice, which never says "switch it off in each project").
+- **Resets and range cuts:** `_threads()` marks each call `compacted` (a `compact_boundary` between it and the previous call),
+  `rewound` (a `/rewind`: a user record whose `parentUuid` is an older assistant message than the newest before it, so the
+  file still holds the abandoned branch) and `reset` (either): the previous call's context is not this call's starting
+  point, so `rewritten` is 0, `_items()` starts a new context there ("After /compact …" / "After /rewind …"), and the
+  replays (`_sv_compact`, `_ttl_tokens`, `_sv_fresh`) restart or stop at it. `Source.cut` holds the sessions whose records
+  before `--since` were dropped; their calls and sessions carry `cut`, their `baseline` is None (so CX11, SV8's base and
+  CX5 leave them out), `_sv_compact` starts them at the median baseline, and `_items()` labels their first call "Carried
+  from before the report's range". `compactions(m)` prices the compactions that happened from `compactMetadata` (SV5's
+  "Compactions so far" tiles; an estimate, not in the logged spend). The hooks see compactions (the boundary record) but
+  not rewinds: the branching record is written after UserPromptSubmit runs.
 - **Stop hooks:** `_post_stop()` charges a Stop hook only the calls that descend from its `stop_hook_summary` record
   (`parentUuid`) before a `new_input()`; EX5's "What Stop hooks set off" and SV2's lever both read it. Don't go back to a
   time window: work started by another input (another session's message, a `/loop` wake-up) would be charged to the hook.
