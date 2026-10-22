@@ -784,6 +784,7 @@ class Source:
         self.dir = os.path.abspath(os.path.expanduser(projects_dir))
         self.home = home or os.path.dirname(self.dir)          # the Claude Code config folder (~/.claude by default)
         self.recs, self.bad_lines, self.files = [], 0, 0
+        self.cut = set()        # sessions already running at the range start (records before --since were dropped)
         decode = json_decoder()
         for path in sorted(glob.glob(os.path.join(self.dir, '**', '*.jsonl'), recursive=True)):
             parts = os.path.relpath(path, self.dir).split(os.sep)
@@ -806,6 +807,8 @@ class Source:
                         continue
                     t = parse_ts(d['timestamp']) if isinstance(d.get('timestamp'), str) else None
                     if t is not None and ((since and t < since) or (until and t >= until)):
+                        if since and t < since and d.get('sessionId') and d.get('type') in ('user', 'assistant') and not d.get('isSidechain'):
+                            self.cut.add(d['sessionId'])
                         continue
                     d['_t'], d['_proj'], d['_sub'], d['_f'], d['_i'] = t, proj, sub, path, i
                     slim(d)
@@ -922,6 +925,36 @@ def redact(x, key=''):
     return x
 
 
+def installed_hooks(claude_dir):
+    """The plugin's installed hook copies under <claude dir>/hooks/claude-usage/ (apply.py puts them there), each with
+    whether it equals the file of that name this plugin ships (current; None: the plugin has no such file). An installed
+    copy changes only when its optimization is applied again, so this is how a report tells that a fix shipped."""
+    d = os.path.join(claude_dir, 'hooks', 'claude-usage')
+    out = {}
+    try:
+        names = sorted(os.listdir(d))
+    except OSError:
+        return out
+    for n in names:
+        p = os.path.join(d, n)
+        if not re.fullmatch(r'[A-Za-z0-9_]+\.(?:py|sh|json)', n) or not os.path.isfile(p):
+            continue
+        src = os.path.join(HERE, 'prices.json') if n == 'prices.json' else os.path.join(HERE, 'hooks', n)
+        try:
+            with open(p, 'rb') as fh:
+                mine = fh.read()
+        except OSError:
+            continue
+        try:
+            with open(src, 'rb') as fh:
+                theirs = fh.read()
+            current = mine.replace(b'\r\n', b'\n') == theirs.replace(b'\r\n', b'\n')
+        except OSError:
+            current = None                      # the plugin ships no file of that name
+        out[n] = {'current': current, 'bytes': len(mine)}
+    return out
+
+
 def config_snapshot(src):
     """What the optimize skill needs to know about the current setup; secrets redacted."""
     def settings_view(js):
@@ -972,6 +1005,7 @@ def config_snapshot(src):
             'mcp_servers': src.mcp,
             'installed_plugins': {k: [{kk: vv for kk, vv in (i or {}).items() if kk in ('scope', 'version', 'installPath')}
                                       for i in (v if isinstance(v, list) else [v])] for k, v in src.plugins.items()},
+            'installed_hooks': installed_hooks(src.home),
             'home': USER_HOME, 'claude_dir': tilde(src.home)}
 
 
@@ -979,6 +1013,12 @@ def config_snapshot(src):
 
 def thread_key(d):
     return (d.get('sessionId'), d.get('agentId') if d.get('isSidechain') else 'main')
+
+
+def boundary_key(d):
+    """A compact_boundary's thread: a subagent's boundary names its agent (isSidechain, or agentId alone should a version
+    write it without the flag; turn records never carry agentId without isSidechain), else the main thread."""
+    return (d.get('sessionId'), d.get('agentId')) if d.get('agentId') else thread_key(d)
 
 
 _BASH = [
@@ -1179,18 +1219,35 @@ class Model:
         self.threads = collections.defaultdict(list)
         for c in self.real:
             self.threads[(c['sid'], c['agent'] or 'main')].append(c)
-        ev, comp = collections.defaultdict(list), collections.defaultdict(list)
+        ev, comp, rew = collections.defaultdict(list), collections.defaultdict(list), collections.defaultdict(list)
+        amsg, alist, users = {}, collections.defaultdict(list), []
         for d in self.recs:
             if d.get('type') in ('user', 'attachment') and d['_t'] is not None and d.get('sessionId'):
                 ev[thread_key(d)].append(d['_t'])
+                if d.get('type') == 'user' and d.get('parentUuid') and not d.get('isCompactSummary'):
+                    users.append(d)
             elif d.get('type') == 'system' and d.get('subtype') == 'compact_boundary' and d['_t'] is not None:
-                comp[thread_key(d)].append(d['_t'])
-        for v in list(ev.values()) + list(comp.values()):
+                comp[boundary_key(d)].append(d['_t'])
+            elif d.get('type') == 'assistant' and d['_t'] is not None and d.get('uuid'):
+                mid = (d.get('message') or {}).get('id') or d['uuid']
+                amsg[d['uuid']] = mid
+                alist[thread_key(d)].append((d['_t'], mid))
+        for v in alist.values():
+            v.sort()
+        for d in users:         # a /rewind continues from an older checkpoint: a user record whose parent is not the newest
+            key = thread_key(d)                                 # assistant message before it (the abandoned branch stays in the file)
+            pm = amsg.get(d['parentUuid'])
+            lst = alist.get(key) or []
+            j = bisect.bisect_left(lst, (d['_t'], '')) - 1
+            if pm is not None and j >= 0 and lst[j][1] != pm and any(mid == pm for _, mid in lst[:j]):
+                rew[key].append(d['_t'])
+        for v in list(ev.values()) + list(comp.values()) + list(rew.values()):
             v.sort()
         self.ttl = {}
         for key, t in self.threads.items():
             t.sort(key=lambda c: (c['t0'], c['t1']))
-            e, cp = ev.get(key, []), comp.get(key, [])
+            e, cp, rw = ev.get(key, []), comp.get(key, []), rew.get(key, [])
+            cut = key[0] in self.src.cut                        # already running at the range start: its first call here is not its first
             w1, w5 = sum(c['cw1'] for c in t), sum(c['cw5'] for c in t)
             ttl = 3600 if (w1 >= w5 and w1 > 0) else 300 if w5 > 0 else (3600 if key[1] == 'main' else 300)
             self.ttl[key] = ttl
@@ -1207,7 +1264,10 @@ class Model:
                 # a compaction replaces the conversation, so nothing after it is a re-write; and a call can't
                 # re-write more than it wrote
                 c['compacted'] = bool(prev) and bisect.bisect_right(cp, c['t0']) > bisect.bisect_right(cp, prev['t1'])
-                c['rewritten'] = max(0, min(prev['ctx'] - c['cr'] - c['inp'], c['cw'])) if prev and not c['compacted'] else 0
+                c['rewound'] = bool(prev) and bisect.bisect_right(rw, c['t0']) > bisect.bisect_right(rw, prev['t1'])
+                c['reset'] = c['compacted'] or c['rewound']    # the previous call's context is not this call's starting point
+                c['cut'] = cut
+                c['rewritten'] = max(0, min(prev['ctx'] - c['cr'] - c['inp'], c['cw'])) if prev and not c['reset'] else 0
                 c['miss'] = c['rewritten'] > MISS_MIN
                 prev = c
         self.misses = [c for c in self.real if c['miss']]
@@ -1271,7 +1331,7 @@ class Model:
                        mode=d.get('permissionMode'), uuid=d.get('uuid'), parent=d.get('parentUuid'), side=side,
                        thread=thread_key(d), source=d.get('promptSource'), meta=bool(d.get('isMeta')))
             s = text.lstrip()
-            ps = d.get('promptSource')
+            ps = None if d.get('isCompactSummary') else d.get('promptSource')     # a compaction summary is never a prompt, whatever its source says
             if (ps is None and d.get('sessionId') not in tagged and not side and not rec['meta'] and s
                     and not d.get('isCompactSummary') and not d.get('isVisibleInTranscriptOnly')
                     and not s.startswith(('<', '[Request interrupted', 'Caveat:'))):
@@ -1391,7 +1451,8 @@ class Model:
                      cwd_main=s['cwd'].most_common(1)[0][0] if s['cwd'] else None,
                      first_cmd=first_cmd.get(sid))
             s['peak'] = max((c['ctx'] for c in main), default=0)
-            s['baseline'] = main[0]['ctx'] if main else None
+            s['cut'] = sid in self.src.cut
+            s['baseline'] = main[0]['ctx'] if main and not s['cut'] else None      # a session already running at the range start has no start here
             fp = next((p['text'] for p in self.prompts if p['sid'] == sid and p['text'].strip()), None)
             s['label'] = s['title'] or s['name'] or (clip(fp, 60) if fp else None) or (f'/{s["first_cmd"]}' if s['first_cmd'] else sid[:8])
             if not calls:
@@ -1519,12 +1580,18 @@ class Model:
             lst = sorted(cand.get(key, []), key=lambda x: x[0])
             times = [x[0] for x in lst]
             n = len(calls)
+            nxt = [n] * n                       # for each call, the index of the next compacted call (n: none): a compaction
+            later = n                           # drops everything added before it, so items are re-read only up to there
+            for i in range(n - 1, -1, -1):
+                nxt[i] = later
+                if calls[i]['reset']:
+                    later = i
             for i, c in enumerate(calls):
                 lo = bisect.bisect_right(times, calls[i - 1]['t1']) if i else 0
                 hi = bisect.bisect_right(times, c['t0'])
                 window = lst[lo:hi]
                 rr = self.prices.per_token(c['model'], 'cr', c['pm'])
-                reads = n - i - 1
+                reads = nxt[i] - i - 1
 
                 def add(source, detail, tokens, tu=None):
                     if tokens <= 0:
@@ -1534,12 +1601,19 @@ class Model:
                                            reads=reads, carry=carry, carry_usd=carry * rr, t=c['t0'], tu=tu,
                                            model=c['model'], pm=c['pm']))
                 W = sum(x[3] for x in window)
-                if i == 0:
-                    scale = min(1.0, c['ctx'] / W) if W else 1.0
+                if i == 0 or c['reset']:        # a new context: the first call, or the first after a compaction (the summary's
+                    scale = min(1.0, c['ctx'] / W) if W else 1.0        # own call is not logged, so its size is this call's) or a rewind
                     for x in window:
                         add(x[1], x[2], x[3] * scale, x[4])
-                    add('Start-up baseline (system prompt, tools, CLAUDE.md…)', 'first call of the thread',
-                        max(0, c['ctx'] - W * scale))
+                    rest = max(0, c['ctx'] - W * scale)
+                    if i == 0 and c['cut']:
+                        add("Carried from before the report's range (session already running)", 'first call in the range', rest)
+                    elif i == 0:
+                        add('Start-up baseline (system prompt, tools, CLAUDE.md…)', 'first call of the thread', rest)
+                    elif c['compacted']:
+                        add('After /compact (summary, system prompt, re-read files)', 'first call after a compaction', rest)
+                    else:
+                        add("After /rewind (the checkpoint's context)", 'first call after a rewind', rest)
                     continue
                 p = calls[i - 1]
                 add("Claude's own previous output", 'assistant turn', p['out'])
@@ -2647,7 +2721,7 @@ def ca_miss_traces(m, g):
 # Each scenario re-prices the logged calls as if one habit or setting had been different from the first day.
 # They are theoretical: they assume the same work would still have been done, and several levers overlap.
 
-SUMMARY_TOK = 20_000     # context a /compact leaves behind (the one /compact in these logs left about 17K)
+SUMMARY_TOK = 20_000     # context a /compact leaves behind (compactMetadata.postTokens in these logs: 8–26K)
 SUMMARY_OUT = 5_000      # output tokens to write that summary
 REREAD_TOK = 10_000      # detail re-read after a compaction or a fresh start
 BRIEF_TOK = 5_000        # a short summary pasted into a fresh session
@@ -2741,17 +2815,18 @@ def _sv_compact(m):
     if 'sv_compact' in m.cache:
         return m.cache['sv_compact']
     threads = [t for k, t in m.threads.items() if k[1] == 'main' and len(t) > 1]
+    med = median([s['baseline'] for s in m.sessions.values() if s['baseline']]) or 30_000
     res = []
     for T in COMPACT_AT:
         saved = cost = 0.0
         n = aff = 0
         for t in threads:
-            base = t[0]['ctx']
+            base = med if t[0]['cut'] else t[0]['ctx']       # a session already running at the range start: its first call here is no start
             after = base + SUMMARY_TOK + REREAD_TOK
             sim = t[0]['ctx']
             for i in range(1, len(t)):
                 c, p = t[i], t[i - 1]
-                if c['compacted']:
+                if c['reset']:
                     sim = c['ctx']
                     continue
                 growth = c['ctx'] - p['ctx']
@@ -2789,9 +2864,9 @@ def _ttl_tokens(m, c, tau):
         if c['miss'] and tau > c['ttl'] and not ttl_fixed_miss(m, c) and idle_of(c) <= tau:
             rw = c['rewritten']
             rd, wr, miss, flip = c['cr'] + rw, c['cw'] - rw, False, True
-        elif not c['miss'] and tau < c['ttl'] and idle_of(c) > tau:
-            rd, wr, miss, flip = 0, c['cw'] + c['cr'], True, True
-    return rd, wr, miss, flip
+        elif not c['miss'] and tau < c['ttl'] and idle_of(c) > tau and not c['reset']:
+            rd, wr, miss, flip = 0, c['cw'] + c['cr'], True, True      # not after a compaction: its idle time holds the
+    return rd, wr, miss, flip                                          # unlogged summarising call, which refreshed the prefix
 
 
 def _ttl_price(m, c, tau):
@@ -2974,7 +3049,7 @@ def _sv_fresh(m):
         first = d * w_rate(m, c)
         later, n = 0.0, 0
         for x in m.threads[c['thread']][c['idx'] + 1:]:
-            if x['compacted'] or (x['thread'], x['idx']) in firsts:
+            if x['reset'] or (x['thread'], x['idx']) in firsts:
                 break
             later += d * (w_rate(m, x) if x['miss'] else r_rate(m, x))
             n += 1
@@ -3170,8 +3245,40 @@ def sv4(m, g):
         note='Misses that followed a “computer went to sleep” API error are grouped as their own cause. CX8 traces each one, step by step.')
 
 
+def compactions(m):
+    """The compactions that happened in main threads, each priced from compactMetadata: the summarising call is not in the
+    transcript, so this is an estimate: preTokens read once at the previous call's model (written, when the cache had
+    expired by then) plus postTokens as output. Not part of the logged spend."""
+    if 'compactions' in m.cache:
+        return m.cache['compactions']
+    out = []
+    for d in m.recs:
+        cm = d.get('compactMetadata') if d.get('type') == 'system' and d.get('subtype') == 'compact_boundary' else None
+        if not isinstance(cm, dict) or d['_t'] is None or d.get('isSidechain'):
+            continue
+        t = m.threads.get(boundary_key(d)) or []
+        ends = [c['t1'] for c in t]
+        j = bisect.bisect_right(ends, d['_t']) - 1
+        if j < 0:
+            continue
+        p = t[j]
+        pre, post = cm.get('preTokens') or 0, cm.get('postTokens') or 0
+        idle = d['_t'] - (cm.get('durationMs') or 0) / 1000 - p['t1']
+        stale = idle > p['ttl']
+        usd = pre * (w_rate(m, p) if stale else r_rate(m, p)) + post * m.prices.per_token(p['model'], 'out', p['pm'])
+        out.append(dict(t=d['_t'], sid=d.get('sessionId'), pre=pre, post=post, stale=stale, usd=usd, trigger=cm.get('trigger') or ''))
+    m.cache['compactions'] = out
+    return out
+
+
 def sv5(m, g):
     res = _sv_compact(m)
+    done = compactions(m)
+    had = [kpi('Compactions so far', len(done), 'count',
+               f"{sum(1 for x in done if x['trigger'] == 'manual')} manual · {f_tok(sum(x['pre'] for x in done) / len(done))} → "
+               f"{f_tok(sum(x['post'] for x in done) / len(done))} on average"),
+           kpi('Their estimated cost', r2(sum(x['usd'] for x in done)), 'usd',
+               'reading the context once + the summary; the summarising call is not in the logged spend')] if done else []
     if not res or not any(r['n'] for r in res):
         return card('SV5', 'At what context size should I /compact, and what would it have saved?', 'T P', [],
                     empty='No main thread grew past the smallest threshold.')
@@ -3180,7 +3287,7 @@ def sv5(m, g):
     shown = [r for r in res if r['net'] >= -2 * best['net']] if best['net'] > 0 else res   # keep the optimum readable
     return card('SV5', 'At what context size should I /compact, and what would it have saved?', 'T P', [
         K(kpi('Best threshold', best['T'], 'tokens', f"{best['n']} compactions"),
-          kpi_save(m, 'Net saving', best['net'], f"after {f_usd(best['cost'])} spent compacting")),
+          kpi_save(m, 'Net saving', best['net'], f"after {f_usd(best['cost'])} spent compacting"), *had),
         LINE([int(r['T']) for r in shown], [S('All time', [r2(r['net']) for r in shown], 1),
                                             S('Per 30 days (projected)', [r2(per_month(m, r['net'])) for r in shown], 2)], 'usd', x_kind='num', x_unit='tokens',
              title='Net saving if you had compacted at each threshold' + (' (thresholds that lose much more are in the table)'
@@ -5561,6 +5668,11 @@ def md_config(config):
         L.append(f"- {short(paths[0])}{more}: " + (' · '.join(parts) or 'empty'))
     if not any('statusLine' in json.loads(k) for k in groups):
         L.append('- No statusLine is configured in any of these files.')
+    inst = config.get('installed_hooks') or {}
+    if inst:
+        state = lambda v: 'current' if v.get('current') else 'older than the plugin\'s: apply its optimization again to update it' if v.get('current') is False else 'not a plugin file'
+        L.append(f"Installed hook copies ({config.get('claude_dir') or '~/.claude'}/hooks/claude-usage): "
+                 + '; '.join(f'{n} ({state(v)})' for n, v in sorted(inst.items())))
     mcp = config.get('mcp_servers') or {}
     L.append('MCP servers configured: user scope: ' + (', '.join(f'{k} ({v})' for k, v in (mcp.get('user') or {}).items()) or 'none')
              + ''.join(f"; {short(pth)}: " + ', '.join((d.get('servers') or {}).keys()) for pth, d in (mcp.get('projects') or {}).items())

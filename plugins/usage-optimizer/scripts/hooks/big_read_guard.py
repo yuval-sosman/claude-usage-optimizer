@@ -7,6 +7,7 @@ with offset/limit). Reading the same file whole again goes through, so nothing i
 
   python3 big_read_guard.py [--max-kb 60]
 """
+import hashlib
 import os
 import sys
 
@@ -28,24 +29,32 @@ def main():
     if not path or ti.get('offset') or ti.get('limit') or os.path.splitext(path)[1].lower() in BINARY:
         return
     try:
+        if not os.path.isfile(path):                           # a folder has a size too; Claude Code refuses it anyway
+            return
         size = os.path.getsize(path)
     except OSError:
         return
     if size < max_kb * 1024:
         return
     sid = inp.get('session_id') or 'unknown'
-    st = S.state_get('read-' + sid)
-    seen = st.get('files') or []
-    if path in seen:
-        return
-    if not S.state_put('read-' + sid, {'files': (seen + [path])[-200:]}):
-        return                                             # unrecorded, the second Read would be denied again
+    name = 'read-' + sid + '-' + hashlib.sha1(path.encode('utf-8', 'replace')).hexdigest()[:16]
+    if S.state_get(name):                                      # one file per (session, path): parallel Reads of two big
+        return                                                 # files each record their own, so neither retry is denied
+    if not S.state_put(name, {'path': path}):
+        return                                                 # unrecorded, the second Read would be denied again
+    lines, read, cap = 0, 0, 8 * 1024 * 1024                   # counted on at most 8 MB, then scaled: not a whole log file
     try:
         with open(path, 'rb') as fh:
-            lines = sum(1 for _ in fh)
+            while read < cap:
+                chunk = fh.read(1024 * 1024)
+                if not chunk:
+                    break
+                lines += chunk.count(b'\n')
+                read += len(chunk)
     except OSError:
-        lines = 0
-    reason = (f"{os.path.basename(path)} is {size // 1024} KB ({lines:,} lines, about {S.tok(size / 4)} tokens). Read whole, it "
+        pass
+    about = f"{lines:,} lines" if read >= size or not read else f"about {int(lines * size / read):,} lines"
+    reason = (f"{os.path.basename(path)} is {size // 1024} KB ({about}, about {S.tok(size / 4)} tokens). Read whole, it "
               f"stays in the context and every later request re-reads it. Find the part you need first (Grep, or the "
               f"file's structure), then Read it with offset/limit. If you really need the whole file, read it again and "
               f"it will go through.")

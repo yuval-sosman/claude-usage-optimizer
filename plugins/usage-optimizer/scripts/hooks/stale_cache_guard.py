@@ -4,7 +4,8 @@
 When the session's last API call is older than its cache lifetime and the context is big, sending the next prompt
 writes the whole context to the cache again. This hook blocks that first prompt with the numbers and the options
 (/clear, which costs nothing; /compact, which reads the context once more but leaves only a summary; or simply send again).
-Sending again within --grace seconds goes through.
+Sending again within --grace seconds goes through. Right after /compact (a compact_boundary newer than any call) it stays
+quiet: the old context is gone, and the summary's own call is not in the transcript.
 
   python3 stale_cache_guard.py [--min-context 60000] [--grace 180] [--ttl 3600]
 
@@ -23,15 +24,15 @@ except Exception:       # a missing or broken helper must never break Claude Cod
 
 def main():
     min_context = S.arg('--min-context', 60000)                # only guard contexts at least this big (tokens)
-    grace = S.arg('--grace', 180)                              # seconds during which sending again goes through
+    grace = max(1, S.arg('--grace', 180))                      # seconds during which sending again goes through (0 would block every send)
     ttl = S.arg('--ttl', 0)                                    # cache lifetime in seconds (0: detect from the transcript)
     inp = S.read_stdin()
     prompt = (inp.get('prompt') or '').strip()
-    if not inp.get('transcript_path') or prompt.startswith('/'):
+    if not inp.get('transcript_path') or S.local_command(prompt):      # a skill's slash command does send a request: guarded
         return
     last = S.last_usage(inp['transcript_path'])
-    if not last or last['ctx'] < min_context:
-        return
+    if not last or last['ctx'] < min_context or not last.get('cached', True):   # also right after /compact (ctx 0), and with
+        return                                                                  # caching off (nothing to re-write)
     ttl = ttl or last['ttl']
     idle = time.time() - last['t']
     if idle < ttl:

@@ -22,7 +22,7 @@ runner script can pull the blocks out by ID.
 | G6 | Some fields exist only on newer CLI versions (`message.usage.speed`, `iterations`, `output_tokens_details`, `diagnostics`) | Always use `//0` / `//null` defaults |
 | G7 | **The system prompt text, CLAUDE.md contents and tool JSON schemas are NOT logged** (except the rare `prompt_snapshot` / `deferred_tools_record` attachments) | Use H02 (tokens of the first API call) as the "fixed context" proxy, and H03–H08 for the pieces that are logged |
 | G8 | Dollar cost is **not** logged (the only 2 `cost-state` rows are zeros) | Compute it from tokens × a price table you supply (B16) |
-| G9 | No compaction (`compact_boundary`) records appear in this data yet | Add a check if they show up later |
+| G9 | A `/compact` writes a `{"type":"system","subtype":"compact_boundary"}` record (`compactMetadata`: trigger, preTokens, postTokens, durationMs) and the summary as a user record, but **not** the summarising API call: the next assistant line is the first call after the compact | Anything that takes "the newest assistant line" as the current state must stop at a boundary newer than it (the hooks' `_session.py` does); re-reads of context items stop at the compaction |
 | G10 | Timestamps are ISO UTC with ms (`2026-09-10T10:38:02.346Z`) | `ms` in `$JQDEFS` converts them to epoch ms |
 
 ---

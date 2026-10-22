@@ -6,7 +6,9 @@ entries. Paths use `~`; apply.py expands them and refuses anything outside the h
 `statusLine`, never add a second copy of a hook, skip settings already at the proposed value.
 
 Every entry follows Claude Code's documented best practice ([best-practices.md](best-practices.md)): the report's numbers
-decide whether an entry applies and how big it is, the guidance decides what the change is. That is why compaction is capped
+decide whether an entry applies and how big it is, the guidance decides what the change is. Installed hook copies never follow a
+plugin update, so a fix in a hook reaches the user only through hook-update (below), listed whenever an installed copy differs
+from the file this plugin version ships (config.json's `installed_hooks`). That is why compaction is capped
 at 400K (never under 300K) beside a notice, why effort goes back to the model's default rather than below it, and why a skill
 used rarely is listed by name rather than switched off. validate.py (which assemble runs) refuses the changes that guidance
 rules out: an auto-compact window under 300K, a saved `low` effort, thinking off, a context notice under 100K.
@@ -204,7 +206,17 @@ rules cover pairs the catalog doesn't list:
   - statusline-cache `complements` (the countdown warns before you type; the guard catches it when you don't look).
   - auto-compact-window / context-guard `overlaps` (SV8 is priced at the context sizes you had; compacting shrinks them).
 
-### statusline-cache: see context size and cache warmth all the time
+### hook-update: the installed hook copies are older than this plugin version
+- **When**: config.json's `installed_hooks` has a file (a hook script, `_session.py`, `prices.json` under
+  `~/.claude/hooks/claude-usage/`) whose `current` is false: it differs from the file this plugin version ships. Whatever the
+  savings data says now: the user installed the hook, and a fix shipped for it is not in effect until the copy changes.
+- **Apply**: `write_file` each such file from the plugin (`hooks/<name>`, or `prices.json`; mode 700 for hook scripts).
+  Settings stay as they are.
+- **Saving**: none (it keeps what the user already applied working as intended); omit `savings`.
+- **Manual**: copy the files from the plugin to `~/.claude/hooks/claude-usage/`.
+- **Related**: none (the hooks' own entries are skipped while their hook is installed).
+
+### statusline-cache: see context size and cache warmth all the time (after /compact: how long ago, and the countdown)
 - **When**: no `statusLine` in any settings file (config.json). The docs: "Track context usage continuously with a custom
   status line."
 - **Apply**: `write_file` `~/.claude/hooks/claude-usage/statusline.py` from `hooks/statusline.py` (mode 700); `merge_json`

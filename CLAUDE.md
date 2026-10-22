@@ -29,7 +29,7 @@ counting again. `optimize`, `brainstorm`, `video`, `share`, `company`, `clear` a
 open the report, it runs open.py instead of building.
 
 `docs/CATALOG.md` and `docs/lib.sh` hold the original jq extraction commands; QUESTIONS.md cites them by catalog id (e.g. `[B06]`).
-The engine doesn't use them. The gotchas table at the top of CATALOG.md (G1–G9) still applies to any new counting. The main one:
+The engine doesn't use them. The gotchas table at the top of CATALOG.md (G1–G10) still applies to any new counting. The main one:
 Claude Code writes one line per content block, so assistant lines must be deduplicated on `message.id + requestId`.
 
 ## Data flow
@@ -42,7 +42,9 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
   (paths: scripts/layout.py; layout.migrate() moves an older flat <OUT> into place on the next run)
   data/metrics.json   every card, per scope (all projects, repo groups, dirs) + meta (generated, range, notes, claude_dir)
   data/digest.md      the same, compact: what the skills read (never the transcripts)
-  data/config.json    current settings/hooks/MCP/skills, secrets removed
+  data/config.json    current settings/hooks/MCP/skills, secrets removed; installed_hooks: each copy under <claude dir>/hooks/claude-usage
+                      and whether it equals the file this plugin version ships (when one doesn't, candidates.py lists hook-update,
+                      whose apply re-copies the outdated files)
   data/candidates.json  scripts/candidates.py (called at the end of a full run; reads only metrics.json + config.json):
                       the optimize catalog evaluated in code (complete, validated optimization drafts, skipped entries
                       with reasons, judgment calls with their facts, links) and one savings bundle per lever for insights
@@ -237,6 +239,23 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
 - **Across scopes:** `where_used()` runs once on all projects in `build()` and reaches every scope as `g.where`: what a
   user-level setting loads everywhere but only some projects use (SV3's "used in some projects" table, `item_origin()`'s
   advice, which never says "switch it off in each project").
+- **Resets and range cuts:** `_threads()` marks each call `compacted` (a `compact_boundary` between it and the previous call),
+  `rewound` (a `/rewind`: a user record whose `parentUuid` is an older assistant message than the newest before it, so the
+  file still holds the abandoned branch) and `reset` (either): the previous call's context is not this call's starting
+  point, so `rewritten` is 0, `_items()` starts a new context there ("After /compact …" / "After /rewind …"), and the
+  replays (`_sv_compact`, `_ttl_tokens`, `_sv_fresh`) restart or stop at it. `Source.cut` holds the sessions whose records
+  before `--since` were dropped; their calls and sessions carry `cut`, their `baseline` is None (so CX11, SV8's base and
+  CX5 leave them out), `_sv_compact` starts them at the median baseline, and `_items()` labels their first call "Carried
+  from before the report's range". `compactions(m)` prices the compactions that happened from `compactMetadata` (SV5's
+  "Compactions so far" tiles; an estimate, not in the logged spend). `_session.scan()` applies the same rewind rule to the newest user record, so the status line and the guards go by
+  the checkpoint's context once that record is in the file; the one prompt that starts the rewound branch is written
+  after UserPromptSubmit runs, so that prompt alone is
+  still judged on the abandoned branch (no record marks a rewind before it). Checked on a real one: `claude -p …
+  --resume <sid> --resume-session-at <assistant uuid>` is a headless /rewind; a UserPromptSubmit hook that copies the
+  transcript saw it end at the previous turn's `last-prompt`, `mode`, `cost-state` and `queue-operation` records, none
+  naming the branch target, while the helper gave the checkpoint's call as soon as the prompt record existed. CX5 reads
+  CLAUDE.md and the other memory files from disk at run time, so two runs that straddle an edit to one of them differ
+  in CX5 alone: compare runs with nothing edited in between.
 - **Stop hooks:** `_post_stop()` charges a Stop hook only the calls that descend from its `stop_hook_summary` record
   (`parentUuid`) before a `new_input()`; EX5's "What Stop hooks set off" and SV2's lever both read it. Don't go back to a
   time window: work started by another input (another session's message, a `/loop` wake-up) would be charged to the hook.
@@ -364,9 +383,23 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
 **Hooks (`scripts/hooks/`):**
 - Hooks must fail open: never block on an error. That includes `import _session` (wrapped in try; a missing helper makes the hook a no-op).
 - apply.py installs `_session.py` and `prices.json` only beside hooks that import `_session`.
+- `last_usage()` returns the newest call (`kind` 'call') or, when a `compact_boundary` system line is newer than every
+  call, the boundary (`kind` 'compacted', `t` the time the compaction finished, `ctx` 0): `/compact` doesn't write the
+  summary's own call as an assistant line, so the newest call found would otherwise be the one before the compact (the
+  old, big context). With ctx 0 both guards do nothing, and the status line shows "compacted … ago" and the cache
+  countdown from `t` until the next call. It returns None with no call or boundary, or an unreadable timestamp: every
+  caller must handle None. `tail()` splits on `\n` bytes only (str.splitlines() would cut a record at a raw U+2028 or
+  NEL, and the newest call would be lost); `scan()` parses each candidate line once and skips anything that is not a JSON
+  object. docs/checks/hooks_check.py runs the hooks on synthetic transcripts for all of this.
 - Keep `_session.py`'s `canon_model`/price fallback in step with the engine's, `_aliases` and `_modifiers` included (the
   hooks pass the call from `last_usage()` to `price()`; they don't read `modelOverrides`).
-- Changes reach users only when they re-apply the optimization.
+- Changes reach users only through `hook-update`: the installed copies never follow the plugin. The engine records each
+  installed copy in config.json's `installed_hooks` (current or not); while one differs, candidates.py drafts
+  `hook-update` (`Setup.stale_copies()`), whose steps re-copy those files and nothing else; `apply.py check` prints
+  `update` for a listed optimization whose only changed files are bundled copies, and `outdated` for an applied one
+  whose copies differ while the list has no hook-update yet (run the report first); the optimize skill puts hook-update
+  first in the reply. The route is never "undo, then apply": after an undo the report no longer lists the hook, and
+  `apply <id>` then says so.
 - Hooks run on every Read, prompt or status-line refresh, so keep them cheap (~25 ms, most of it Python starting):
   no argparse (`S.arg()`), imports only where needed, and `last_usage()` reads the transcript's last 64 KB first (growing
   to 3 MB at most). Measure against the old hook with the same payloads before and after a change.
@@ -378,6 +411,9 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
   digest's setup lines show installed hooks in the plain form too (`md_config()` imports `plain_command`), so the
   arguments aren't lost to its 160-character clip.
 - A guard blocks or denies only when `S.state_put()` could record the warning, so the retry always goes through.
+- The guards skip only Claude Code's own commands (`_session.LOCAL`, `local_command()`): a skill or custom command
+  (`/name:skill`, `/my-command`) sends a request and is guarded like a typed prompt. A call with no cache reads or writes
+  (`cached` False: caching off) gets no pause and no cache line.
 - Undoing an optimization never restores an older `_session.py` under hooks that other applied optimizations still use.
 
 **Paths or portability:**

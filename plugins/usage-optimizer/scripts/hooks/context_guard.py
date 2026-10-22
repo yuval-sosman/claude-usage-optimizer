@@ -19,14 +19,14 @@ def main():
     threshold = S.arg('--threshold', 150000)
     step = S.arg('--step', 50000)                              # repeat the notice every this many more tokens
     inp = S.read_stdin()
-    if not inp.get('transcript_path') or (inp.get('prompt') or '').lstrip().startswith('/'):
+    if not inp.get('transcript_path') or S.local_command(inp.get('prompt')):
         return
     last = S.last_usage(inp['transcript_path'])
     if not last:
         return
     sid = inp.get('session_id') or 'unknown'
     st = S.state_get('ctx-' + sid)
-    if last['ctx'] < threshold:
+    if last['ctx'] < threshold:                                # ctx is 0 right after /compact: the old context is gone
         if st:
             S.state_put('ctx-' + sid, {})                     # back under the threshold (/compact, /clear): start over
         return

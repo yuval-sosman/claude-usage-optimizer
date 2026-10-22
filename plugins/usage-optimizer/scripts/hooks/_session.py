@@ -27,6 +27,22 @@ def arg(name, default):
     return v
 
 
+LOCAL = {'add-dir', 'agents', 'artifacts', 'bashes', 'bug', 'clear', 'color', 'compact', 'config', 'context', 'cost', 'doctor',
+         'effort', 'exit', 'export', 'fast', 'feedback', 'fleet', 'goal', 'help', 'hooks', 'ide', 'keybindings', 'login', 'logout', 'mcp',
+         'memory', 'model', 'output-style', 'permissions', 'plugin', 'plugins', 'privacy-settings', 'quit', 'release-notes', 'resume',
+         'rewind', 'skills', 'statusline', 'stats', 'status', 'tasks', 'terminal-setup', 'theme', 'upgrade', 'usage', 'vim', 'workflows'}
+
+
+def local_command(prompt):
+    """Whether a prompt is one of Claude Code's own commands that send no request (or /compact and /clear, which the guards
+    suggest): nothing to guard. A skill or custom command (/name:skill, /my-command) does send a request and is guarded."""
+    s = (prompt or '').strip()
+    if not s.startswith('/'):
+        return False
+    name = s[1:].split(None, 1)[0].lower() if s[1:].strip() else ''
+    return ':' not in name and name in LOCAL
+
+
 def read_stdin():
     import sys
     try:
@@ -36,9 +52,15 @@ def read_stdin():
 
 
 def parse_ts(s):
+    """An ISO timestamp (any number of fraction digits, Z or an offset) or an epoch number (s or ms) as epoch seconds."""
     import datetime as dt
+    import re
+    if isinstance(s, (int, float)) and not isinstance(s, bool):
+        return float(s) / 1000 if s > 1e11 else float(s)
     try:
-        return dt.datetime.fromisoformat(s.replace('Z', '+00:00')).timestamp()
+        s = re.sub(r'(\.\d{6})\d+', r'\1', str(s).strip().replace('Z', '+00:00'))      # 3.8–3.10 take 3 or 6 digits only
+        s = re.sub(r'([+-]\d{2})(\d{2})$', r'\1:\2', s)                                 # +0000 → +00:00
+        return dt.datetime.fromisoformat(s).timestamp()
     except Exception:
         return None
 
@@ -47,8 +69,12 @@ def last_usage(transcript):
     """The newest main-thread API call in the transcript: its end time, context size, model and cache lifetime.
 
     Scans back from the end of the file (at most TAIL bytes) until it has the newest call and a cache write to tell the
-    lifetime by, which is usually within the first 64 KB read."""
-    st = {'last': None, 'w1': 0, 'w5': 0}
+    lifetime by, which is usually within the first 64 KB read. After a /compact, until the next call, the result is the
+    boundary instead: kind 'compacted', t the time the compaction finished (the cached prefix's clock restarted then), and
+    ctx 0, since the context the summary leaves is not in the transcript (a guard that compares ctx with a threshold does
+    nothing, which is right: the old context is gone). A call has kind 'call'. After a /rewind (the newest user record
+    points at an older assistant message), the checkpoint's call, with the newest call's time."""
+    st = {'last': None, 'first': None, 'parent': None, 'w1': 0, 'w5': 0}
     batches = tail(transcript)
     while True:
         try:
@@ -57,9 +83,14 @@ def last_usage(transcript):
             return None
         if lines is None or scan(lines, st):
             break
-    last, w1, w5 = st['last'], st['w1'], st['w5']
-    if last is None or last['t'] is None:
+    last, w1, w5 = st['last'] or st['first'], st['w1'], st['w5']     # a parent never found in the tail: the newest call
+    if last is None:
         return None
+    if last['t'] is None:                      # an unreadable timestamp: the file was last written at or after the call
+        try:
+            last['t'] = os.path.getmtime(transcript)
+        except OSError:
+            return None
     last['ttl'] = 3600 if w1 >= w5 and w1 > 0 else 300 if w5 > 0 else 3600
     return last
 
@@ -79,34 +110,68 @@ def tail(path):
             if pos > stop:
                 cut = buf.find(b'\n')
                 carry, buf = (buf, b'') if cut < 0 else (buf[:cut], buf[cut + 1:])
-            yield buf.decode('utf-8', 'replace').splitlines()
-            if pos == stop:
+            yield [b.decode('utf-8', 'replace') for b in buf.split(b'\n')]     # on \n only: str.splitlines() would
+            if pos == stop:                                                      # also cut a record at a raw U+2028/NEL
                 return
 
 
 def scan(lines, st):
-    """Go on from st through lines, newest first: True once it has the newest call and a cache write at or before it."""
+    """Go on from st through lines, newest first: True once it has the newest call (or, with no call after it, the newest
+    /compact boundary: the summary's own call is not in the transcript) and a cache write at or before it to tell the
+    lifetime by. One parse per line; anything that is not a JSON object is skipped.
+
+    A /rewind leaves the abandoned branch in the file: the newest user record then points (parentUuid) at an assistant
+    message older than the newest one. The call to go by is that older message's (the checkpoint's context), with the
+    newest call's time (every call since read and so refreshed the cached prefix)."""
     for ln in reversed(lines):
-        if '"assistant"' not in ln or '"usage"' not in ln:
+        want_user = st['parent'] is None and st['first'] is None and '"user"' in ln and '"parentUuid"' in ln
+        boundary = st['last'] is None and st['first'] is None and '"compact_boundary"' in ln
+        if not (want_user or boundary or ('"assistant"' in ln and '"usage"' in ln)):
             continue
         try:
             d = json.loads(ln)
-        except ValueError:
+        except Exception:                      # a cut line, or one nested past the recursion limit
             continue
-        if d.get('type') != 'assistant' or d.get('isSidechain'):
+        if not isinstance(d, dict) or d.get('isSidechain'):
+            continue
+        typ = d.get('type')
+        if typ == 'system' and d.get('agentId'):   # a subagent's boundary written without isSidechain: not this thread's
+            continue
+        if typ == 'user':
+            if want_user:                      # the newest user record, newer than every call: a prompt, a tool result…
+                p = d.get('parentUuid')
+                st['parent'] = p if isinstance(p, str) and p else False
+            continue
+        if typ == 'system':
+            if boundary and d.get('subtype') == 'compact_boundary':
+                st['last'] = dict(kind='compacted', t=parse_ts(d.get('timestamp') or ''), model='', ctx=0, geo=None, speed=None)
+            continue
+        if typ != 'assistant':
             continue
         m = d.get('message') or {}
         u = m.get('usage') or {}
-        if not u or m.get('model') == '<synthetic>':
+        if not isinstance(u, dict) or not u or m.get('model') == '<synthetic>':
             continue
         cc = u.get('cache_creation') or {}
-        st['w1'] += cc.get('ephemeral_1h_input_tokens') or 0
-        st['w5'] += cc.get('ephemeral_5m_input_tokens') or 0
-        if st['last'] is None:
-            st['last'] = dict(t=parse_ts(d.get('timestamp') or ''), model=m.get('model') or '',
-                              ctx=(u.get('input_tokens') or 0) + (u.get('cache_read_input_tokens') or 0) + (u.get('cache_creation_input_tokens') or 0),
-                              geo=u.get('inference_geo'), speed=u.get('speed'))
-        if st['w1'] + st['w5'] > 0 and st['last'] is not None:
+        w1, w5 = cc.get('ephemeral_1h_input_tokens'), cc.get('ephemeral_5m_input_tokens')
+        if w1 is None and w5 is None:          # no breakdown (an older CLI, a gateway): a 5-minute write, as the engine counts it
+            w1, w5 = 0, u.get('cache_creation_input_tokens')
+        st['w1'] += w1 or 0
+        st['w5'] += w5 or 0
+        cd = dict(kind='call', t=parse_ts(d.get('timestamp') or ''), model=m.get('model') or '',
+                  ctx=(u.get('input_tokens') or 0) + (u.get('cache_read_input_tokens') or 0) + (u.get('cache_creation_input_tokens') or 0),
+                  geo=u.get('inference_geo'), speed=u.get('speed'), mid=m.get('id') or d.get('uuid') or '',
+                  cached=bool((u.get('cache_read_input_tokens') or 0) + (u.get('cache_creation_input_tokens') or 0)))   # False: caching off
+        if st['first'] is None:
+            st['first'] = cd
+        if st['parent']:                       # the newest user record points at a call: this one?
+            if d.get('uuid') == st['parent']:
+                if st['last'] is None:         # an older message than the newest: a /rewind to it
+                    st['last'] = dict(cd, t=st['first']['t']) if cd['mid'] != st['first']['mid'] else st['first']
+                st['parent'] = False
+        elif st['last'] is None:
+            st['last'] = cd
+        if st['last'] is not None and st['w1'] + st['w5'] > 0:
             return True
     return False
 
@@ -201,17 +266,20 @@ def state_put(name, value):
     """Whether the state was written. A guard blocks only when it was: otherwise the retry it promises could never pass."""
     try:
         os.makedirs(STATE, mode=0o700, exist_ok=True)           # file paths and context sizes: yours only
-        with open(os.path.join(STATE, name + '.json'), 'w', encoding='utf-8') as fh:
+        path = os.path.join(STATE, name + '.json')
+        tmp = f'{path}.{os.getpid()}.tmp'                       # written whole, then moved: a hook running at the same
+        with open(tmp, 'w', encoding='utf-8') as fh:            # time (parallel tool calls) never reads a torn file
             json.dump(value, fh)
+        os.replace(tmp, path)
     except Exception:
         return False
     try:
         mark = os.path.join(STATE, '.swept')             # keep the folder small (swept at most once an hour):
         if abs(time.time() - (os.path.getmtime(mark) if os.path.exists(mark) else 0)) > 3600:   # abs: the clock may go back
             open(mark, 'w').close()
-            for f in os.listdir(STATE):                  # drop state older than two days
+            for f in os.listdir(STATE):                  # drop this module's state older than two days (nothing else)
                 p = os.path.join(STATE, f)
-                if f != '.swept' and time.time() - os.path.getmtime(p) > 2 * 86400:
+                if (f.endswith('.json') or f.endswith('.tmp')) and os.path.isfile(p) and time.time() - os.path.getmtime(p) > 2 * 86400:
                     os.remove(p)
     except Exception:
         pass

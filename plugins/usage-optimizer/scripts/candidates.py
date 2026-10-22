@@ -197,6 +197,7 @@ class Setup:
         self.files = dict(user)
         for proj in (config.get('project_settings') or {}).values():
             self.files.update(proj or {})
+        self.installed = config.get('installed_hooks') or {}      # the hook copies under ~/.claude/hooks/claude-usage
 
     def get(self, *path):
         cur = self.user
@@ -219,6 +220,11 @@ class Setup:
 
     def has_hook(self, script):
         return any(script in cmd for _, _, _, cmd in self.hooks())
+
+    def stale_copies(self):
+        """Installed hook copies (under ~/.claude/hooks/claude-usage: hook scripts, _session.py, prices.json) that differ from the
+        file this plugin version ships (config.json's installed_hooks). A copy changes only when applied again: hook-update."""
+        return sorted(n for n, x in self.installed.items() if isinstance(x, dict) and x.get('current') is False)
 
     def expand(self, cmd):
         """A hook command with ~, $HOME and ${HOME} spelled out as this report's home folder."""
@@ -1061,7 +1067,8 @@ def stale_cache_guard(R, S, v):
                      f"Each return re-wrote the whole context ({usd(brk['u'])} of misses, SV4), and every later call kept re-reading it." if brk else ''),
             f'Installs stale_cache_guard.py as a UserPromptSubmit hook. When the last call is older than the cache lifetime (read from the '
             f'transcript) and the context is over {size(minc)}, it holds that one prompt, shows what continuing will re-write, and suggests '
-            '/clear with a handoff or /compact. Sending the same prompt again within 3 minutes goes through.',
+            '/clear with a handoff or /compact. Sending the same prompt again within 3 minutes goes through. Right after /compact it '
+            'stays quiet: the old context is gone.',
             R.questions('SV8', 'SV4', 'CX8', 'ME3'), 'one-click', 'low',
             hook_manual('stale_cache_guard.py', 'UserPromptSubmit', cmd)[:2]
             + ['Or, without the hook: before a long break, /compact while the cache is still warm (cheap then), or ask for a short handoff '
@@ -1076,6 +1083,40 @@ def stale_cache_guard(R, S, v):
     return draft(basis + '; no stale_cache_guard.py hook yet.', o, ['fresh', 'misses'])
 
 
+HOOK_USERS = {'stale_cache_guard.py': 'the stale-cache guard', 'context_guard.py': 'the context notice', 'big_read_guard.py': 'the big-read guard',
+              'statusline.py': 'the status line', 'keep_awake.sh': 'keep-awake'}
+
+
+@entry('hook-update')
+def hook_update(R, S, v):
+    """A hook copy installed under ~/.claude/hooks/claude-usage (a hook script, _session.py or prices.json) differs from the file
+    this plugin version ships (config.json's installed_hooks): the copies never follow a plugin update, so a fix in a hook reaches
+    the user only through this entry, whatever the savings data says now."""
+    stale = S.stale_copies()
+    if not stale:
+        return skip('every installed hook copy equals the file this plugin version ships' if S.installed else 'no hook copies are installed')
+    using = [HOOK_USERS[h] for h in HOOK_USERS if (S.has_statusline() if h == 'statusline.py' else S.has_hook(h))
+             and (h in stale or (h.endswith('.py') and ({'_session.py', 'prices.json'} & set(stale))))]
+    steps = []
+    for n in stale:
+        st = {'action': 'write_file', 'path': f'{HOOKS}/{n}', 'source': 'prices.json' if n == 'prices.json' else f'hooks/{n}'}
+        if n.endswith(('.py', '.sh')) and n != '_session.py':
+            st['mode'] = '700'
+        steps.append(st)
+    o = opt('hook-update', 'Update the installed hook copies to this plugin version', 'reliability', 'hook',
+            f"{and_list(stale)} under ~/.claude/hooks/claude-usage {'differs' if len(stale) == 1 else 'differ'} from the file this plugin "
+            f"version ships" + (f", and {and_list(using)} {'runs' if len(using) == 1 else 'run'} from {'it' if len(stale) == 1 else 'them'}" if using else '')
+            + '. Hooks run from these copies, which a plugin update never touches, so a fix shipped for a hook is not in effect yet.',
+            f"Copies {and_list(stale)} from this plugin version over the installed {'file' if len(stale) == 1 else 'files'}; settings stay as they are. "
+            'The hooks pick the new copies up on their next run.',
+            R.questions('EX5'), 'one-click', 'low',
+            [f'Copy {and_list(stale)} from the usage-optimizer plugin (scripts/hooks/, prices.json from scripts/) to {HOOKS}/.'],
+            f'apply.py undo hook-update (a copy another applied optimization still uses stays in place).', docs('hooks'),
+            tradeoffs='None: the same hooks, at the version you installed the plugin at.', steps=steps,
+            apply_summary=f"replace {and_list(stale)} under {HOOKS}/ with this plugin version's")
+    return draft(f"config.json: installed {and_list(stale)} {'differs' if len(stale) == 1 else 'differ'} from the plugin's files.", o)
+
+
 @entry('statusline-cache')
 def statusline_cache(R, S, v):
     """No statusLine in any settings file."""
@@ -1087,7 +1128,7 @@ def statusline_cache(R, S, v):
             "No status line is configured, so you can't see how big a session is or whether its cache is still warm before you type"
             + (f'; {len(brk)} of your cache misses were returns after {span(gaps[0])} to {span(gaps[-1])} away (CX8).' if len(gaps) > 1 else '.'),
             'Installs statusline.py as your status line: model · context size · cache warm Xm left, or cold and what the next message '
-            're-writes · session cost.',
+            're-writes · session cost (right after /compact: how long ago, and the cache countdown).',
             R.questions('CX8', 'CX4', 'CX1'), 'one-click', 'low',
             [f'Copy scripts/hooks/statusline.py (plus _session.py and prices.json) to {HOOKS}/.',
              f'In {SETTINGS} add "statusLine": {{"type": "command", "command": "python3 \\"$HOME/.claude/hooks/claude-usage/statusline.py\\""}}.'],
