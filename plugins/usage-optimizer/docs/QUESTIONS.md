@@ -119,6 +119,9 @@ Context per call for the four largest sessions (main thread).
 **CX3. What is my context made of, and what does each part cost?** `T P S`
 Added tokens by source (start-up baseline; tool results per tool; my prompts; Claude's own output; injected attachments such as hook context, skill listings, file-change notices, reminders, MCP and agent listings), and what re-reading each source cost over the rest of its session (carry cost). One vertical bar chart: tokens added on the left axis, re-read cost on the right. The insight names the costliest single item.
 - Why: a big early tool output is paid for again on every later call. This is the most direct way to see what's worth trimming.
+- How: each item is charged for the calls that follow it in its thread up to the next compaction (`compact_boundary`), which drops
+  everything added before it; the first call after a compaction starts a new context, split like a thread's first call, with the
+  rest as "After /compact (summary, system prompt, re-read files)".
 - Check: ✓ measured from context growth: summed re-reads (644M) match the logged cache reads (627M). Largest sources: the start-up baseline (~31%), Claude's own earlier output (~23%), Bash results (~20%), Read results (~11%). Costliest single item: a 33K-token file read, re-read 96 times.
 
 **CX4. How big is my context when I `/clear`?** `T P`
@@ -404,6 +407,8 @@ Per item: tokens per session, its share of the saving, where it comes from (buil
   - The idle time is the time from the end of the previous response to the request; the cache clock runs from there. Measured start-to-start, 7 subagent hits seemed to come after more than 5 minutes; measured from the response's end, none do.
   - The replay is anchored. A longer lifetime than the actual one never adds a miss and a shorter one never removes one, so only the other direction is predicted: a hit becomes a miss when idle > τ, and an expiry miss becomes a hit when idle ≤ τ.
   - A miss from a changed prompt, or one within 5 minutes (retries, parallel requests), stays a miss under both lifetimes.
+  - The first call after a compaction is never flipped to a miss: its idle time holds the summarising call, which is not logged
+    and refreshed the cached prefix, and it writes a new context whatever the lifetime.
   - A simulated miss rewrites the whole context.
   - Decomposition: 5 min − 1 hour = the rewrites of pauses of 5–60 min − the 1-hour write premium. Break-even pauses per 100 calls = pauses × premium / (penalty × calls).
   - Tried and rejected:
@@ -448,7 +453,7 @@ One line chart in tokens: main-thread context per API call (what each call re-re
 | "Does a big context slow Claude down?" | Tested: median tokens/s is flat across <100k, 100–200k and >200k for every model. |
 | Cost of model or effort switches, as its own question | 0 mid-thread model switches, and the one effort switch kept its cache. Kept as a cause row in CX8. |
 | Remote Control usage | Every session registers a bridge, and the logs don't show whether a remote client was attached. |
-| Compaction cost | No compaction records yet (peak context 381k in a 1M window). Add it when `compact_boundary` appears. |
+| Compaction cost | `compact_boundary` records exist, but the summarising call is not logged as an assistant line, so its cost (reading the whole context once, writing the summary) can only be estimated from `compactMetadata` (preTokens, postTokens). SV5 uses a fixed summary size instead. |
 | "Does plan mode or a longer prompt give cheaper or better results?" | Confounded: harder tasks get more planning, and there's no quality label to control for it. |
 | Quality comparison of models (e.g. your Opus vs Sonnet implementer race) | Needs judgment, not counting. |
 | Exact size of the system prompt, CLAUDE.md and tool schemas | Not logged as their own items. CX5 estimates them from the `prompt_snapshot` Claude Code logs and the files on disk, scaled to the measured first request. |

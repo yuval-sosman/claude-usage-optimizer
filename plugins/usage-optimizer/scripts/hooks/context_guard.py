@@ -26,7 +26,7 @@ def main():
         return
     sid = inp.get('session_id') or 'unknown'
     st = S.state_get('ctx-' + sid)
-    if last['ctx'] < threshold:
+    if last['ctx'] < threshold:                                # ctx is 0 right after /compact: the old context is gone
         if st:
             S.state_put('ctx-' + sid, {})                     # back under the threshold (/compact, /clear): start over
         return

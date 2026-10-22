@@ -456,9 +456,32 @@ def failure(e):
     return f'{type(e).__name__}: {e}'
 
 
+def drifted(rec):
+    """The bundled files this applied record installed or relies on (hooks, _session.py, prices.json) whose installed copy
+    no longer equals the plugin's file of that name: a newer plugin shipped them, and only applying again updates a copy."""
+    names = []
+    paths = [f.get('path') for f in rec.get('files') or [] if f.get('kind') == 'file'] + list(rec.get('uses') or [])
+    for p in paths:
+        base = os.path.basename(p or '')
+        src = 'prices.json' if base == 'prices.json' else 'hooks/' + base
+        if src not in policy.bundled_sources() or base in names:
+            continue
+        try:
+            with open(os.path.join(HERE, src), encoding='utf-8') as fh:
+                mine = fh.read()
+        except OSError:
+            continue
+        cur = read_text(p)
+        if cur is not None and cur.replace('\r\n', '\n') != mine.replace('\r\n', '\n'):
+            names.append(base)
+    return names
+
+
 def do_check(opts, out):
     """Preview every optimization that has apply steps (nothing is written): one line each, whether it would apply
-    cleanly and what it would change, then the warnings `show` gives about related ones. Returns the number of errors."""
+    cleanly and what it would change, then the warnings `show` gives about related ones; then, for an applied optimization
+    the report no longer lists (an installed hook) whose installed files differ from the plugin's, an `outdated` line.
+    Returns the number of errors."""
     state = load_state(out)
     tally = {}
     for o in opts.values():
@@ -477,11 +500,23 @@ def do_check(opts, out):
             status, what = ('applied', '') if oid in state else ('in place', 'already set up this way: nothing to change')
         else:
             status = 'update' if oid in state else 'ok'
-            what = ('applied before with different content; applying again replaces it: ' if oid in state else '') + what
+            if oid in state:
+                changed = [os.path.basename(p) for st, p, b, a, _ in steps if b != a]
+                copies = [n for n in changed if ('prices.json' if n == 'prices.json' else 'hooks/' + n) in policy.bundled_sources()]
+                what = ((f"the plugin ships a newer {', '.join(copies)}; applying again updates the installed copy: "
+                        if copies and len(copies) == len(changed) else 'applied before with different content; applying again replaces it: ') + what)
         tally[status] = tally.get(status, 0) + 1
         print(f'  {status:<9} {oid:<34} {what}'.rstrip())
         for w in relation_warnings(o, opts, state, out):
             print(f'            {w}')
+    for oid, rec in sorted(state.items()) if 'hook-update' not in opts else []:      # listed: its own line says it
+        if oid == ORIGINS or oid in opts or not isinstance(rec, dict):
+            continue
+        d = drifted(rec)
+        if d:
+            tally['outdated'] = tally.get('outdated', 0) + 1
+            print(f"  {'outdated':<9} {oid:<34} the plugin ships a newer {', '.join(d)} than the installed copy; run "
+                  f"/usage-optimizer:report (it lists hook-update), then {own_command('apply', 'hook-update', out)}")
     print('  ' + (', '.join(f'{n} {s}' for s, n in tally.items()) or 'No optimization has apply steps.'))
     return tally.get('ERROR', 0)
 
@@ -1013,6 +1048,10 @@ def main(argv=None):
                     print(f"  {'':<34} {REL[r['relation']]} {r['id']}")
         return
     if not a.id or a.id not in opts:
+        if a.id in state:
+            raise SystemExit(f"{a.id} is applied, and the report leaves an installed hook out of optimizations.json. To update its copies "
+                             f"to this plugin version, run /usage-optimizer:report (it lists hook-update when a copy differs), then "
+                             f"{own_command('apply', 'hook-update', out)}. To remove it: {own_command('undo', a.id, out)}.")
         raise SystemExit(f"Unknown id {a.id!r}. Known: {', '.join(opts)}")
     if a.cmd == 'show':
         show(opts[a.id], out)

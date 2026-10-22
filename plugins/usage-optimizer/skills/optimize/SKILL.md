@@ -203,12 +203,18 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/usage_report.py" --render --out "<OUT>" -
 ```
 
 `check` previews every one-click optimization against the user's current files in one call, one line each. `ok` (with
-the change it would make), `in place` (the setup already has it), `applied` (applied earlier with apply.py) and `update`
-(applied earlier, this version differs) are all fine: just make sure each describes the change you intended. An `ERROR`
-line needs action: when it is about the optimization (a path, a step, a value), fix the notes and assemble again; when
-it names one of the user's own files (e.g. "is not valid JSON: fix it by hand first"), leave the notes and tell the user
-in the reply. Relation warnings describe what the user already applied; mention them in the reply, don't drop items
-because of them.
+the change it would make), `in place` (the setup already has it) and `applied` (applied earlier with apply.py) are fine:
+just make sure each describes the change you intended. An `update` line means the user applied this optimization earlier
+and this version differs; when the line says the plugin ships a newer hook file (`_session.py`, a hook script,
+`prices.json`), a fix shipped for a hook the user runs, and the installed copy only changes when they apply again: put
+that optimization in the reply with its apply command, and say the hook keeps running the old copy until then. The
+`hook-update` optimization (listed whenever an installed copy differs from the plugin's file) is that case for every
+installed hook at once: always put it in the reply, first among the one-click items, with its apply command. An
+`outdated` line names an applied optimization whose copies differ although hook-update is not in the list (the list is
+older than the plugin): tell the user to run /usage-optimizer:report and then apply hook-update. An `ERROR` line needs
+action: when it is about the optimization (a path, a step, a value), fix the notes and assemble again; when it names one
+of the user's own files (e.g. "is not valid JSON: fix it by hand first"), leave the notes and tell the user in the reply.
+Relation warnings describe what the user already applied; mention them in the reply, don't drop items because of them.
 
 ## 5. Reply
 

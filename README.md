@@ -307,7 +307,8 @@ The tab shows how optimizations interact:
 
 `apply.py` warns before you apply one whose alternative is already applied.
 
-Hooks it can install (copied to `~/.claude/hooks/claude-usage/`, so they keep working if the plugin moves or updates):
+Hooks it can install (copied to `~/.claude/hooks/claude-usage/`, so they keep working if the plugin moves or updates; when a
+plugin update ships a newer hook, the report lists a `hook-update` optimization and `apply.py apply hook-update` updates the copies):
 - **Stale-cache guard:** holds the first message into an expired, big session and shows what it would cost.
 - **Context notice:** a line of text once the context passes your break-even size.
 - **Big-read guard:** asks Claude to grep first, then read a range.

@@ -922,6 +922,36 @@ def redact(x, key=''):
     return x
 
 
+def installed_hooks(claude_dir):
+    """The plugin's installed hook copies under <claude dir>/hooks/claude-usage/ (apply.py puts them there), each with
+    whether it equals the file of that name this plugin ships (current; None: the plugin has no such file). An installed
+    copy changes only when its optimization is applied again, so this is how a report tells that a fix shipped."""
+    d = os.path.join(claude_dir, 'hooks', 'claude-usage')
+    out = {}
+    try:
+        names = sorted(os.listdir(d))
+    except OSError:
+        return out
+    for n in names:
+        p = os.path.join(d, n)
+        if not re.fullmatch(r'[A-Za-z0-9_]+\.(?:py|sh|json)', n) or not os.path.isfile(p):
+            continue
+        src = os.path.join(HERE, 'prices.json') if n == 'prices.json' else os.path.join(HERE, 'hooks', n)
+        try:
+            with open(p, 'rb') as fh:
+                mine = fh.read()
+        except OSError:
+            continue
+        try:
+            with open(src, 'rb') as fh:
+                theirs = fh.read()
+            current = mine.replace(b'\r\n', b'\n') == theirs.replace(b'\r\n', b'\n')
+        except OSError:
+            current = None                      # the plugin ships no file of that name
+        out[n] = {'current': current, 'bytes': len(mine)}
+    return out
+
+
 def config_snapshot(src):
     """What the optimize skill needs to know about the current setup; secrets redacted."""
     def settings_view(js):
@@ -972,6 +1002,7 @@ def config_snapshot(src):
             'mcp_servers': src.mcp,
             'installed_plugins': {k: [{kk: vv for kk, vv in (i or {}).items() if kk in ('scope', 'version', 'installPath')}
                                       for i in (v if isinstance(v, list) else [v])] for k, v in src.plugins.items()},
+            'installed_hooks': installed_hooks(src.home),
             'home': USER_HOME, 'claude_dir': tilde(src.home)}
 
 
@@ -1519,12 +1550,18 @@ class Model:
             lst = sorted(cand.get(key, []), key=lambda x: x[0])
             times = [x[0] for x in lst]
             n = len(calls)
+            nxt = [n] * n                       # for each call, the index of the next compacted call (n: none): a compaction
+            later = n                           # drops everything added before it, so items are re-read only up to there
+            for i in range(n - 1, -1, -1):
+                nxt[i] = later
+                if calls[i]['compacted']:
+                    later = i
             for i, c in enumerate(calls):
                 lo = bisect.bisect_right(times, calls[i - 1]['t1']) if i else 0
                 hi = bisect.bisect_right(times, c['t0'])
                 window = lst[lo:hi]
                 rr = self.prices.per_token(c['model'], 'cr', c['pm'])
-                reads = n - i - 1
+                reads = nxt[i] - i - 1
 
                 def add(source, detail, tokens, tu=None):
                     if tokens <= 0:
@@ -1534,12 +1571,14 @@ class Model:
                                            reads=reads, carry=carry, carry_usd=carry * rr, t=c['t0'], tu=tu,
                                            model=c['model'], pm=c['pm']))
                 W = sum(x[3] for x in window)
-                if i == 0:
-                    scale = min(1.0, c['ctx'] / W) if W else 1.0
+                if i == 0 or c['compacted']:    # a new context: the first call, or the first after a compaction (the summary's
+                    scale = min(1.0, c['ctx'] / W) if W else 1.0        # own call is not logged, so its size is this call's)
                     for x in window:
                         add(x[1], x[2], x[3] * scale, x[4])
-                    add('Start-up baseline (system prompt, tools, CLAUDE.md…)', 'first call of the thread',
-                        max(0, c['ctx'] - W * scale))
+                    if i == 0:
+                        add('Start-up baseline (system prompt, tools, CLAUDE.md…)', 'first call of the thread', max(0, c['ctx'] - W * scale))
+                    else:
+                        add('After /compact (summary, system prompt, re-read files)', 'first call after a compaction', max(0, c['ctx'] - W * scale))
                     continue
                 p = calls[i - 1]
                 add("Claude's own previous output", 'assistant turn', p['out'])
@@ -2647,7 +2686,7 @@ def ca_miss_traces(m, g):
 # Each scenario re-prices the logged calls as if one habit or setting had been different from the first day.
 # They are theoretical: they assume the same work would still have been done, and several levers overlap.
 
-SUMMARY_TOK = 20_000     # context a /compact leaves behind (the one /compact in these logs left about 17K)
+SUMMARY_TOK = 20_000     # context a /compact leaves behind (compactMetadata.postTokens in these logs: 8–26K)
 SUMMARY_OUT = 5_000      # output tokens to write that summary
 REREAD_TOK = 10_000      # detail re-read after a compaction or a fresh start
 BRIEF_TOK = 5_000        # a short summary pasted into a fresh session
@@ -2789,9 +2828,9 @@ def _ttl_tokens(m, c, tau):
         if c['miss'] and tau > c['ttl'] and not ttl_fixed_miss(m, c) and idle_of(c) <= tau:
             rw = c['rewritten']
             rd, wr, miss, flip = c['cr'] + rw, c['cw'] - rw, False, True
-        elif not c['miss'] and tau < c['ttl'] and idle_of(c) > tau:
-            rd, wr, miss, flip = 0, c['cw'] + c['cr'], True, True
-    return rd, wr, miss, flip
+        elif not c['miss'] and tau < c['ttl'] and idle_of(c) > tau and not c['compacted']:
+            rd, wr, miss, flip = 0, c['cw'] + c['cr'], True, True      # not after a compaction: its idle time holds the
+    return rd, wr, miss, flip                                          # unlogged summarising call, which refreshed the prefix
 
 
 def _ttl_price(m, c, tau):
@@ -5561,6 +5600,11 @@ def md_config(config):
         L.append(f"- {short(paths[0])}{more}: " + (' · '.join(parts) or 'empty'))
     if not any('statusLine' in json.loads(k) for k in groups):
         L.append('- No statusLine is configured in any of these files.')
+    inst = config.get('installed_hooks') or {}
+    if inst:
+        state = lambda v: 'current' if v.get('current') else 'older than the plugin\'s: apply its optimization again to update it' if v.get('current') is False else 'not a plugin file'
+        L.append(f"Installed hook copies ({config.get('claude_dir') or '~/.claude'}/hooks/claude-usage): "
+                 + '; '.join(f'{n} ({state(v)})' for n, v in sorted(inst.items())))
     mcp = config.get('mcp_servers') or {}
     L.append('MCP servers configured: user scope: ' + (', '.join(f'{k} ({v})' for k, v in (mcp.get('user') or {}).items()) or 'none')
              + ''.join(f"; {short(pth)}: " + ', '.join((d.get('servers') or {}).keys()) for pth, d in (mcp.get('projects') or {}).items())

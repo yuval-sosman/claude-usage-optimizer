@@ -29,7 +29,7 @@ counting again. `optimize`, `brainstorm`, `video`, `share`, `company`, `clear` a
 open the report, it runs open.py instead of building.
 
 `docs/CATALOG.md` and `docs/lib.sh` hold the original jq extraction commands; QUESTIONS.md cites them by catalog id (e.g. `[B06]`).
-The engine doesn't use them. The gotchas table at the top of CATALOG.md (G1–G9) still applies to any new counting. The main one:
+The engine doesn't use them. The gotchas table at the top of CATALOG.md (G1–G10) still applies to any new counting. The main one:
 Claude Code writes one line per content block, so assistant lines must be deduplicated on `message.id + requestId`.
 
 ## Data flow
@@ -42,7 +42,9 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
   (paths: scripts/layout.py; layout.migrate() moves an older flat <OUT> into place on the next run)
   data/metrics.json   every card, per scope (all projects, repo groups, dirs) + meta (generated, range, notes, claude_dir)
   data/digest.md      the same, compact: what the skills read (never the transcripts)
-  data/config.json    current settings/hooks/MCP/skills, secrets removed
+  data/config.json    current settings/hooks/MCP/skills, secrets removed; installed_hooks: each copy under <claude dir>/hooks/claude-usage
+                      and whether it equals the file this plugin version ships (when one doesn't, candidates.py lists hook-update,
+                      whose apply re-copies the outdated files)
   data/candidates.json  scripts/candidates.py (called at the end of a full run; reads only metrics.json + config.json):
                       the optimize catalog evaluated in code (complete, validated optimization drafts, skipped entries
                       with reasons, judgment calls with their facts, links) and one savings bundle per lever for insights
@@ -364,13 +366,23 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
 **Hooks (`scripts/hooks/`):**
 - Hooks must fail open: never block on an error. That includes `import _session` (wrapped in try; a missing helper makes the hook a no-op).
 - apply.py installs `_session.py` and `prices.json` only beside hooks that import `_session`.
-- `last_usage()` returns None when a `compact_boundary` system line is newer than every call: `/compact` doesn't write
-  the summary's own call as an assistant line, so the newest call found would be the one before the compact (the old,
-  big context). The guards then let the first prompt after a compact through and the status line leaves out its context
-  part until the next call. Every caller of `last_usage()` must handle None.
+- `last_usage()` returns the newest call (`kind` 'call') or, when a `compact_boundary` system line is newer than every
+  call, the boundary (`kind` 'compacted', `t` the time the compaction finished, `ctx` 0): `/compact` doesn't write the
+  summary's own call as an assistant line, so the newest call found would otherwise be the one before the compact (the
+  old, big context). With ctx 0 both guards do nothing, and the status line shows "compacted … ago" and the cache
+  countdown from `t` until the next call. It returns None with no call or boundary, or an unreadable timestamp: every
+  caller must handle None. `tail()` splits on `\n` bytes only (str.splitlines() would cut a record at a raw U+2028 or
+  NEL, and the newest call would be lost); `scan()` parses each candidate line once and skips anything that is not a JSON
+  object. docs/checks/hooks_check.py runs the hooks on synthetic transcripts for all of this.
 - Keep `_session.py`'s `canon_model`/price fallback in step with the engine's, `_aliases` and `_modifiers` included (the
   hooks pass the call from `last_usage()` to `price()`; they don't read `modelOverrides`).
-- Changes reach users only when they re-apply the optimization.
+- Changes reach users only through `hook-update`: the installed copies never follow the plugin. The engine records each
+  installed copy in config.json's `installed_hooks` (current or not); while one differs, candidates.py drafts
+  `hook-update` (`Setup.stale_copies()`), whose steps re-copy those files and nothing else; `apply.py check` prints
+  `update` for a listed optimization whose only changed files are bundled copies, and `outdated` for an applied one
+  whose copies differ while the list has no hook-update yet (run the report first); the optimize skill puts hook-update
+  first in the reply. The route is never "undo, then apply": after an undo the report no longer lists the hook, and
+  `apply <id>` then says so.
 - Hooks run on every Read, prompt or status-line refresh, so keep them cheap (~25 ms, most of it Python starting):
   no argparse (`S.arg()`), imports only where needed, and `last_usage()` reads the transcript's last 64 KB first (growing
   to 3 MB at most). Measure against the old hook with the same payloads before and after a change.
