@@ -19,7 +19,7 @@ def main():
     threshold = S.arg('--threshold', 150000)
     step = S.arg('--step', 50000)                              # repeat the notice every this many more tokens
     inp = S.read_stdin()
-    if not inp.get('transcript_path') or (inp.get('prompt') or '').lstrip().startswith('/'):
+    if not inp.get('transcript_path') or S.local_command(inp.get('prompt')):
         return
     last = S.last_usage(inp['transcript_path'])
     if not last:

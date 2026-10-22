@@ -40,7 +40,7 @@ def main():
     left = None
     if pc.get('expires_at'):
         left = pc['expires_at'] - time.time()
-    elif last:
+    elif last and last.get('cached', True):          # with caching off there is no cache to be warm or cold
         left = last['t'] + last['ttl'] - time.time()
     if left is not None:
         if left > 0:

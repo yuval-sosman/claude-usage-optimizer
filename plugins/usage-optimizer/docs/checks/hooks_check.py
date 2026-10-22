@@ -15,6 +15,8 @@ CLAUDE_USAGE_HOOK_STATE) and checks what they say:
   - usage without the cache_creation breakdown: a 5-minute lifetime, like the engine;
   - a /rewind (the newest user record points at an older assistant message): the checkpoint's context, not the
     abandoned branch's; a record pointing at the newest call, or at a user record, changes nothing;
+  - a skill's slash command is guarded, Claude Code's own commands are not; a session with caching off gets no pause
+    and no cache line;
   - the big-read guard: two parallel Reads of two big files each get one deny, the retry of either goes through; a
     folder is never denied.
 Exits 1 on the first failure.
@@ -177,6 +179,17 @@ def main():
                              user(NOW - 100, 'meta', 'x%d' % int(NOW - 210))])
         R.check('a user record whose parent is a user record changes nothing', 'ctx 180K' in R.status(meta), R.status(meta))
 
+        out = R.hook('stale_cache_guard.py', {'prompt': '/usage-optimizer:report last week', 'session_id': 'sid', 'transcript_path': pre}, ['--min-context', '60000'])
+        R.check("a skill's slash command sends a request: guarded", '"block"' in out, out)
+        out = R.hook('stale_cache_guard.py', {'prompt': '/clear', 'session_id': 'sid', 'transcript_path': pre}, ['--min-context', '60000'])
+        out2 = R.hook('stale_cache_guard.py', {'prompt': '/compact keep the plan', 'session_id': 'sid', 'transcript_path': pre}, ['--min-context', '60000'])
+        R.check("Claude Code's own commands (/clear, /compact …) are never paused", out == '' and out2 == '', (out[:30], out2[:30]))
+        c = call(NOW - 2 * 3600, 141000); c['message']['usage'].update(input_tokens=141000, cache_read_input_tokens=0, cache_creation_input_tokens=0, cache_creation={'ephemeral_1h_input_tokens': 0, 'ephemeral_5m_input_tokens': 0})
+        off = R.transcript([user(NOW - 2 * 3600 - 60, 'go'), c])
+        out = R.guard(off)
+        R.check('caching off (no cache reads or writes): the guard has nothing to pause', out == '', out)
+        out = R.status(off)
+        R.check('caching off: the status line shows the context but no cache line', 'ctx 141K' in out and 'cache' not in out, out)
         out = R.hook('stale_cache_guard.py', {'prompt': 'hi', 'session_id': 'sid', 'transcript_path': pre}, ['--min-context', '60000', '--grace', '0'])
         out2 = R.hook('stale_cache_guard.py', {'prompt': 'hi', 'session_id': 'sid', 'transcript_path': pre}, ['--min-context', '60000', '--grace', '0'], fresh=False)
         R.check('--grace 0: the first send blocks, the second (right away) still goes through', '"block"' in out and out2 == '', (out[:40], out2))

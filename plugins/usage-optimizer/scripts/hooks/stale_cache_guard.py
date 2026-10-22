@@ -28,11 +28,11 @@ def main():
     ttl = S.arg('--ttl', 0)                                    # cache lifetime in seconds (0: detect from the transcript)
     inp = S.read_stdin()
     prompt = (inp.get('prompt') or '').strip()
-    if not inp.get('transcript_path') or prompt.startswith('/'):
+    if not inp.get('transcript_path') or S.local_command(prompt):      # a skill's slash command does send a request: guarded
         return
     last = S.last_usage(inp['transcript_path'])
-    if not last or last['ctx'] < min_context:                  # also right after /compact (ctx 0: the old context is gone)
-        return
+    if not last or last['ctx'] < min_context or not last.get('cached', True):   # also right after /compact (ctx 0), and with
+        return                                                                  # caching off (nothing to re-write)
     ttl = ttl or last['ttl']
     idle = time.time() - last['t']
     if idle < ttl:

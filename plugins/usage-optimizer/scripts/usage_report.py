@@ -1015,6 +1015,12 @@ def thread_key(d):
     return (d.get('sessionId'), d.get('agentId') if d.get('isSidechain') else 'main')
 
 
+def boundary_key(d):
+    """A compact_boundary's thread: a subagent's boundary names its agent (isSidechain, or agentId alone should a version
+    write it without the flag; turn records never carry agentId without isSidechain), else the main thread."""
+    return (d.get('sessionId'), d.get('agentId')) if d.get('agentId') else thread_key(d)
+
+
 _BASH = [
     ('test', re.compile(r'\b(swift test|pytest|py\.test|(npm|yarn|pnpm) (run )?test|jest|vitest|go test|cargo test|'
                         r'xcodebuild test|swift run \S*(Tests?|Checks?)\b|ctest|rspec|phpunit|mvn test|gradle test)')),
@@ -1221,7 +1227,7 @@ class Model:
                 if d.get('type') == 'user' and d.get('parentUuid') and not d.get('isCompactSummary'):
                     users.append(d)
             elif d.get('type') == 'system' and d.get('subtype') == 'compact_boundary' and d['_t'] is not None:
-                comp[thread_key(d)].append(d['_t'])
+                comp[boundary_key(d)].append(d['_t'])
             elif d.get('type') == 'assistant' and d['_t'] is not None and d.get('uuid'):
                 mid = (d.get('message') or {}).get('id') or d['uuid']
                 amsg[d['uuid']] = mid
@@ -1325,7 +1331,7 @@ class Model:
                        mode=d.get('permissionMode'), uuid=d.get('uuid'), parent=d.get('parentUuid'), side=side,
                        thread=thread_key(d), source=d.get('promptSource'), meta=bool(d.get('isMeta')))
             s = text.lstrip()
-            ps = d.get('promptSource')
+            ps = None if d.get('isCompactSummary') else d.get('promptSource')     # a compaction summary is never a prompt, whatever its source says
             if (ps is None and d.get('sessionId') not in tagged and not side and not rec['meta'] and s
                     and not d.get('isCompactSummary') and not d.get('isVisibleInTranscriptOnly')
                     and not s.startswith(('<', '[Request interrupted', 'Caveat:'))):
@@ -3250,7 +3256,7 @@ def compactions(m):
         cm = d.get('compactMetadata') if d.get('type') == 'system' and d.get('subtype') == 'compact_boundary' else None
         if not isinstance(cm, dict) or d['_t'] is None or d.get('isSidechain'):
             continue
-        t = m.threads.get(thread_key(d)) or []
+        t = m.threads.get(boundary_key(d)) or []
         ends = [c['t1'] for c in t]
         j = bisect.bisect_right(ends, d['_t']) - 1
         if j < 0:

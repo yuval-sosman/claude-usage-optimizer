@@ -406,6 +406,9 @@ Claude Code writes one line per content block, so assistant lines must be dedupl
   digest's setup lines show installed hooks in the plain form too (`md_config()` imports `plain_command`), so the
   arguments aren't lost to its 160-character clip.
 - A guard blocks or denies only when `S.state_put()` could record the warning, so the retry always goes through.
+- The guards skip only Claude Code's own commands (`_session.LOCAL`, `local_command()`): a skill or custom command
+  (`/name:skill`, `/my-command`) sends a request and is guarded like a typed prompt. A call with no cache reads or writes
+  (`cached` False: caching off) gets no pause and no cache line.
 - Undoing an optimization never restores an older `_session.py` under hooks that other applied optimizations still use.
 
 **Paths or portability:**

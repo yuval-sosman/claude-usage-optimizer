@@ -27,6 +27,22 @@ def arg(name, default):
     return v
 
 
+LOCAL = {'add-dir', 'agents', 'artifacts', 'bashes', 'bug', 'clear', 'color', 'compact', 'config', 'context', 'cost', 'doctor',
+         'effort', 'exit', 'export', 'fast', 'feedback', 'fleet', 'goal', 'help', 'hooks', 'ide', 'keybindings', 'login', 'logout', 'mcp',
+         'memory', 'model', 'output-style', 'permissions', 'plugin', 'plugins', 'privacy-settings', 'quit', 'release-notes', 'resume',
+         'rewind', 'skills', 'statusline', 'stats', 'status', 'tasks', 'terminal-setup', 'theme', 'upgrade', 'usage', 'vim', 'workflows'}
+
+
+def local_command(prompt):
+    """Whether a prompt is one of Claude Code's own commands that send no request (or /compact and /clear, which the guards
+    suggest): nothing to guard. A skill or custom command (/name:skill, /my-command) does send a request and is guarded."""
+    s = (prompt or '').strip()
+    if not s.startswith('/'):
+        return False
+    name = s[1:].split(None, 1)[0].lower() if s[1:].strip() else ''
+    return ':' not in name and name in LOCAL
+
+
 def read_stdin():
     import sys
     try:
@@ -119,6 +135,8 @@ def scan(lines, st):
         if not isinstance(d, dict) or d.get('isSidechain'):
             continue
         typ = d.get('type')
+        if typ == 'system' and d.get('agentId'):   # a subagent's boundary written without isSidechain: not this thread's
+            continue
         if typ == 'user':
             if want_user:                      # the newest user record, newer than every call: a prompt, a tool result…
                 p = d.get('parentUuid')
@@ -142,7 +160,8 @@ def scan(lines, st):
         st['w5'] += w5 or 0
         cd = dict(kind='call', t=parse_ts(d.get('timestamp') or ''), model=m.get('model') or '',
                   ctx=(u.get('input_tokens') or 0) + (u.get('cache_read_input_tokens') or 0) + (u.get('cache_creation_input_tokens') or 0),
-                  geo=u.get('inference_geo'), speed=u.get('speed'), mid=m.get('id') or d.get('uuid') or '')
+                  geo=u.get('inference_geo'), speed=u.get('speed'), mid=m.get('id') or d.get('uuid') or '',
+                  cached=bool((u.get('cache_read_input_tokens') or 0) + (u.get('cache_creation_input_tokens') or 0)))   # False: caching off
         if st['first'] is None:
             st['first'] = cd
         if st['parent']:                       # the newest user record points at a call: this one?
